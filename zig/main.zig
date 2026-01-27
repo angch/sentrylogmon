@@ -8,6 +8,7 @@ const Args = struct {
     command: ?[]const u8 = null,
     journalctl: ?[]const u8 = null,
     pattern: []const u8 = "Error",
+    format: ?[]const u8 = null,
     environment: []const u8 = "production",
     release: []const u8 = "",
     verbose: bool = false,
@@ -97,6 +98,8 @@ fn printUsage() void {
         \\        Monitor journalctl output (args passed to journalctl)
         \\  --pattern string
         \\        Regex pattern to match (default "Error")
+        \\  --format string
+        \\        Log format (nginx, nginx-error, dmesg)
         \\  --environment string
         \\        Sentry environment (default "production")
         \\  --release string
@@ -151,6 +154,10 @@ fn parseArgs(allocator: std.mem.Allocator) !Args {
             if (arg_iter.next()) |pattern| {
                 args.pattern = pattern;
             }
+        } else if (std.mem.eql(u8, arg, "--format")) {
+            if (arg_iter.next()) |format| {
+                args.format = format;
+            }
         } else if (std.mem.eql(u8, arg, "--environment")) {
             if (arg_iter.next()) |env| {
                 args.environment = env;
@@ -193,6 +200,7 @@ fn monitorFile(allocator: std.mem.Allocator, file_path: []const u8, args: Args) 
                 allocator.free(line);
             }
             entry.value_ptr.deinit();
+            allocator.free(entry.key_ptr.*);
         }
         timestamp_groups.deinit();
     }
@@ -202,7 +210,7 @@ fn monitorFile(allocator: std.mem.Allocator, file_path: []const u8, args: Args) 
 
         if (line_or_null) |line| {
             // Check if line matches pattern
-            if (containsPattern(line, args.pattern)) {
+            if (shouldLog(line, args)) {
                 if (args.verbose) {
                     std.debug.print("Matched line: {s}\n", .{line});
                 }
@@ -231,8 +239,9 @@ fn monitorFile(allocator: std.mem.Allocator, file_path: []const u8, args: Args) 
                     allocator.free(l);
                 }
                 entry.value_ptr.deinit();
+                allocator.free(entry.key_ptr.*);
             }
-            timestamp_groups.clearAndFree();
+            timestamp_groups.clearRetainingCapacity();
 
             if (args.oneshot) {
                 break;
@@ -276,6 +285,7 @@ fn monitorCommand(allocator: std.mem.Allocator, argv: []const []const u8, source
                             allocator.free(line);
                         }
                         entry.value_ptr.deinit();
+                        allocator.free(entry.key_ptr.*);
                     }
                     timestamp_groups.deinit();
                 }
@@ -284,7 +294,7 @@ fn monitorCommand(allocator: std.mem.Allocator, argv: []const []const u8, source
                     const line_or_null = in_stream.readUntilDelimiterOrEof(&line_buf, '\n') catch break;
 
                     if (line_or_null) |line| {
-                        if (containsPattern(line, args.pattern)) {
+                        if (shouldLog(line, args)) {
                             if (args.verbose) {
                                 std.debug.print("Matched line: {s}\n", .{line});
                             }
@@ -324,6 +334,26 @@ fn monitorCommand(allocator: std.mem.Allocator, argv: []const []const u8, source
         }
         std.time.sleep(1 * std.time.ns_per_s);
     }
+}
+
+fn shouldLog(line: []const u8, args: Args) bool {
+    if (args.format) |fmt| {
+        if (std.mem.eql(u8, fmt, "nginx") or std.mem.eql(u8, fmt, "nginx-error")) {
+            const patterns = [_][]const u8{ "error", "critical", "crit", "alert", "emerg" };
+            return containsAny(line, &patterns);
+        } else if (std.mem.eql(u8, fmt, "dmesg")) {
+            const patterns = [_][]const u8{ "error", "fail", "panic", "oops", "exception" };
+            return containsAny(line, &patterns);
+        }
+    }
+    return containsPattern(line, args.pattern);
+}
+
+fn containsAny(haystack: []const u8, needles: []const []const u8) bool {
+    for (needles) |needle| {
+        if (containsPattern(haystack, needle)) return true;
+    }
+    return false;
 }
 
 fn containsPattern(haystack: []const u8, needle: []const u8) bool {

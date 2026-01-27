@@ -102,6 +102,25 @@ Expected behavior:
 - Should monitor kernel messages
 - Should detect errors in kernel log
 
+### Test 6: Specific Log Formats
+
+Test nginx-error format:
+
+```bash
+# Create test file
+cat > /tmp/nginx-error.log << 'EOF'
+2026/01/27 10:00:00 [error] 1234#0: *1 connect() failed (111: Connection refused)
+2026/01/27 10:00:01 [info] 1234#0: *2 client closed connection
+EOF
+
+# Run test
+./zig/zig-out/bin/sentrylogmon-zig --file /tmp/nginx-error.log --format=nginx-error --verbose --oneshot
+```
+
+Expected behavior:
+- Should detect the "[error]" line
+- Should NOT detect the "[info]" line
+
 ## Comparison Testing
 
 Compare output and behavior with the Go version:

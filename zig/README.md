@@ -64,6 +64,9 @@ The Zig version supports the same command-line arguments as the Go version:
 # With pattern matching
 ./sentrylogmon-zig --dsn="..." --file=/var/log/app.log --pattern="error"
 
+# With specific format (e.g. nginx-error)
+./sentrylogmon-zig --dsn="..." --file=/var/log/nginx/error.log --format=nginx-error
+
 # Verbose mode
 ./sentrylogmon-zig --dsn="..." --file=/var/log/app.log --verbose
 ```
@@ -74,6 +77,7 @@ The Zig version supports the same command-line arguments as the Go version:
 - `--file <path>`: Monitor a log file
 - `--dmesg`: Monitor dmesg output
 - `--pattern <string>`: Pattern to match (default: "Error")
+- `--format <string>`: Log format (nginx, nginx-error, dmesg)
 - `--environment <string>`: Sentry environment tag (default: "production")
 - `--release <string>`: Sentry release version
 - `--verbose`: Enable verbose logging
