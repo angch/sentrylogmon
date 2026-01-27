@@ -8,7 +8,7 @@ import (
 
 func TestTimestampExtraction(t *testing.T) {
 	timestampRegex := regexp.MustCompile(`^\[\s*([0-9.]+)\]`)
-	
+
 	tests := []struct {
 		line      string
 		timestamp string
@@ -52,7 +52,7 @@ func TestTimestampExtraction(t *testing.T) {
 func TestPatternMatching(t *testing.T) {
 	// Case sensitive "Error"
 	pattern := regexp.MustCompile("Error")
-	
+
 	tests := []struct {
 		line    string
 		matches bool
