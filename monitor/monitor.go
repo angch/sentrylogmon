@@ -32,6 +32,7 @@ type Monitor struct {
 	Detector  detectors.Detector
 	Collector *sysstat.Collector
 	Verbose   bool
+	StopOnEOF bool
 
 	// Buffering
 	buffer           []string
@@ -93,6 +94,9 @@ func (m *Monitor) Start() {
 
 		if m.Verbose {
 			log.Printf("Monitor for %s stopped, restarting in 1s...", m.Source.Name())
+		}
+		if m.StopOnEOF {
+			return
 		}
 		time.Sleep(1 * time.Second)
 	}
