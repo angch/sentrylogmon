@@ -135,11 +135,17 @@ if [ -f "../main.go" ]; then
     GO_LINES=$(wc -l < ../main.go)
     echo "  - main.go: $GO_LINES lines"
     
-    # Zig should be comparable or slightly larger due to manual HTTP
-    if [ $LINES -lt $(($GO_LINES * 3)) ]; then
-        echo "✓ Zig implementation is reasonably sized"
+    # Zig implementation is expected to be larger due to:
+    # 1. Manual HTTP client (no Sentry SDK)
+    # 2. Manual JSON construction
+    # 3. DSN parsing implementation
+    # 4. Explicit error handling
+    # Threshold of 3x allows for this additional code while catching bloat
+    MAX_ACCEPTABLE_LINES=$(($GO_LINES * 3))
+    if [ $LINES -lt $MAX_ACCEPTABLE_LINES ]; then
+        echo "✓ Zig implementation is reasonably sized ($LINES lines vs max $MAX_ACCEPTABLE_LINES)"
     else
-        echo "⚠ Zig implementation seems large"
+        echo "⚠ Zig implementation seems large ($LINES lines exceeds $MAX_ACCEPTABLE_LINES threshold)"
     fi
 fi
 
