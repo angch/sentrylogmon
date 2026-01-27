@@ -54,6 +54,7 @@ func main() {
 	}
 
 	var reader io.Reader
+	var logSource string
 
 	// Determine log source
 	if *useDmesg {
@@ -68,8 +69,13 @@ func main() {
 		if err := cmd.Start(); err != nil {
 			log.Fatalf("Failed to start dmesg: %v", err)
 		}
-		defer cmd.Process.Kill()
+		defer func() {
+			if cmd.Process != nil {
+				cmd.Process.Kill()
+			}
+		}()
 		reader = stdout
+		logSource = "dmesg"
 	} else if *inputFile != "" {
 		if *verbose {
 			log.Printf("Monitoring file: %s", *inputFile)
@@ -80,16 +86,17 @@ func main() {
 		}
 		defer file.Close()
 		reader = file
+		logSource = *inputFile
 	} else {
 		log.Fatal("Please specify a log source: --dmesg or --file")
 	}
 
 	// Monitor logs
-	monitor(reader, patternRegex)
+	monitor(reader, patternRegex, logSource)
 }
 
 // monitor reads log lines and groups by timestamp
-func monitor(reader io.Reader, pattern *regexp.Regexp) {
+func monitor(reader io.Reader, pattern *regexp.Regexp, logSource string) {
 	scanner := bufio.NewScanner(reader)
 	
 	// Map to group lines by timestamp
@@ -127,12 +134,12 @@ func monitor(reader io.Reader, pattern *regexp.Regexp) {
 
 	// Send grouped events to Sentry
 	for timestamp, lines := range timestampGroups {
-		sendToSentry(timestamp, lines)
+		sendToSentry(timestamp, lines, logSource)
 	}
 }
 
 // sendToSentry sends grouped log lines to Sentry
-func sendToSentry(timestamp string, lines []string) {
+func sendToSentry(timestamp string, lines []string, logSource string) {
 	message := fmt.Sprintf("Log errors at timestamp [%s]", timestamp)
 	
 	// Combine all lines for the event
@@ -150,7 +157,7 @@ func sendToSentry(timestamp string, lines []string) {
 			"lines":       eventDetails,
 		})
 		scope.SetTag("timestamp", timestamp)
-		scope.SetTag("source", "dmesg")
+		scope.SetTag("source", logSource)
 		
 		sentry.CaptureMessage(message)
 	})
