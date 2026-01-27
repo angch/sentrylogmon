@@ -41,6 +41,10 @@ func TestDetectorsWithTestData(t *testing.T) {
 					continue
 				}
 
+				if !strings.HasSuffix(file.Name(), ".txt") {
+					continue
+				}
+
 				inputFilename := file.Name()
 				// Construct expect filename: foo.txt -> foo.expect.txt
 				baseName := strings.TrimSuffix(inputFilename, filepath.Ext(inputFilename))
