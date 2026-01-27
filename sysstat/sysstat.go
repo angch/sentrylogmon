@@ -120,6 +120,7 @@ type Collector struct {
 	mu       sync.RWMutex
 	state    *SystemState
 	stopChan chan struct{}
+	stopOnce sync.Once
 }
 
 func New() *Collector {
@@ -176,7 +177,9 @@ func (c *Collector) Run() {
 	// Initial collection
 	c.collect()
 
-	ticker := time.NewTicker(1 * time.Minute)
+	// Start with 1 minute interval
+	currentInterval := 1 * time.Minute
+	ticker := time.NewTicker(currentInterval)
 	defer ticker.Stop()
 
 	for {
@@ -186,25 +189,33 @@ func (c *Collector) Run() {
 		case <-ticker.C:
 			c.collect()
 
-			// Adjust ticker interval based on load
+			// Determine next interval based on load
 			c.mu.RLock()
-			sleepDuration := 1 * time.Minute
+			nextInterval := 1 * time.Minute
 			if c.state.Load != nil {
 				// If Load1 > NumCPU, consider it high load and back off
 				if c.state.Load.Load1 > float64(runtime.NumCPU()) {
-					sleepDuration = 10 * time.Minute
+					nextInterval = 10 * time.Minute
 				}
 			}
 			c.mu.RUnlock()
 
-			ticker.Reset(sleepDuration)
+			// Only reset ticker if interval changed to avoid unnecessary resets
+			if nextInterval != currentInterval {
+				ticker.Stop()
+				ticker = time.NewTicker(nextInterval)
+				currentInterval = nextInterval
+			}
 		}
 	}
 }
 
 // Stop gracefully stops the collector goroutine.
+// Safe to call multiple times.
 func (c *Collector) Stop() {
-	close(c.stopChan)
+	c.stopOnce.Do(func() {
+		close(c.stopChan)
+	})
 }
 
 func (c *Collector) collect() {
