@@ -2,7 +2,7 @@
 
 A lightweight, resource-efficient log monitoring tool that watches various log sources for issues and forwards them to Sentry for centralized error tracking and alerting.
 
-**Available in both Go and Rust implementations** - choose the one that best fits your environment!
+**Available in Go, Rust, and Zig implementations** - choose the one that best fits your environment!
 
 ## Overview
 
@@ -16,6 +16,13 @@ A lightweight, resource-efficient log monitoring tool that watches various log s
 
 The tool is optimized for low CPU and memory usage, making it suitable for deployment on production systems without impacting performance.
 
+**Three implementations are available:**
+- **Go version**: Full-featured reference implementation with regex support and official Sentry SDK (~7MB binary)
+- **Rust version**: Async implementation with smaller binary (~3.6MB, 50% smaller than Go)
+- **Zig version**: Ultra-lightweight port optimized for minimal resource usage (~200KB, 95% smaller than Go!)
+
+See [rust/README.md](rust/README.md) for Rust-specific documentation and [zig/README.md](zig/README.md) for Zig-specific documentation.
+
 ## Features
 
 - **Multiple Log Sources**: Support for files, journalctl, dmesg, and custom command outputs
@@ -26,16 +33,27 @@ The tool is optimized for low CPU and memory usage, making it suitable for deplo
 - **Lightweight**: Minimal CPU and memory footprint
 - **Flexible Configuration**: Command-line flags and environment variables
 - **Real-time Monitoring**: Continuous monitoring with configurable check intervals
-- **Two Implementations**: Choose between Go (reference) or Rust (smaller binary, ~50% size reduction)
+- **Three Implementations**: Choose between Go (reference), Rust (smaller binary), or Zig (smallest binary)
 
 ## Rust Port
 
 A Rust implementation is available in the `rust/` directory. It provides the same functionality as the Go version but with:
-- **Smaller binary size**: ~3.6MB vs ~7.2MB (50% smaller)
+- **Smaller binary size**: ~3.6MB vs ~7.2MB (50% smaller than Go)
 - **Async I/O**: Built on Tokio for efficient non-blocking operations
 - **Same features**: All core functionality matches the Go version
 
 See [rust/README.md](rust/README.md) for Rust-specific documentation.
+
+## Zig Port
+
+A Zig implementation is available in the `zig/` directory. It provides core functionality with:
+- **Smallest binary size**: ~200-300KB (95% smaller than Go, 90% smaller than Rust)
+- **Minimal memory footprint**: ~2-3MB RSS vs ~5-8MB for Go
+- **Zero external dependencies**: Only uses Zig standard library
+- **Fast startup**: ~5-10ms vs ~50-100ms for Go
+- **Simple pattern matching**: Case-insensitive substring search (simpler than full regex)
+
+See [zig/README.md](zig/README.md) for Zig-specific documentation.
 
 ## Installation
 
@@ -47,6 +65,9 @@ See [rust/README.md](rust/README.md) for Rust-specific documentation.
 **For Rust version:**
 - Rust 1.70 or later
 - Cargo (comes with Rust)
+
+**For Zig version:**
+- Zig 0.11.0 or later
 
 **Check prerequisites:**
 ```bash
@@ -73,9 +94,20 @@ cd sentrylogmon
 make build-rust
 ```
 
-**Build both:**
+**Build Zig version:**
+```bash
+cd sentrylogmon
+make build-zig
+```
+
+**Build all three:**
 ```bash
 make build-all
+```
+
+**Compare binary sizes:**
+```bash
+make compare-size
 ```
 
 ### Installing via go install
@@ -84,19 +116,6 @@ make build-all
 go install github.com/angch/sentrylogmon@latest
 ```
 
-## Usage
-
-### Basic Usage
-
-Monitor a log file for errors:
-
-```bash
-sentrylogmon --dsn="https://your-sentry-dsn@sentry.io/project" --file=/var/log/app.log
-```
-
-### Configuration Options
-
-#### Sentry DSN
 
 Specify the Sentry DSN via command line or environment variable:
 

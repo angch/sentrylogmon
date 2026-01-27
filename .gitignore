@@ -37,6 +37,15 @@ go.work.sum
 # .idea/
 # .vscode/
 
+# Zig build artifacts
+zig/zig-out/
+zig/.zig-cache/
+zig-out/
+.zig-cache/
+
+# Zig binary
+sentrylogmon-zig
+
 # Rust
 rust/target/
 rust/Cargo.lock
