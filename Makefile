@@ -1,7 +1,7 @@
 .PHONY: build test clean build-bench benchmark
 
 build:
-	go build -o sentrylogmon .
+	CGO_ENABLED=0 GOARCH=amd64 go build -ldflags "-s -w" -o sentrylogmon .
 
 test:
 	go test -v ./...
