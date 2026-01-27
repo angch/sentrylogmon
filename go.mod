@@ -3,6 +3,7 @@ module github.com/angch/sentrylogmon
 go 1.24.12
 
 require (
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/getsentry/sentry-go v0.41.0
 	github.com/prometheus/procfs v0.19.2
 	github.com/shirou/gopsutil/v3 v3.24.5
