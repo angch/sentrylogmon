@@ -21,6 +21,7 @@ type MonitorConfig struct {
 	Args    string `yaml:"args"`    // for journalctl or command
 	Pattern string `yaml:"pattern"` // regex pattern for custom format
 	Format  string `yaml:"format"`  // dmesg, nginx, custom (default: custom if pattern set)
+	ExcludePattern string `yaml:"exclude_pattern"` // regex pattern to exclude from reporting
 }
 
 type Config struct {
@@ -38,6 +39,7 @@ var (
 	journalctl  = flag.String("journalctl", "", "Monitor journalctl output (pass args)")
 	command     = flag.String("command", "", "Monitor custom command output")
 	pattern     = flag.String("pattern", "Error", "Pattern to match (case sensitive)")
+	excludePattern = flag.String("exclude", "", "Pattern to exclude from reporting (case sensitive)")
 	environment = flag.String("environment", "production", "Sentry environment")
 	release     = flag.String("release", "", "Sentry release version")
 	verbose     = flag.Bool("verbose", false, "Verbose logging")
@@ -99,6 +101,7 @@ func Load() (*Config, error) {
 
 	monitor := MonitorConfig{
 		Pattern: *pattern,
+		ExcludePattern: *excludePattern,
 	}
 
 	if *useDmesg {

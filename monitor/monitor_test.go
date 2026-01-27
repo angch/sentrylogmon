@@ -67,7 +67,7 @@ func TestMonitorGrouping(t *testing.T) {
 	source := &MockSource{content: input}
 	detector := &MockDetector{}
 
-	mon, err := New(source, detector, nil, false)
+	mon, err := New(source, detector, nil, false, "")
 	if err != nil {
 		t.Fatalf("Failed to create monitor: %v", err)
 	}
@@ -113,6 +113,70 @@ func TestMonitorGrouping(t *testing.T) {
 		expected2 := "[106.0] Line 3\n[107.0] Line 4"
 		if msg2 != expected2 {
 			t.Errorf("Event 2 content mismatch.\nExpected:\n%s\nGot:\n%s", expected2, msg2)
+		}
+	}
+}
+
+func TestMonitorExclusion(t *testing.T) {
+	// Setup Sentry Mock
+	transport := &MockTransport{}
+	err := sentry.Init(sentry.ClientOptions{
+		Transport: transport,
+	})
+	if err != nil {
+		t.Fatalf("Failed to init sentry: %v", err)
+	}
+
+	// Input lines
+	// Line 1: Should be excluded
+	// Line 2: Should be kept
+	input := `[100.0] Line 1 - ignore me
+[101.0] Line 2 - keep me
+[102.0] Line 3 - ignore me too
+`
+	source := &MockSource{content: input}
+	detector := &MockDetector{} // Detects everything
+
+	// Create monitor with exclude pattern
+	mon, err := New(source, detector, nil, false, "ignore me")
+	if err != nil {
+		t.Fatalf("Failed to create monitor: %v", err)
+	}
+	mon.StopOnEOF = true
+
+	go mon.Start()
+
+	// Wait for processing with timeout
+	start := time.Now()
+	for {
+		transport.mu.Lock()
+		count := len(transport.events)
+		transport.mu.Unlock()
+		if count >= 1 {
+			break
+		}
+		if time.Since(start) > 2*time.Second {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// Flush sentry
+	sentry.Flush(time.Second)
+
+	transport.mu.Lock()
+	defer transport.mu.Unlock()
+
+	if len(transport.events) != 1 {
+		t.Errorf("Expected 1 event, got %d", len(transport.events))
+		for i, e := range transport.events {
+			t.Logf("Event %d: %s", i, e.Message)
+		}
+	} else {
+		msg := transport.events[0].Message
+		expected := "[101.0] Line 2 - keep me"
+		if msg != expected {
+			t.Errorf("Event content mismatch.\nExpected:\n%s\nGot:\n%s", expected, msg)
 		}
 	}
 }
