@@ -7,7 +7,7 @@ description = "Lightweight log monitoring tool with Sentry integration"
 license = "MIT"
 
 [dependencies]
-sentry = { version = "0.32", default-features = false, features = ["rustls", "backtrace", "contexts", "panic", "transport"] }
+sentry = { version = "0.32", default-features = false, features = ["rustls", "backtrace", "contexts", "panic", "reqwest"] }
 tokio = { version = "1.35", features = ["full"] }
 tokio-stream = "0.1"
 regex = "1.10"
