@@ -200,9 +200,10 @@ func (c *Collector) Run() {
 			}
 			c.mu.RUnlock()
 
-			// Only reset ticker if interval changed to avoid unnecessary resets
+			// Only recreate ticker if interval changed to avoid unnecessary overhead
 			if nextInterval != currentInterval {
-				ticker.Stop()
+				oldTicker := ticker
+				oldTicker.Stop()
 				ticker = time.NewTicker(nextInterval)
 				currentInterval = nextInterval
 			}
