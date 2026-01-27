@@ -61,6 +61,7 @@ impl Collector {
         let state = self.state.clone();
         tokio::spawn(async move {
             let mut sys = System::new_all();
+
             loop {
                 sys.refresh_all();
 
@@ -102,7 +103,14 @@ impl Collector {
 
                 *state.write().await = new_state;
 
-                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                // Backoff logic: if load > num_cpus, sleep longer
+                let sleep_duration = if load_avg.one > sys.cpus().len() as f64 {
+                    tokio::time::Duration::from_secs(600) // 10 minutes
+                } else {
+                    tokio::time::Duration::from_secs(60) // 1 minute
+                };
+
+                tokio::time::sleep(sleep_duration).await;
             }
         });
     }
