@@ -117,8 +117,18 @@ test-go:
 
 # Run Zig tests
 test-zig:
-	@echo "Running Zig tests..."
-	cd zig && zig build test
+	@if which zig > /dev/null 2>&1; then \
+		echo "Running Zig tests..."; \
+		cd zig && zig build test; \
+	else \
+		echo "Running Zig validation (Zig not installed)..."; \
+		cd zig && ./validate.sh; \
+	fi
+
+# Validate Zig implementation
+validate-zig:
+	@echo "Validating Zig implementation..."
+	@cd zig && ./validate.sh
 
 # Compare binary sizes
 compare-size: build
@@ -146,7 +156,8 @@ help:
 	@echo "  make clean              - Remove build artifacts"
 	@echo "  make test               - Run tests"
 	@echo "  make test-go            - Run Go tests"
-	@echo "  make test-zig           - Run Zig tests"
+	@echo "  make test-zig           - Run Zig tests (or validation if Zig not installed)"
+	@echo "  make validate-zig       - Validate Zig code structure without building"
 	@echo "  make compare-size       - Compare binary sizes of Go and Zig versions"
 	@echo "  make help               - Show this help message"
 	@echo ""
