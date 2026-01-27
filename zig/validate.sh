@@ -44,10 +44,12 @@ else
 fi
 
 # Check for dmesg monitoring
-if grep -q "monitorDmesg" main.zig; then
+if grep -q "monitorCommand" main.zig; then
+    echo "✓ Command monitoring function found"
+elif grep -q "monitorDmesg" main.zig; then
     echo "✓ Dmesg monitoring function found"
 else
-    echo "✗ Dmesg monitoring function not found"
+    echo "✗ Command/Dmesg monitoring function not found"
     exit 1
 fi
 
@@ -116,7 +118,7 @@ echo ""
 echo "Verifying functional parity with Go implementation..."
 
 # Check that all command-line flags are supported
-FLAGS=("dsn" "file" "dmesg" "pattern" "environment" "release" "verbose")
+FLAGS=("dsn" "file" "dmesg" "pattern" "environment" "release" "verbose" "oneshot" "command" "journalctl" "help")
 for flag in "${FLAGS[@]}"; do
     if grep -q "$flag" main.zig; then
         echo "✓ Flag --$flag is supported"
