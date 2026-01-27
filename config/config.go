@@ -69,9 +69,19 @@ func Load() (*Config, error) {
 		if err := yaml.Unmarshal(data, cfg); err != nil {
 			return nil, err
 		}
-		// If verbose flag is set, it overrides config?
-		// Actually config file doesn't have verbose field in YAML usually,
-		// but let's stick to flag for verbose.
+
+		// Fallback to flags/env if missing in config
+		if cfg.Sentry.DSN == "" {
+			cfg.Sentry.DSN = *dsn
+		}
+		if cfg.Sentry.Environment == "" {
+			cfg.Sentry.Environment = *environment
+		}
+		if cfg.Sentry.Release == "" {
+			cfg.Sentry.Release = *release
+		}
+
+		// Verbose flag always overrides
 		cfg.Verbose = *verbose
 		return cfg, nil
 	}
