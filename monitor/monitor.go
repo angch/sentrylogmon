@@ -32,6 +32,7 @@ type Monitor struct {
 	Detector  detectors.Detector
 	Collector *sysstat.Collector
 	Verbose   bool
+	StopOnEOF bool
 
 	// Buffering
 	buffer           []string
@@ -88,7 +89,17 @@ func (m *Monitor) Start() {
 		m.forceFlush()
 
 		if err := scanner.Err(); err != nil {
-			log.Printf("Error reading from source %s: %v", m.Source.Name(), err)
+			// Suppress specific errors when stopping on EOF is enabled
+			if !m.StopOnEOF || !strings.Contains(err.Error(), "file already closed") {
+				log.Printf("Error reading from source %s: %v", m.Source.Name(), err)
+			}
+		}
+
+		if m.StopOnEOF {
+			if m.Verbose {
+				log.Printf("Monitor for %s stopped (StopOnEOF set).", m.Source.Name())
+			}
+			break
 		}
 
 		if m.Verbose {

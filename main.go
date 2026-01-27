@@ -4,7 +4,9 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -40,6 +42,19 @@ func main() {
 
 	if cfg.Verbose {
 		log.Printf("Initialized Sentry (env=%s, release=%s)", cfg.Sentry.Environment, cfg.Sentry.Release)
+	}
+
+	if cfg.Verbose || cfg.OneShot {
+		defer func() {
+			var m runtime.MemStats
+			runtime.ReadMemStats(&m)
+			log.Printf("Final Memory Usage: Alloc = %v MiB, TotalAlloc = %v MiB, Sys = %v MiB, NumGC = %v",
+				m.Alloc/1024/1024,
+				m.TotalAlloc/1024/1024,
+				m.Sys/1024/1024,
+				m.NumGC,
+			)
+		}()
 	}
 
 	if len(cfg.Monitors) == 0 {
@@ -100,6 +115,7 @@ func main() {
 			log.Printf("Failed to create monitor '%s': %v", monCfg.Name, err)
 			continue
 		}
+		m.StopOnEOF = cfg.OneShot
 		monitors = append(monitors, m)
 	}
 
@@ -107,16 +123,41 @@ func main() {
 		log.Fatal("No valid monitors to start.")
 	}
 
+	var wg sync.WaitGroup
 	for _, m := range monitors {
-		go m.Start()
+		wg.Add(1)
+		go func(mon *monitor.Monitor) {
+			defer wg.Done()
+			mon.Start()
+		}(m)
 	}
 
 	// Wait for signals
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	sig := <-c
-	if cfg.Verbose {
-		log.Printf("Received signal %v, shutting down...", sig)
+
+	if cfg.OneShot {
+		done := make(chan struct{})
+		go func() {
+			wg.Wait()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+			if cfg.Verbose {
+				log.Println("All monitors finished.")
+			}
+		case sig := <-c:
+			if cfg.Verbose {
+				log.Printf("Received signal %v, shutting down...", sig)
+			}
+		}
+	} else {
+		sig := <-c
+		if cfg.Verbose {
+			log.Printf("Received signal %v, shutting down...", sig)
+		}
 	}
 
 	// Clean up

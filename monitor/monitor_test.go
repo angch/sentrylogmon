@@ -71,6 +71,7 @@ func TestMonitorGrouping(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create monitor: %v", err)
 	}
+	mon.StopOnEOF = true
 
 	mon.Start()
 
