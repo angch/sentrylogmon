@@ -93,6 +93,7 @@ type Collector struct {
 	mu       sync.RWMutex
 	state    *SystemState
 	stopChan chan struct{}
+	stopOnce sync.Once
 }
 
 func New() *Collector {
@@ -102,8 +103,12 @@ func New() *Collector {
 	}
 }
 
+// Stop gracefully stops the collector goroutine.
+// Safe to call multiple times.
 func (c *Collector) Stop() {
-	close(c.stopChan)
+	c.stopOnce.Do(func() {
+		close(c.stopChan)
+	})
 }
 
 func (c *Collector) GetState() *SystemState {
