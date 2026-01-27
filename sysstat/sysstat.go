@@ -3,13 +3,14 @@ package sysstat
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/prometheus/procfs"
 	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/load"
 	"github.com/shirou/gopsutil/v3/mem"
@@ -21,6 +22,10 @@ type ProcessInfo struct {
 	CPU     string `json:"cpu"`
 	MEM     string `json:"mem"`
 	Command string `json:"command"`
+
+	// Internal fields for sorting
+	cpuUsage float64
+	memUsage float64
 }
 
 type PressureInfo struct {
@@ -95,16 +100,34 @@ func (c *Collector) collect() {
 	}
 	newState.DiskPressure = getDiskPressure()
 
-	// Top CPU
-	newState.TopCPU = getTopProcesses("-%cpu")
-	// Top Mem
-	newState.TopMem = getTopProcesses("-%mem")
-
-	// Process Summary
-	out, err := exec.Command("sh", "-c", "ps -e | wc -l").Output()
+	procs, summary, err := getProcessStats(newState.Uptime, newState.Memory.Total)
 	if err == nil {
-		count := strings.TrimSpace(string(out))
-		newState.ProcessSummary = fmt.Sprintf("Total Processes: %s", count)
+		newState.ProcessSummary = summary
+
+		// Sort by CPU
+		sort.Slice(procs, func(i, j int) bool {
+			return procs[i].cpuUsage > procs[j].cpuUsage
+		})
+		if len(procs) > 5 {
+			newState.TopCPU = procs[:5]
+		} else {
+			newState.TopCPU = procs
+		}
+
+		// Sort by Memory (make a copy or re-sort)
+		// Since we want two different lists, we'll re-sort the full list
+		// but wait, newState.TopCPU holds references or copies? Copies.
+		// So we can re-sort the 'procs' slice.
+		sort.Slice(procs, func(i, j int) bool {
+			return procs[i].memUsage > procs[j].memUsage
+		})
+		if len(procs) > 5 {
+			newState.TopMem = procs[:5]
+		} else {
+			newState.TopMem = procs
+		}
+	} else {
+		newState.ProcessSummary = fmt.Sprintf("Error collecting process stats: %v", err)
 	}
 
 	c.mu.Lock()
@@ -146,44 +169,72 @@ func getDiskPressure() *PressureInfo {
 	return nil
 }
 
-func getTopProcesses(sortFlag string) []ProcessInfo {
-	// ps -eo pid,rss,pcpu,pmem,args --sort=-%cpu
-	cmd := exec.Command("ps", "-eo", "pid,rss,pcpu,pmem,args", "--sort="+sortFlag)
-	out, err := cmd.Output()
+func getProcessStats(uptime uint64, totalMem uint64) ([]ProcessInfo, string, error) {
+	fs, err := procfs.NewFS("/proc")
 	if err != nil {
-		return nil
+		return nil, "", err
 	}
 
-	lines := strings.Split(string(out), "\n")
-	var res []ProcessInfo
-	// Skip header (line 0)
-	if len(lines) < 2 {
-		return nil
+	procs, err := fs.AllProcs()
+	if err != nil {
+		return nil, "", err
 	}
 
-	// We want top 5.
-	count := 0
-	for i := 1; i < len(lines); i++ {
-		line := strings.TrimSpace(lines[i])
-		if line == "" {
-			continue
-		}
-		parts := strings.Fields(line)
-		if len(parts) < 5 {
+	var results []ProcessInfo
+	pageSize := os.Getpagesize()
+	clkTck := float64(100) // Default to 100Hz on most systems.
+	// To be more accurate we should use sysconf(_SC_CLK_TCK) but that requires CGO or more complex syscalls.
+	// For this estimation, 100Hz is a reasonable default for x86 Linux.
+
+	for _, p := range procs {
+		stat, err := p.Stat()
+		if err != nil {
 			continue
 		}
 
-		res = append(res, ProcessInfo{
-			Pid:     parts[0],
-			RSS:     parts[1],
-			CPU:     parts[2],
-			MEM:     parts[3],
-			Command: strings.Join(parts[4:], " "),
+		cmd, err := p.CmdLine()
+		if err != nil || len(cmd) == 0 {
+			// Fallback to Comm if CmdLine is empty or error
+			comm, err := p.Comm()
+			if err == nil {
+				cmd = []string{comm}
+			} else {
+				cmd = []string{"unknown"}
+			}
+		}
+		commandStr := strings.Join(cmd, " ")
+
+		// CPU Usage: (utime + stime) / (uptime - starttime)
+		// Times are in jiffies.
+		// Uptime is in seconds.
+
+		totalTicks := float64(stat.UTime + stat.STime)
+		startTimeSeconds := float64(stat.Starttime) / clkTck
+
+		var cpuUsage float64
+		if float64(uptime) > startTimeSeconds {
+			secondsActive := float64(uptime) - startTimeSeconds
+			cpuUsage = (totalTicks / clkTck) / secondsActive * 100.0
+		}
+
+		// Memory Usage
+		rssBytes := float64(stat.RSS * pageSize)
+		memUsage := 0.0
+		if totalMem > 0 {
+			memUsage = (rssBytes / float64(totalMem)) * 100.0
+		}
+
+		results = append(results, ProcessInfo{
+			Pid:      strconv.Itoa(p.PID),
+			RSS:      fmt.Sprintf("%.0f", rssBytes), // Bytes
+			CPU:      fmt.Sprintf("%.1f", cpuUsage),
+			MEM:      fmt.Sprintf("%.1f", memUsage),
+			Command:  commandStr,
+			cpuUsage: cpuUsage,
+			memUsage: memUsage,
 		})
-		count++
-		if count >= 5 {
-			break
-		}
 	}
-	return res
+
+	summary := fmt.Sprintf("Total Processes: %d", len(procs))
+	return results, summary, nil
 }

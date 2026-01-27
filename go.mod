@@ -4,6 +4,7 @@ go 1.24.12
 
 require (
 	github.com/getsentry/sentry-go v0.41.0
+	github.com/prometheus/procfs v0.19.2
 	github.com/shirou/gopsutil/v3 v3.24.5
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -17,6 +18,6 @@ require (
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
-	golang.org/x/sys v0.20.0 // indirect
+	golang.org/x/sys v0.37.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 )
