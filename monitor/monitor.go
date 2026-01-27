@@ -5,6 +5,7 @@ import (
 	"log"
 	"regexp"
 
+	"github.com/angch/sentrylogmon/detectors"
 	"github.com/angch/sentrylogmon/sources"
 	"github.com/getsentry/sentry-go"
 )
@@ -12,20 +13,16 @@ import (
 var timestampRegex = regexp.MustCompile(`^\[\s*([0-9.]+)\]`)
 
 type Monitor struct {
-	Source  sources.LogSource
-	Pattern *regexp.Regexp
-	Verbose bool
+	Source   sources.LogSource
+	Detector detectors.Detector
+	Verbose  bool
 }
 
-func New(source sources.LogSource, pattern string, verbose bool) (*Monitor, error) {
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		return nil, err
-	}
+func New(source sources.LogSource, detector detectors.Detector, verbose bool) (*Monitor, error) {
 	return &Monitor{
-		Source:  source,
-		Pattern: re,
-		Verbose: verbose,
+		Source:   source,
+		Detector: detector,
+		Verbose:  verbose,
 	}, nil
 }
 
@@ -43,7 +40,7 @@ func (m *Monitor) Start() {
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
 		line := scanner.Text()
-		if m.Pattern.MatchString(line) {
+		if m.Detector.Detect(line) {
 			if m.Verbose {
 				log.Printf("[%s] Matched: %s", m.Source.Name(), line)
 			}

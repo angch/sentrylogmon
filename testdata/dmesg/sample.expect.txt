@@ -1,0 +1,4 @@
+[    2.345678] Error: Failed to initialize hardware
+[    4.567890] Kernel panic - not syncing: Fatal exception
+[    5.678901] oops: dereferencing null pointer
+[    7.890123] fail: network interface down
