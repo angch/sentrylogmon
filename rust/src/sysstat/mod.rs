@@ -107,6 +107,7 @@ impl Collector {
         });
     }
 
+    #[allow(dead_code)]
     pub async fn get_state(&self) -> SystemState {
         self.state.read().await.clone()
     }

@@ -15,6 +15,7 @@ const FLUSH_INTERVAL: Duration = Duration::from_secs(5);
 pub struct Monitor {
     source: Box<dyn LogSource>,
     detector: Box<dyn Detector>,
+    #[allow(dead_code)]
     collector: Arc<Collector>,
     verbose: bool,
     stop_on_eof: bool,
