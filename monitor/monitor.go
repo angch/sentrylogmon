@@ -75,10 +75,7 @@ func (m *Monitor) sendToSentry(line string) {
 		if m.Collector != nil {
 			state := m.Collector.GetState()
 			if state != nil {
-				stateMap := state.ToMap()
-				if stateMap != nil {
-					scope.SetContext("Server State", stateMap)
-				}
+				scope.SetContext("Server State", state.ToMap())
 			}
 		}
 
