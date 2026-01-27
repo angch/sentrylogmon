@@ -33,7 +33,7 @@ While the Zig version maintains functional parity with the Go reference implemen
 
 ### Prerequisites
 
-- Zig 0.11.0 or later
+- Zig 0.13.0 or later
 
 ### Build Commands
 
