@@ -84,6 +84,8 @@ func main() {
 			// Fallback logic
 			if monCfg.Type == "dmesg" {
 				detectorFormat = "dmesg"
+			} else if detectors.IsKnownDetector(monCfg.Name) {
+				detectorFormat = monCfg.Name
 			} else {
 				detectorFormat = "custom"
 			}
