@@ -126,6 +126,9 @@ install-prereqs:
 	else \
 		echo "Rust is already installed: $$(cargo --version)"; \
 	fi
+	@# Install Rust target for static linking
+	@echo "Installing Rust musl target..."
+	@rustup target add x86_64-unknown-linux-musl || echo "Failed to add target, please ensure rustup is installed"
 	@echo ""
 	@echo "Installation complete!"
 	@echo "If tools were installed to /tmp, add them to your PATH:"
@@ -136,6 +139,11 @@ install-prereqs:
 clean-all: clean-go clean-zig clean-rust
 	@echo "All build artifacts cleaned"
 
+# Build Rust binary
+build-rust:
+	@echo "Building Rust binary..."
+	cd rust && cargo build --release --target x86_64-unknown-linux-musl
+	@echo "Rust binary built: rust/target/x86_64-unknown-linux-musl/release/sentrylogmon"
 # Clean Go artifacts
 clean-go:
 	@echo "Cleaning Go build artifacts..."
