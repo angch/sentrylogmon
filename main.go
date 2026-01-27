@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -67,24 +68,64 @@ func main() {
 
 	// Start monitors
 	var monitors []*monitor.Monitor
-	for _, monCfg := range cfg.Monitors {
-		var src sources.LogSource
 
+	addMonitor := func(src sources.LogSource, monCfg config.MonitorConfig) {
+		detectorFormat := determineDetectorFormat(monCfg)
+
+		det, err := detectors.GetDetector(detectorFormat, monCfg.Pattern)
+		if err != nil {
+			log.Printf("Failed to create detector for monitor '%s': %v", monCfg.Name, err)
+			return
+		}
+
+		m, err := monitor.New(src, det, sysstatCollector, cfg.Verbose)
+		if err != nil {
+			log.Printf("Failed to create monitor '%s': %v", monCfg.Name, err)
+			return
+		}
+		m.StopOnEOF = cfg.OneShot
+		monitors = append(monitors, m)
+	}
+
+	for _, monCfg := range cfg.Monitors {
 		switch monCfg.Type {
 		case "file":
 			if monCfg.Path == "" {
 				log.Printf("Skipping file monitor '%s': path is empty", monCfg.Name)
 				continue
 			}
-			src = sources.NewFileSource(monCfg.Name, monCfg.Path)
+
+			if strings.ContainsAny(monCfg.Path, "*?[]") {
+				matches, err := filepath.Glob(monCfg.Path)
+				if err != nil {
+					log.Printf("Error matching glob pattern %s: %v", monCfg.Path, err)
+					continue
+				}
+				if len(matches) == 0 {
+					log.Printf("No files matched glob pattern %s", monCfg.Path)
+					continue
+				}
+				for _, match := range matches {
+					// Use a unique name for each file source
+					name := monCfg.Name + ":" + match
+					src := sources.NewFileSource(name, match)
+					addMonitor(src, monCfg)
+				}
+			} else {
+				src := sources.NewFileSource(monCfg.Name, monCfg.Path)
+				addMonitor(src, monCfg)
+			}
 		case "journalctl":
-			src = sources.NewJournalctlSource(monCfg.Name, monCfg.Args)
+			src := sources.NewJournalctlSource(monCfg.Name, monCfg.Args)
+			addMonitor(src, monCfg)
 		case "dmesg":
-			src = sources.NewDmesgSource(monCfg.Name)
+			src := sources.NewDmesgSource(monCfg.Name)
+			addMonitor(src, monCfg)
 		case "command":
 			parts := strings.Fields(monCfg.Args)
 			if len(parts) > 0 {
-				src = sources.NewCommandSource(monCfg.Name, parts[0], parts[1:]...)
+				src := sources.NewCommandSource(monCfg.Name, parts[0], parts[1:]...)
+				addMonitor(src, monCfg)
 			} else {
 				log.Printf("Skipping command monitor '%s': command is empty", monCfg.Name)
 				continue
@@ -93,22 +134,6 @@ func main() {
 			log.Printf("Unknown monitor type: %s", monCfg.Type)
 			continue
 		}
-
-		detectorFormat := determineDetectorFormat(monCfg)
-
-		det, err := detectors.GetDetector(detectorFormat, monCfg.Pattern)
-		if err != nil {
-			log.Printf("Failed to create detector for monitor '%s': %v", monCfg.Name, err)
-			continue
-		}
-
-		m, err := monitor.New(src, det, sysstatCollector, cfg.Verbose)
-		if err != nil {
-			log.Printf("Failed to create monitor '%s': %v", monCfg.Name, err)
-			continue
-		}
-		m.StopOnEOF = cfg.OneShot
-		monitors = append(monitors, m)
 	}
 
 	if len(monitors) == 0 {
