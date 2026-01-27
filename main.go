@@ -1,6 +1,10 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
+	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -13,14 +17,51 @@ import (
 
 	"github.com/angch/sentrylogmon/config"
 	"github.com/angch/sentrylogmon/detectors"
+	"github.com/angch/sentrylogmon/ipc"
 	"github.com/angch/sentrylogmon/monitor"
 	"github.com/angch/sentrylogmon/sources"
 	"github.com/angch/sentrylogmon/sysstat"
 	"github.com/getsentry/sentry-go"
 )
 
+var (
+	statusFlag = flag.Bool("status", false, "List running instances")
+	updateFlag = flag.Bool("update", false, "Update/Restart all running instances")
+)
+
 func main() {
-	// Parse flags and load config
+	// Ensure flags are parsed first to handle --status/--update without requiring full config
+	config.ParseFlags()
+
+	if *statusFlag {
+		instances, err := ipc.ListInstances("/tmp/sentrylogmon")
+		if err != nil {
+			log.Fatalf("Error listing instances: %v", err)
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		enc.Encode(instances)
+		return
+	}
+
+	if *updateFlag {
+		instances, err := ipc.ListInstances("/tmp/sentrylogmon")
+		if err != nil {
+			log.Fatalf("Error listing instances: %v", err)
+		}
+		for _, inst := range instances {
+			socketPath := fmt.Sprintf("/tmp/sentrylogmon/sentrylogmon.%d.sock", inst.PID)
+			fmt.Printf("Requesting update for PID %d...\n", inst.PID)
+			if err := ipc.RequestUpdate(socketPath); err != nil {
+				fmt.Printf("Failed to update PID %d: %v\n", inst.PID, err)
+			} else {
+				fmt.Printf("Update requested for PID %d\n", inst.PID)
+			}
+		}
+		return
+	}
+
+	// Load configuration after checking for IPC flags
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
@@ -44,6 +85,9 @@ func main() {
 	if cfg.Verbose {
 		log.Printf("Initialized Sentry (env=%s, release=%s)", cfg.Sentry.Environment, cfg.Sentry.Release)
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	if cfg.Verbose || cfg.OneShot {
 		defer func() {
@@ -78,7 +122,7 @@ func main() {
 			return
 		}
 
-		m, err := monitor.New(src, det, sysstatCollector, cfg.Verbose)
+		m, err := monitor.New(ctx, src, det, sysstatCollector, cfg.Verbose)
 		if err != nil {
 			log.Printf("Failed to create monitor '%s': %v", monCfg.Name, err)
 			return
@@ -149,6 +193,61 @@ func main() {
 		}(m)
 	}
 
+	shutdown := func() {
+		cancel()
+		for _, m := range monitors {
+			if err := m.Source.Close(); err != nil {
+				log.Printf("Error closing source %s: %v", m.Source.Name(), err)
+			}
+		}
+
+		done := make(chan struct{})
+		go func() {
+			wg.Wait()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			log.Println("Timeout waiting for monitors to stop")
+		}
+	}
+
+	// Start IPC Server
+	socketDir := "/tmp/sentrylogmon"
+	if err := os.MkdirAll(socketDir, 0700); err != nil {
+		log.Printf("Failed to create IPC directory: %v", err)
+	} else {
+		socketPath := filepath.Join(socketDir, fmt.Sprintf("sentrylogmon.%d.sock", os.Getpid()))
+
+		restartFunc := func() {
+			log.Println("Restart requested via IPC. Shutting down...")
+			shutdown()
+
+			os.Remove(socketPath)
+
+			executable, err := os.Executable()
+			if err != nil {
+				log.Printf("Failed to get executable path: %v", err)
+				return
+			}
+
+			log.Printf("Re-executing %s %v", executable, os.Args[1:])
+			if err := syscall.Exec(executable, os.Args, os.Environ()); err != nil {
+				log.Fatalf("Failed to re-exec: %v", err)
+			}
+		}
+
+		go func() {
+			if err := ipc.StartServer(socketPath, cfg, restartFunc); err != nil {
+				log.Printf("IPC Server error: %v", err)
+			}
+		}()
+
+		defer os.Remove(socketPath)
+	}
+
 	// Wait for signals
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
@@ -169,19 +268,14 @@ func main() {
 			if cfg.Verbose {
 				log.Printf("Received signal %v, shutting down...", sig)
 			}
+			shutdown()
 		}
 	} else {
 		sig := <-c
 		if cfg.Verbose {
 			log.Printf("Received signal %v, shutting down...", sig)
 		}
-	}
-
-	// Clean up
-	for _, m := range monitors {
-		if err := m.Source.Close(); err != nil {
-			log.Printf("Error closing source %s: %v", m.Source.Name(), err)
-		}
+		shutdown()
 	}
 }
 
