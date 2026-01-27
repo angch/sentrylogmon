@@ -14,6 +14,12 @@ A lightweight, resource-efficient log monitoring tool that watches various log s
 
 The tool is optimized for low CPU and memory usage, making it suitable for deployment on production systems without impacting performance.
 
+**Two implementations are available:**
+- **Go version**: Full-featured reference implementation with regex support and official Sentry SDK (~10MB binary)
+- **Zig version**: Ultra-lightweight port optimized for minimal resource usage (~200KB binary, 95% smaller!)
+
+See [zig/README.md](zig/README.md) for details on the Zig implementation.
+
 ## Features
 
 - **Multiple Log Sources**: Support for files, journalctl, dmesg, and custom command outputs
@@ -28,13 +34,45 @@ The tool is optimized for low CPU and memory usage, making it suitable for deplo
 ### Prerequisites
 
 - Go 1.19 or later
+- Zig 0.11.0 or later (for Zig build)
 
 ### Building from Source
+
+**Using Make (builds both Go and Zig versions):**
+
+```bash
+git clone https://github.com/angch/sentrylogmon.git
+cd sentrylogmon
+
+# Check if prerequisites are installed
+make check-prereqs
+
+# Install prerequisites if needed (downloads to /tmp)
+make install-prereqs
+
+# Build both Go and Zig binaries
+make build
+
+# Or build individually
+make build-go   # Builds sentrylogmon (Go)
+make build-zig  # Builds zig/zig-out/bin/sentrylogmon-zig
+```
+
+**Building Go version only:**
 
 ```bash
 git clone https://github.com/angch/sentrylogmon.git
 cd sentrylogmon
 go build -o sentrylogmon
+```
+
+**Building Zig version only:**
+
+```bash
+git clone https://github.com/angch/sentrylogmon.git
+cd sentrylogmon/zig
+zig build -Doptimize=ReleaseSafe
+# Binary will be at zig-out/bin/sentrylogmon-zig
 ```
 
 ### Installing via go install
@@ -173,14 +211,45 @@ sudo systemctl status sentrylogmon
 
 ### Building
 
+Using Make (recommended):
 ```bash
+# Build both Go and Zig versions
+make build
+
+# Build only Go
+make build-go
+
+# Build only Zig
+make build-zig
+
+# Build Zig with maximum size optimization
+make build-zig-small
+
+# Compare binary sizes
+make compare-size
+```
+
+Building manually:
+```bash
+# Go version
 go build -o sentrylogmon
+
+# Zig version
+cd zig && zig build
 ```
 
 ### Testing
 
 ```bash
+# Go tests
+make test-go
+# or
 go test ./...
+
+# Zig tests
+make test-zig
+# or
+cd zig && zig build test
 ```
 
 ### Linting
@@ -188,6 +257,22 @@ go test ./...
 ```bash
 golangci-lint run
 ```
+
+### Makefile Targets
+
+Run `make help` to see all available targets:
+
+```bash
+make help
+```
+
+Available targets include:
+- `make build` - Build both Go and Zig binaries
+- `make clean` - Remove build artifacts
+- `make check-prereqs` - Check if Go and Zig are installed
+- `make install-prereqs` - Download and install prerequisites
+- `make test` - Run tests
+- `make compare-size` - Compare binary sizes
 
 ## Configuration File Support (Future)
 
