@@ -20,7 +20,6 @@ static TIMESTAMP_REGEX: Lazy<Regex> = Lazy::new(|| {
 pub struct Monitor {
     source: Box<dyn LogSource>,
     detector: Box<dyn Detector>,
-    #[allow(dead_code)]
     collector: Arc<Collector>,
     verbose: bool,
     stop_on_eof: bool,
@@ -56,6 +55,7 @@ impl Monitor {
         let buffer = self.buffer.clone();
         let last_activity = self.last_activity.clone();
         let source_name = self.source.name().to_string();
+        let collector = self.collector.clone();
         tokio::spawn(async move {
             loop {
                 tokio::time::sleep(FLUSH_INTERVAL).await;
@@ -70,7 +70,7 @@ impl Monitor {
                     let msg = buf.join("\n");
                     buf.clear();
                     drop(buf);
-                    Self::send_to_sentry(&source_name, &msg).await;
+                    Self::send_to_sentry(&source_name, &msg, Some(&collector)).await;
                 }
             }
         });
@@ -125,7 +125,7 @@ impl Monitor {
             let msg = buffer.join("\n");
             buffer.clear();
             drop(buffer);
-            Self::send_to_sentry(self.source.name(), &msg).await;
+            Self::send_to_sentry(self.source.name(), &msg, Some(&self.collector)).await;
         }
     }
 
@@ -135,11 +135,18 @@ impl Monitor {
             let msg = buffer.join("\n");
             buffer.clear();
             drop(buffer);
-            Self::send_to_sentry(self.source.name(), &msg).await;
+            Self::send_to_sentry(self.source.name(), &msg, Some(&self.collector)).await;
         }
     }
 
-    async fn send_to_sentry(source_name: &str, message: &str) {
+    async fn send_to_sentry(source_name: &str, message: &str, collector: Option<&Collector>) {
+        let state_json = if let Some(c) = collector {
+            let state = c.get_state().await;
+            serde_json::to_value(state).ok()
+        } else {
+            None
+        };
+
         sentry::with_scope(
             |scope| {
                 scope.set_tag("source", source_name);
@@ -152,6 +159,10 @@ impl Monitor {
                 }
 
                 scope.set_extra("raw_line", serde_json::json!(message));
+
+                if let Some(json) = state_json {
+                    scope.set_extra("Server State", json);
+                }
             },
             || {
                 sentry::capture_message(message, sentry::Level::Error);
