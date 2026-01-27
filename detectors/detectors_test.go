@@ -114,6 +114,7 @@ func TestIsKnownDetector(t *testing.T) {
 	}{
 		{"KnownDmesg", "dmesg", true},
 		{"KnownNginx", "nginx", true},
+		{"KnownNginxError", "nginx-error", true},
 		{"UnknownFoo", "foo", false},
 		{"UnknownEmpty", "", false},
 		{"UnknownCase", "Nginx", false}, // Currently case sensitive
