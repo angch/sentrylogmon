@@ -2,6 +2,8 @@
 
 A lightweight, resource-efficient log monitoring tool that watches various log sources for issues and forwards them to Sentry for centralized error tracking and alerting.
 
+**Available in both Go and Rust implementations** - choose the one that best fits your environment!
+
 ## Overview
 
 `sentrylogmon` is designed to be a minimal-overhead monitoring solution that can:
@@ -24,19 +26,56 @@ The tool is optimized for low CPU and memory usage, making it suitable for deplo
 - **Lightweight**: Minimal CPU and memory footprint
 - **Flexible Configuration**: Command-line flags and environment variables
 - **Real-time Monitoring**: Continuous monitoring with configurable check intervals
+- **Two Implementations**: Choose between Go (reference) or Rust (smaller binary, ~50% size reduction)
+
+## Rust Port
+
+A Rust implementation is available in the `rust/` directory. It provides the same functionality as the Go version but with:
+- **Smaller binary size**: ~3.6MB vs ~7.2MB (50% smaller)
+- **Async I/O**: Built on Tokio for efficient non-blocking operations
+- **Same features**: All core functionality matches the Go version
+
+See [rust/README.md](rust/README.md) for Rust-specific documentation.
 
 ## Installation
 
 ### Prerequisites
 
+**For Go version:**
 - Go 1.19 or later
+
+**For Rust version:**
+- Rust 1.70 or later
+- Cargo (comes with Rust)
+
+**Check prerequisites:**
+```bash
+make check-prereqs
+```
+
+**Install prerequisites (if missing):**
+```bash
+make install-prereqs
+```
 
 ### Building from Source
 
+**Build Go version:**
 ```bash
 git clone https://github.com/angch/sentrylogmon.git
 cd sentrylogmon
-go build -o sentrylogmon
+make build-go
+```
+
+**Build Rust version:**
+```bash
+cd sentrylogmon
+make build-rust
+```
+
+**Build both:**
+```bash
+make build-all
 ```
 
 ### Installing via go install
@@ -248,20 +287,65 @@ Generate 100MB of Nginx-formatted logs with errors:
 
 ### Building
 
+**Go version:**
 ```bash
+make build-go
+# or
 go build -o sentrylogmon
+```
+
+**Rust version:**
+```bash
+make build-rust
+# or
+cd rust && cargo build --release
+```
+
+**Both versions:**
+```bash
+make build-all
 ```
 
 ### Testing
 
+**Go tests:**
 ```bash
+make test-go
+# or
 go test ./...
+```
+
+**Rust tests:**
+```bash
+make test-rust
+# or
+cd rust && cargo test
+```
+
+**All tests:**
+```bash
+make test-all
 ```
 
 ### Linting
 
+**Go:**
 ```bash
 golangci-lint run
+```
+
+**Rust:**
+```bash
+cd rust && cargo clippy
+```
+
+### Binary Size Comparison
+
+```bash
+make build-all
+# Shows sizes of both binaries
+# Go binary:   ~7.2MB
+# Rust binary: ~3.6MB (50% smaller)
 ```
 
 ## Contributing
