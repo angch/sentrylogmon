@@ -46,42 +46,165 @@ type SystemState struct {
 	ProcessSummary string                 `json:"process_summary"`
 }
 
+// ToMap converts SystemState to map[string]interface{} for Sentry context.
+// This is more efficient than JSON marshal/unmarshal round-trip.
+func (s *SystemState) ToMap() map[string]interface{} {
+	if s == nil {
+		return nil
+	}
+
+	result := make(map[string]interface{})
+	result["timestamp"] = s.Timestamp
+	result["uptime"] = s.Uptime
+	result["process_summary"] = s.ProcessSummary
+
+	if s.Load != nil {
+		result["load"] = map[string]interface{}{
+			"load1":  s.Load.Load1,
+			"load5":  s.Load.Load5,
+			"load15": s.Load.Load15,
+		}
+	}
+
+	if s.Memory != nil {
+		result["memory"] = map[string]interface{}{
+			"total":        s.Memory.Total,
+			"available":    s.Memory.Available,
+			"used":         s.Memory.Used,
+			"used_percent": s.Memory.UsedPercent,
+			"free":         s.Memory.Free,
+		}
+	}
+
+	if s.DiskPressure != nil {
+		result["disk_pressure"] = map[string]interface{}{
+			"avg10":  s.DiskPressure.Avg10,
+			"avg60":  s.DiskPressure.Avg60,
+			"avg300": s.DiskPressure.Avg300,
+			"total":  s.DiskPressure.Total,
+		}
+	}
+
+	if len(s.TopCPU) > 0 {
+		topCPU := make([]map[string]interface{}, len(s.TopCPU))
+		for i, p := range s.TopCPU {
+			topCPU[i] = map[string]interface{}{
+				"pid":     p.Pid,
+				"rss":     p.RSS,
+				"cpu":     p.CPU,
+				"mem":     p.MEM,
+				"command": p.Command,
+			}
+		}
+		result["top_cpu"] = topCPU
+	}
+
+	if len(s.TopMem) > 0 {
+		topMem := make([]map[string]interface{}, len(s.TopMem))
+		for i, p := range s.TopMem {
+			topMem[i] = map[string]interface{}{
+				"pid":     p.Pid,
+				"rss":     p.RSS,
+				"cpu":     p.CPU,
+				"mem":     p.MEM,
+				"command": p.Command,
+			}
+		}
+		result["top_mem"] = topMem
+	}
+
+	return result
+}
+
 type Collector struct {
-	mu    sync.RWMutex
-	state *SystemState
+	mu       sync.RWMutex
+	state    *SystemState
+	stopChan chan struct{}
 }
 
 func New() *Collector {
 	return &Collector{
-		state: &SystemState{},
+		state:    &SystemState{},
+		stopChan: make(chan struct{}),
 	}
 }
 
 func (c *Collector) GetState() *SystemState {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.state
+
+	if c.state == nil {
+		return nil
+	}
+
+	// Create a deep copy to avoid data races
+	copyState := *c.state
+
+	// Deep-copy pointer fields
+	if c.state.Load != nil {
+		loadCopy := *c.state.Load
+		copyState.Load = &loadCopy
+	}
+
+	if c.state.Memory != nil {
+		memCopy := *c.state.Memory
+		copyState.Memory = &memCopy
+	}
+
+	if c.state.DiskPressure != nil {
+		dpCopy := *c.state.DiskPressure
+		copyState.DiskPressure = &dpCopy
+	}
+
+	// Deep-copy slice fields to avoid sharing backing arrays
+	if c.state.TopCPU != nil {
+		topCPUCopy := make([]ProcessInfo, len(c.state.TopCPU))
+		copy(topCPUCopy, c.state.TopCPU)
+		copyState.TopCPU = topCPUCopy
+	}
+
+	if c.state.TopMem != nil {
+		topMemCopy := make([]ProcessInfo, len(c.state.TopMem))
+		copy(topMemCopy, c.state.TopMem)
+		copyState.TopMem = topMemCopy
+	}
+
+	return &copyState
 }
 
 func (c *Collector) Run() {
 	// Initial collection
 	c.collect()
 
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
 	for {
-		sleepDuration := 1 * time.Minute
+		select {
+		case <-c.stopChan:
+			return
+		case <-ticker.C:
+			c.collect()
 
-		c.mu.RLock()
-		if c.state.Load != nil {
-			// If Load1 > NumCPU, consider it high load and back off
-			if c.state.Load.Load1 > float64(runtime.NumCPU()) {
-				sleepDuration = 10 * time.Minute
+			// Adjust ticker interval based on load
+			c.mu.RLock()
+			sleepDuration := 1 * time.Minute
+			if c.state.Load != nil {
+				// If Load1 > NumCPU, consider it high load and back off
+				if c.state.Load.Load1 > float64(runtime.NumCPU()) {
+					sleepDuration = 10 * time.Minute
+				}
 			}
-		}
-		c.mu.RUnlock()
+			c.mu.RUnlock()
 
-		time.Sleep(sleepDuration)
-		c.collect()
+			ticker.Reset(sleepDuration)
+		}
 	}
+}
+
+// Stop gracefully stops the collector goroutine.
+func (c *Collector) Stop() {
+	close(c.stopChan)
 }
 
 func (c *Collector) collect() {
@@ -135,6 +258,10 @@ func (c *Collector) collect() {
 	c.mu.Unlock()
 }
 
+// getDiskPressure reads Pressure Stall Information (PSI) from /proc/pressure/io.
+// PSI is a Linux-specific feature available in kernel 4.20+ and requires
+// CONFIG_PSI=y in kernel configuration. Returns nil on other platforms,
+// older kernels, or if PSI is disabled.
 func getDiskPressure() *PressureInfo {
 	content, err := os.ReadFile("/proc/pressure/io")
 	if err != nil {

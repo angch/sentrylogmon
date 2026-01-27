@@ -34,6 +34,14 @@ func TestCollect(t *testing.T) {
 		}
 	}
 
+	if len(state.TopMem) == 0 {
+		t.Log("TopMem is empty, possibly due to missing ps command or permissions")
+	} else {
+		if len(state.TopMem) > 5 {
+			t.Error("TopMem has too many entries")
+		}
+	}
+
 	if time.Since(state.Timestamp) > 1*time.Minute {
 		t.Error("Timestamp is too old")
 	}
