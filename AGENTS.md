@@ -310,9 +310,9 @@ When enhancing this project:
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
-| 2026-01 | Initial design using Go + Sentry | Best balance of performance and integration capabilities |
-| 2026-01 | CLI flags + env vars for config | Simplicity and container-friendliness |
-| 2026-01 | Support for files, journalctl, dmesg | Cover 90% of common use cases |
+| 2026-01-27 | Initial design using Go + Sentry | Best balance of performance and integration capabilities |
+| 2026-01-27 | CLI flags + env vars for config | Simplicity and container-friendliness |
+| 2026-01-27 | Support for files, journalctl, dmesg | Cover 90% of common use cases |
 
 ---
 
