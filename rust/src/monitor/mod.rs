@@ -1,4 +1,5 @@
 use anyhow::Result;
+use once_cell::sync::Lazy;
 use regex::Regex;
 use std::sync::Arc;
 use tokio::io::AsyncBufReadExt;
@@ -11,6 +12,10 @@ use crate::sysstat::Collector;
 
 const MAX_BUFFER_SIZE: usize = 1000;
 const FLUSH_INTERVAL: Duration = Duration::from_secs(5);
+
+static TIMESTAMP_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^\[\s*([0-9.]+)\]").unwrap()
+});
 
 pub struct Monitor {
     source: Box<dyn LogSource>,
@@ -140,8 +145,7 @@ impl Monitor {
                 scope.set_tag("source", source_name);
                 
                 // Try to extract timestamp
-                let timestamp_regex = Regex::new(r"^\[\s*([0-9.]+)\]").unwrap();
-                if let Some(caps) = timestamp_regex.captures(message) {
+                if let Some(caps) = TIMESTAMP_REGEX.captures(message) {
                     if let Some(ts) = caps.get(1) {
                         scope.set_tag("log_timestamp", ts.as_str());
                     }
