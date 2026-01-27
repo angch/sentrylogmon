@@ -25,7 +25,7 @@ func (s *MockSource) Close() error { return nil }
 // MockDetector implements detectors.Detector (implicitly)
 type MockDetector struct{}
 
-func (d *MockDetector) Detect(line string) bool {
+func (d *MockDetector) Detect(line []byte) bool {
 	return true // Detect everything
 }
 
@@ -71,8 +71,24 @@ func TestMonitorGrouping(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create monitor: %v", err)
 	}
+	mon.StopOnEOF = true
 
-	mon.Start()
+	go mon.Start()
+
+	// Wait for processing with timeout
+	start := time.Now()
+	for {
+		transport.mu.Lock()
+		count := len(transport.events)
+		transport.mu.Unlock()
+		if count >= 2 {
+			break
+		}
+		if time.Since(start) > 2*time.Second {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	// Flush sentry to ensure events are sent to mock transport
 	sentry.Flush(time.Second)

@@ -67,9 +67,9 @@ func TestDetectorsWithTestData(t *testing.T) {
 					var detectedLines []string
 					scanner := bufio.NewScanner(inputFile)
 					for scanner.Scan() {
-						line := scanner.Text()
-						if detector.Detect(line) {
-							detectedLines = append(detectedLines, line)
+						lineBytes := scanner.Bytes()
+						if detector.Detect(lineBytes) {
+							detectedLines = append(detectedLines, string(lineBytes))
 						}
 					}
 

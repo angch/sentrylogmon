@@ -28,25 +28,27 @@ func NewDmesgDetector() *DmesgDetector {
 	return &DmesgDetector{GenericDetector: d}
 }
 
-func (d *DmesgDetector) Detect(line string) bool {
+func (d *DmesgDetector) Detect(line []byte) bool {
 	// 1. Check if it matches the error pattern first
 	isError := d.GenericDetector.Detect(line)
 
 	// 2. Check if it looks like a new dmesg line (starts with timestamp)
-	isDmesgLine := dmesgStartRegex.MatchString(line)
+	isDmesgLine := dmesgStartRegex.Match(line)
 
 	// 3. Parse the line for detailed info
-	matches := dmesgLineRegex.FindStringSubmatch(line)
+	matches := dmesgLineRegex.FindSubmatch(line)
 	var timestamp float64
-	var header string
+	var headerBytes []byte
 	var err error
 
 	if len(matches) >= 3 {
-		timestamp, err = strconv.ParseFloat(matches[1], 64)
+		// matches[1] is timestamp, matches[2] is header
+		// We use string conversion for ParseFloat, which is unavoidable unless we write custom parser
+		timestamp, err = strconv.ParseFloat(string(matches[1]), 64)
 		if err != nil {
 			timestamp = 0
 		}
-		header = matches[2]
+		headerBytes = matches[2]
 	}
 
 	if isError {
@@ -54,8 +56,8 @@ func (d *DmesgDetector) Detect(line string) bool {
 		if timestamp > 0 {
 			d.lastMatchTime = timestamp
 		}
-		if header != "" {
-			d.lastMatchHeader = header
+		if len(headerBytes) > 0 {
+			d.lastMatchHeader = string(headerBytes)
 		}
 		return true
 	}
@@ -64,9 +66,10 @@ func (d *DmesgDetector) Detect(line string) bool {
 	if d.lastMatchHeader != "" {
 		if isDmesgLine {
 			// It's a new log line. Check if it's related.
-			if header != "" && timestamp > 0 {
+			if len(headerBytes) > 0 && timestamp > 0 {
 				if (timestamp - d.lastMatchTime) <= 5.0 {
-					if areHeadersRelated(d.lastMatchHeader, header) {
+					// Convert headerBytes to string for comparison
+					if areHeadersRelated(d.lastMatchHeader, string(headerBytes)) {
 						return true
 					}
 				}
