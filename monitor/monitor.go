@@ -2,27 +2,31 @@ package monitor
 
 import (
 	"bufio"
+	"encoding/json"
 	"log"
 	"regexp"
 
 	"github.com/angch/sentrylogmon/detectors"
 	"github.com/angch/sentrylogmon/sources"
+	"github.com/angch/sentrylogmon/sysstat"
 	"github.com/getsentry/sentry-go"
 )
 
 var timestampRegex = regexp.MustCompile(`^\[\s*([0-9.]+)\]`)
 
 type Monitor struct {
-	Source   sources.LogSource
-	Detector detectors.Detector
-	Verbose  bool
+	Source    sources.LogSource
+	Detector  detectors.Detector
+	Collector *sysstat.Collector
+	Verbose   bool
 }
 
-func New(source sources.LogSource, detector detectors.Detector, verbose bool) (*Monitor, error) {
+func New(source sources.LogSource, detector detectors.Detector, collector *sysstat.Collector, verbose bool) (*Monitor, error) {
 	return &Monitor{
-		Source:   source,
-		Detector: detector,
-		Verbose:  verbose,
+		Source:    source,
+		Detector:  detector,
+		Collector: collector,
+		Verbose:   verbose,
 	}, nil
 }
 
@@ -68,6 +72,15 @@ func (m *Monitor) sendToSentry(line string) {
 		}
 
 		scope.SetExtra("raw_line", line)
+
+		if m.Collector != nil {
+			state := m.Collector.GetState()
+			// Convert state to map[string]interface{} for SetContext
+			var stateMap map[string]interface{}
+			data, _ := json.Marshal(state)
+			json.Unmarshal(data, &stateMap)
+			scope.SetContext("Server State", stateMap)
+		}
 
 		// We send the line as the message.
 		// Sentry will group these based on the message content.

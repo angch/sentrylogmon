@@ -12,6 +12,7 @@ import (
 	"github.com/angch/sentrylogmon/detectors"
 	"github.com/angch/sentrylogmon/monitor"
 	"github.com/angch/sentrylogmon/sources"
+	"github.com/angch/sentrylogmon/sysstat"
 	"github.com/getsentry/sentry-go"
 )
 
@@ -44,6 +45,10 @@ func main() {
 	if len(cfg.Monitors) == 0 {
 		log.Fatal("No monitors configured. Use --file, --dmesg, --journalctl, --command, or config file.")
 	}
+
+	// Start System Stats Collector
+	sysstatCollector := sysstat.New()
+	go sysstatCollector.Run()
 
 	// Start monitors
 	var monitors []*monitor.Monitor
@@ -112,7 +117,7 @@ func main() {
 			continue
 		}
 
-		m, err := monitor.New(src, det, cfg.Verbose)
+		m, err := monitor.New(src, det, sysstatCollector, cfg.Verbose)
 		if err != nil {
 			log.Printf("Failed to create monitor '%s': %v", monCfg.Name, err)
 			continue
