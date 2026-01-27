@@ -1,0 +1,3 @@
+[    2.000000] Error: Something bad
+    at function_call (file.c:123)
+    at another_call (file.c:456)

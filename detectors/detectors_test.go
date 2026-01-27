@@ -24,12 +24,6 @@ func TestDetectorsWithTestData(t *testing.T) {
 
 		detectorName := entry.Name()
 		t.Run(detectorName, func(t *testing.T) {
-			// Get detector for this directory name
-			detector, err := GetDetector(detectorName, "")
-			if err != nil {
-				t.Fatalf("Failed to get detector for %s: %v", detectorName, err)
-			}
-
 			dirPath := filepath.Join(testDataDir, detectorName)
 			files, err := os.ReadDir(dirPath)
 			if err != nil {
@@ -51,6 +45,12 @@ func TestDetectorsWithTestData(t *testing.T) {
 				expectFilename := baseName + ".expect.txt"
 
 				t.Run(inputFilename, func(t *testing.T) {
+					// Create detector for each file to ensure fresh state
+					detector, err := GetDetector(detectorName, "")
+					if err != nil {
+						t.Fatalf("Failed to get detector for %s: %v", detectorName, err)
+					}
+
 					inputPath := filepath.Join(dirPath, inputFilename)
 					expectPath := filepath.Join(dirPath, expectFilename)
 
