@@ -216,6 +216,32 @@ sentrylogmon --config=sentrylogmon.yaml
 
 **Note:** If you provide Sentry configuration (DSN, environment, release) via flags or environment variables, they will be used as fallbacks if missing from the configuration file.
 
+### Instance Management (IPC)
+
+The Go version of `sentrylogmon` supports managing running instances via a secure IPC mechanism (Unix Domain Sockets). This allows you to list running instances and instruct them to restart (e.g., to pick up a new binary or configuration).
+
+**List running instances:**
+```bash
+sentrylogmon --status
+```
+Output:
+```json
+[
+  {
+    "pid": 1234,
+    "start_time": "2023-10-27T10:00:00Z",
+    "version": "v1.0.0",
+    "config": { ... }
+  }
+]
+```
+
+**Restart all running instances:**
+```bash
+sentrylogmon --update
+```
+This command sends a signal to all discovered instances to gracefully shut down their monitors and re-execute the binary in-place (preserving the PID). This is useful for upgrades or configuration reloading without stopping the service manually.
+
 ### Example Configurations
 
 **Production web server monitoring:**

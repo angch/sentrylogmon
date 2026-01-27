@@ -30,11 +30,8 @@ var (
 )
 
 func main() {
-	// Parse flags and load config
-	cfg, err := config.Load()
-	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
-	}
+	// Ensure flags are parsed first to handle --status/--update without requiring full config
+	config.ParseFlags()
 
 	if *statusFlag {
 		instances, err := ipc.ListInstances("/tmp/sentrylogmon")
@@ -62,6 +59,12 @@ func main() {
 			}
 		}
 		return
+	}
+
+	// Load configuration after checking for IPC flags
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
 	if cfg.Sentry.DSN == "" {

@@ -31,21 +31,23 @@ func ListInstances(socketDir string) ([]StatusResponse, error) {
 	var instances []StatusResponse
 
 	for _, socketPath := range matches {
-		client := newUnixClient(socketPath)
-		// URL host is ignored by unix dialer, but scheme must be http
-		resp, err := client.Get("http://unix/status")
-		if err != nil {
-			// Skip dead sockets or permission denied
-			continue
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode == http.StatusOK {
-			var status StatusResponse
-			if err := json.NewDecoder(resp.Body).Decode(&status); err == nil {
-				instances = append(instances, status)
+		func() {
+			client := newUnixClient(socketPath)
+			// URL host is ignored by unix dialer, but scheme must be http
+			resp, err := client.Get("http://unix/status")
+			if err != nil {
+				// Skip dead sockets or permission denied
+				return
 			}
-		}
+			defer resp.Body.Close()
+
+			if resp.StatusCode == http.StatusOK {
+				var status StatusResponse
+				if err := json.NewDecoder(resp.Body).Decode(&status); err == nil {
+					instances = append(instances, status)
+				}
+			}
+		}()
 	}
 
 	return instances, nil
