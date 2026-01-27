@@ -303,6 +303,19 @@ Integration tests for detectors are located in `testdata/<detector>/`.
 - Preserve original timezone in metadata
 - Use Go's `time.Time` type throughout
 
+## Rust Development
+
+The Rust implementation (`rust/` directory) aims to provide a high-performance alternative to the Go version.
+
+### Guidelines
+
+1.  **Feature Parity**: The Rust version must follow the Go version's feature sets. Any new feature added to Go should be ported to Rust.
+2.  **Static Linking**: The release binary must be built as a statically linked binary for `amd64` (using `musl` target).
+3.  **Testing**:
+    *   Unit tests should cover individual components.
+    *   Integration tests must use the shared `testdata/` directory to ensure consistent behavior between Go and Rust versions.
+    *   Run tests via `make test-rust` or `cargo test` in the `rust` directory.
+
 ## Contribution Guidelines for Agents
 
 When enhancing this project:

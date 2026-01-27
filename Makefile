@@ -42,6 +42,9 @@ install-prereqs:
 	else \
 		echo "Rust is already installed: $$(cargo --version)"; \
 	fi
+	@# Install Rust target for static linking
+	@echo "Installing Rust musl target..."
+	@rustup target add x86_64-unknown-linux-musl || echo "Failed to add target, please ensure rustup is installed"
 	@echo ""
 	@echo "Prerequisites installation complete."
 
@@ -54,8 +57,8 @@ build-go:
 # Build Rust binary
 build-rust:
 	@echo "Building Rust binary..."
-	cd rust && cargo build --release
-	@echo "Rust binary built: rust/target/release/sentrylogmon"
+	cd rust && cargo build --release --target x86_64-unknown-linux-musl
+	@echo "Rust binary built: rust/target/x86_64-unknown-linux-musl/release/sentrylogmon"
 
 # Build both binaries
 build-all: build-go build-rust
