@@ -75,8 +75,9 @@ func (m *Monitor) Start() {
 		scanner.Buffer(buf, MaxScanTokenSize)
 
 		for scanner.Scan() {
-			line := scanner.Text()
-			if m.Detector.Detect(line) {
+			lineBytes := scanner.Bytes()
+			if m.Detector.Detect(lineBytes) {
+				line := string(lineBytes)
 				if m.Verbose {
 					log.Printf("[%s] Matched: %s", m.Source.Name(), line)
 				}

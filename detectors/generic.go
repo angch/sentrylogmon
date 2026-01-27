@@ -15,6 +15,6 @@ func NewGenericDetector(pattern string) (*GenericDetector, error) {
 	return &GenericDetector{pattern: re}, nil
 }
 
-func (d *GenericDetector) Detect(line string) bool {
-	return d.pattern.MatchString(line)
+func (d *GenericDetector) Detect(line []byte) bool {
+	return d.pattern.Match(line)
 }
