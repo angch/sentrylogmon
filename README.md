@@ -19,6 +19,7 @@ The tool is optimized for low CPU and memory usage, making it suitable for deplo
 - **Multiple Log Sources**: Support for files, journalctl, dmesg, and custom command outputs
 - **Pattern-based Detection**: Configurable regex patterns to identify issues
 - **Sentry Integration**: Direct integration with Sentry for error tracking and alerting
+- **System Status Context**: Automatically captures and attaches system state (CPU load, memory usage, top processes) to Sentry events
 - **Lightweight**: Minimal CPU and memory footprint
 - **Flexible Configuration**: Command-line flags and environment variables
 - **Real-time Monitoring**: Continuous monitoring with configurable check intervals
