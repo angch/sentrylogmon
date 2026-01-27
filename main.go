@@ -172,5 +172,8 @@ func determineDetectorFormat(monCfg config.MonitorConfig) string {
 	if monCfg.Type == "dmesg" {
 		return "dmesg"
 	}
+	if detectors.IsKnownDetector(monCfg.Name) {
+		return monCfg.Name
+	}
 	return "custom"
 }

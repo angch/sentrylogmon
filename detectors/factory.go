@@ -19,3 +19,13 @@ func GetDetector(format string, pattern string) (Detector, error) {
 		return nil, fmt.Errorf("unknown detector format: %s", format)
 	}
 }
+
+// IsKnownDetector checks if the given name matches a known detector type.
+func IsKnownDetector(name string) bool {
+	switch name {
+	case "dmesg", "nginx":
+		return true
+	default:
+		return false
+	}
+}

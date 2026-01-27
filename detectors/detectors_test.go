@@ -105,3 +105,25 @@ func readLines(t *testing.T, path string) []string {
 	}
 	return lines
 }
+
+func TestIsKnownDetector(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		{"KnownDmesg", "dmesg", true},
+		{"KnownNginx", "nginx", true},
+		{"UnknownFoo", "foo", false},
+		{"UnknownEmpty", "", false},
+		{"UnknownCase", "Nginx", false}, // Currently case sensitive
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsKnownDetector(tt.input); got != tt.expected {
+				t.Errorf("IsKnownDetector(%q) = %v, want %v", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
