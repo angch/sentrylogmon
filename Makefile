@@ -100,11 +100,11 @@ install-prereqs:
 	@if ! which zig > /dev/null 2>&1; then \
 		echo "Installing Zig..."; \
 		mkdir -p /tmp/sentrylogmon-tools; \
-		echo "Attempting to download Zig 0.11.0..."; \
+		echo "Attempting to download Zig 0.13.0..."; \
 		cd /tmp/sentrylogmon-tools && \
-		(curl -sL https://ziglang.org/download/0.11.0/zig-linux-x86_64-0.11.0.tar.xz -o zig.tar.xz && \
+		(curl -sL https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz -o zig.tar.xz && \
 		tar -xf zig.tar.xz && \
-		mv zig-linux-x86_64-0.11.0 zig && \
+		mv zig-linux-x86_64-0.13.0 zig && \
 		rm zig.tar.xz && \
 		echo "" && \
 		echo "Zig downloaded to /tmp/sentrylogmon-tools/zig" && \
@@ -263,7 +263,7 @@ help:
 	@echo ""
 	@echo "Prerequisites:"
 	@echo "  - Go 1.19 or later"
-	@echo "  - Zig 0.11.0 or later (optional)"
+	@echo "  - Zig 0.13.0 or later (optional)"
 	@echo "  - Rust/Cargo (optional)"
 	@echo ""
 	@echo "Examples:"

@@ -17,7 +17,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     // Parse command-line arguments
-    var args = try parseArgs(allocator);
+    const args = try parseArgs(allocator);
     defer if (args.file) |f| allocator.free(f);
     defer if (args.release.len > 0) allocator.free(args.release);
 
@@ -279,21 +279,25 @@ fn sendToSentry(allocator: std.mem.Allocator, timestamp: []const u8, lines: []co
 
     const uri = try std.Uri.parse(url_buf);
 
-    var headers = std.http.Headers{ .allocator = allocator };
-    defer headers.deinit();
-
     const auth_header = try std.fmt.allocPrint(allocator, "Sentry sentry_version=7,sentry_key={s}", .{parsed_dsn.public_key});
     defer allocator.free(auth_header);
 
-    try headers.append("X-Sentry-Auth", auth_header);
-    try headers.append("Content-Type", "application/json");
+    const extra_headers = &[_]std.http.Header{
+        .{ .name = "X-Sentry-Auth", .value = auth_header },
+        .{ .name = "Content-Type", .value = "application/json" },
+    };
 
-    var request = try client.open(.POST, uri, headers, .{});
+    var server_header_buffer: [4096]u8 = undefined;
+
+    var request = try client.open(.POST, uri, .{
+        .server_header_buffer = &server_header_buffer,
+        .extra_headers = extra_headers,
+    });
     defer request.deinit();
 
     request.transfer_encoding = .{ .content_length = payload.items.len };
 
-    try request.send(.{});
+    try request.send();
     try request.writeAll(payload.items);
     try request.finish();
 
