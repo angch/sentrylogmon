@@ -66,7 +66,7 @@ Modern systems generate extensive logs from various sources (application logs, s
 - **Container-Friendly**: Environment variables work well in Docker/Kubernetes
 - **Security**: Sensitive data (DSN) can be kept out of command-line history via env vars
 
-**Future Consideration**: Configuration files (YAML/TOML) could be added for complex multi-monitor setups without breaking existing CLI interface.
+**Future Consideration**: Configuration files (YAML/TOML) could be added for complex multi-monitor setups without breaking existing CLI interface. (Implemented 2026-01-27)
 
 ### 5. Log Source Support
 
@@ -107,10 +107,15 @@ sentrylogmon/
 │   ├── journalctl.go      # journalctl log source
 │   ├── dmesg.go           # dmesg log source
 │   └── command.go         # Custom command log source
-├── detector/
-│   └── detector.go        # Pattern matching and detection logic
-├── forwarder/
-│   └── sentry.go          # Sentry integration and message forwarding
+├── detectors/
+│   ├── detector.go        # Pattern matching interface
+│   └── ...                # Specific detector implementations
+├── monitor/
+│   └── monitor.go         # Orchestration and Sentry forwarding
+├── sysstat/
+│   └── sysstat.go         # System state collection
+├── testdata/
+│   └── ...                # Data-driven test files
 ├── go.mod
 ├── go.sum
 ├── README.md
@@ -124,37 +129,37 @@ sentrylogmon/
 
 ```go
 type LogSource interface {
-    // Read returns the next log line or an error
-    Read() (string, error)
-    
-    // Close releases resources associated with the log source
+    // Stream returns a reader that streams the log output.
+    // It should handle starting the underlying process if necessary.
+    Stream() (io.Reader, error)
+
+    // Close stops the log source and releases resources.
     Close() error
+
+    // Name returns the name of the source (e.g. for logging).
+    Name() string
 }
 ```
 
 #### Detector
 
 ```go
-type Detector struct {
-    pattern *regexp.Regexp
-}
-
-func (d *Detector) IsIssue(line string) bool {
-    return d.pattern.MatchString(line)
+type Detector interface {
+    Detect(line string) bool
 }
 ```
 
-#### Forwarder
+#### Monitor (Forwarder)
 
-```go
-type SentryForwarder struct {
-    hub *sentry.Hub
-}
+The `Monitor` struct in `monitor/monitor.go` handles the core logic:
+1. Reads from `LogSource`
+2. Checks lines against `Detector`
+3. If issue detected, collects `SystemState`
+4. Buffers and sends to Sentry
 
-func (f *SentryForwarder) Forward(message string, context map[string]interface{}) error {
-    // Send to Sentry using CaptureMessage
-}
-```
+#### System State Collection (`sysstat`)
+
+The `sysstat` package collects system metrics (Load, Memory, Top Processes) to provide context when an error occurs. This helps in diagnosing if the error was caused by resource exhaustion.
 
 ## Technology Decisions
 
@@ -165,7 +170,11 @@ func (f *SentryForwarder) Forward(message string, context map[string]interface{}
    - Handles connection pooling, retries, and rate limiting
    - Supports all Sentry features (breadcrumbs, contexts, etc.)
 
-2. **Standard Library**: Prefer stdlib over third-party where possible
+2. **System Statistics**:
+   - `github.com/shirou/gopsutil/v3`: For portable system stats (load, memory)
+   - `github.com/prometheus/procfs`: For efficient access to /proc filesystem
+
+3. **Standard Library**: Prefer stdlib over third-party where possible
    - `regexp` for pattern matching
    - `flag` for CLI parsing (or `github.com/spf13/cobra` for more complex CLI)
    - `bufio` for efficient line reading
@@ -182,10 +191,10 @@ func (f *SentryForwarder) Forward(message string, context map[string]interface{}
 
 ### Planned Features
 
-1. **Configuration File Support**
+1. **Configuration File Support** (Implemented)
    - YAML/TOML format for defining multiple monitors
-   - Hot-reload capability to update config without restart
-   - Validate config before applying
+   - Hot-reload capability to update config without restart (Future)
+   - Validate config before applying (Future)
 
 2. **Metrics and Health Monitoring**
    - Expose Prometheus metrics (lines processed, issues detected, etc.)
@@ -227,9 +236,16 @@ The following are explicitly **not** goals for this project:
 ### Unit Tests
 
 - Test each LogSource implementation independently
-- Mock Sentry client for Forwarder tests
+- Mock Sentry client for Monitor tests
 - Test pattern matching edge cases in Detector
 - Aim for >80% code coverage
+
+### Data-Driven Tests
+
+Integration tests for detectors are located in `testdata/<detector>/`.
+- Each test case consists of an input file (`*.txt`) and an expected output file (`*.expect.txt`).
+- **Important**: Files not ending in `.txt` are ignored by the test runner. This allows keeping backup files or other artifacts in the directory without breaking tests.
+- When adding new test cases, ensure you provide both the input `.txt` file and the corresponding `.expect.txt` file.
 
 ### Integration Tests
 
@@ -313,6 +329,9 @@ When enhancing this project:
 | 2026-01-27 | Initial design using Go + Sentry | Best balance of performance and integration capabilities |
 | 2026-01-27 | CLI flags + env vars for config | Simplicity and container-friendliness |
 | 2026-01-27 | Support for files, journalctl, dmesg | Cover 90% of common use cases |
+| 2026-01-27 | Added `sysstat` for system context | Provide crucial context (load, memory) for debugging errors |
+| 2026-01-27 | Ignore non-txt files in testdata | Prevent editor backups and artifacts from breaking data-driven tests |
+| 2026-01-27 | Added Configuration File Support | Support for complex multi-monitor setups via YAML config |
 
 ---
 

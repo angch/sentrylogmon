@@ -2,6 +2,8 @@
 
 A lightweight, resource-efficient log monitoring tool that watches various log sources for issues and forwards them to Sentry for centralized error tracking and alerting.
 
+**Available in Go, Rust, and Zig implementations** - choose the one that best fits your environment!
+
 ## Overview
 
 `sentrylogmon` is designed to be a minimal-overhead monitoring solution that can:
@@ -14,65 +16,98 @@ A lightweight, resource-efficient log monitoring tool that watches various log s
 
 The tool is optimized for low CPU and memory usage, making it suitable for deployment on production systems without impacting performance.
 
-**Two implementations are available:**
-- **Go version**: Full-featured reference implementation with regex support and official Sentry SDK (~10MB binary)
-- **Zig version**: Ultra-lightweight port optimized for minimal resource usage (~200KB binary, 95% smaller!)
+**Three implementations are available:**
+- **Go version**: Full-featured reference implementation with regex support and official Sentry SDK (~7MB binary)
+- **Rust version**: Async implementation with smaller binary (~3.6MB, 50% smaller than Go)
+- **Zig version**: Ultra-lightweight port optimized for minimal resource usage (~200KB, 95% smaller than Go!)
 
-See [zig/README.md](zig/README.md) for details on the Zig implementation.
+See [rust/README.md](rust/README.md) for Rust-specific documentation and [zig/README.md](zig/README.md) for Zig-specific documentation.
 
 ## Features
 
 - **Multiple Log Sources**: Support for files, journalctl, dmesg, and custom command outputs
 - **Pattern-based Detection**: Configurable regex patterns to identify issues
 - **Sentry Integration**: Direct integration with Sentry for error tracking and alerting
+- **System Status Context**: Automatically captures and attaches system state (CPU load, memory usage, top processes) to Sentry events
+- **Efficient File Watching**: Uses `fsnotify` for native file system notifications
 - **Lightweight**: Minimal CPU and memory footprint
 - **Flexible Configuration**: Command-line flags and environment variables
 - **Real-time Monitoring**: Continuous monitoring with configurable check intervals
+- **Three Implementations**: Choose between Go (reference), Rust (smaller binary), or Zig (smallest binary)
+
+## Rust Port
+
+A Rust implementation is available in the `rust/` directory. It provides the same functionality as the Go version but with:
+- **Smaller binary size**: ~3.6MB vs ~7.2MB (50% smaller than Go)
+- **Async I/O**: Built on Tokio for efficient non-blocking operations
+- **Same features**: All core functionality matches the Go version
+
+See [rust/README.md](rust/README.md) for Rust-specific documentation.
+
+## Zig Port
+
+A Zig implementation is available in the `zig/` directory. It provides core functionality with:
+- **Smallest binary size**: ~200-300KB (95% smaller than Go, 90% smaller than Rust)
+- **Minimal memory footprint**: ~2-3MB RSS vs ~5-8MB for Go
+- **Zero external dependencies**: Only uses Zig standard library
+- **Fast startup**: ~5-10ms vs ~50-100ms for Go
+- **Simple pattern matching**: Case-insensitive substring search (simpler than full regex)
+
+See [zig/README.md](zig/README.md) for Zig-specific documentation.
 
 ## Installation
 
 ### Prerequisites
 
+**For Go version:**
 - Go 1.19 or later
-- Zig 0.11.0 or later (for Zig build)
+
+**For Rust version:**
+- Rust 1.70 or later
+- Cargo (comes with Rust)
+
+**For Zig version:**
+- Zig 0.11.0 or later
+
+**Check prerequisites:**
+```bash
+make check-prereqs
+```
+
+**Install prerequisites (if missing):**
+```bash
+make install-prereqs
+```
 
 ### Building from Source
 
-**Using Make (builds both Go and Zig versions):**
-
+**Build Go version:**
 ```bash
 git clone https://github.com/angch/sentrylogmon.git
 cd sentrylogmon
-
-# Check if prerequisites are installed
-make check-prereqs
-
-# Install prerequisites if needed (downloads to /tmp)
-make install-prereqs
-
-# Build both Go and Zig binaries
-make build
-
-# Or build individually
-make build-go   # Builds sentrylogmon (Go)
-make build-zig  # Builds zig/zig-out/bin/sentrylogmon-zig
+make build-go
 ```
 
-**Building Go version only:**
-
+**Build Rust version:**
 ```bash
-git clone https://github.com/angch/sentrylogmon.git
 cd sentrylogmon
-go build -o sentrylogmon
+make build-rust
 ```
 
-**Building Zig version only:**
-
+**Build Zig version:**
 ```bash
-git clone https://github.com/angch/sentrylogmon.git
-cd sentrylogmon/zig
-zig build -Doptimize=ReleaseSafe
-# Binary will be at zig-out/bin/sentrylogmon-zig
+cd sentrylogmon
+make build-zig
+```
+
+**Build all three:**
+```bash
+make build-all
+```
+
+**Compare binary sizes:**
+```bash
+make compare-size
 ```
 
 ### Installing via go install
@@ -81,19 +116,6 @@ zig build -Doptimize=ReleaseSafe
 go install github.com/angch/sentrylogmon@latest
 ```
 
-## Usage
-
-### Basic Usage
-
-Monitor a log file for errors:
-
-```bash
-sentrylogmon --dsn="https://your-sentry-dsn@sentry.io/project" --file=/var/log/app.log
-```
-
-### Configuration Options
-
-#### Sentry DSN
 
 Specify the Sentry DSN via command line or environment variable:
 
@@ -146,6 +168,44 @@ sentrylogmon --dsn="..." --file=/var/log/app.log --pattern="(?i)(error|fatal|pan
 - `--environment`: Sentry environment tag (e.g., "production", "staging")
 - `--release`: Sentry release identifier
 - `--verbose`: Enable verbose logging
+- `--oneshot`: Run once and exit when input stream ends (useful for batch processing or benchmarking)
+
+### Configuration File
+
+You can also use a configuration file to manage multiple monitors and settings. This is the recommended way for complex setups.
+
+Create `sentrylogmon.yaml`:
+
+```yaml
+# sentrylogmon.yaml
+sentry:
+  dsn: https://your-dsn@sentry.io/project
+  environment: production
+  release: v1.2.3
+
+monitors:
+  - name: nginx-errors
+    type: file
+    path: /var/log/nginx/error.log
+    format: nginx
+
+  - name: app-errors
+    type: file
+    path: /var/log/app.log
+    pattern: "(?i)(error|critical)"
+
+  - name: app-journal
+    type: journalctl
+    args: "--unit=myapp.service -f"
+    pattern: "(?i)(error|fatal|panic)"
+```
+
+Run with configuration file:
+```bash
+sentrylogmon --config=sentrylogmon.yaml
+```
+
+**Note:** If you provide Sentry configuration (DSN, environment, release) via flags or environment variables, they will be used as fallbacks if missing from the configuration file.
 
 ### Example Configurations
 
@@ -177,9 +237,22 @@ sentrylogmon \
 
 ## Running as a Service
 
-### systemd Service
+### Automated Installation (Recommended)
 
-Create `/etc/systemd/system/sentrylogmon.service`:
+An installation script is provided to automatically build the binary, install it to `/usr/local/bin/`, create a default configuration, and set up the systemd service.
+
+```bash
+sudo ./install_service.sh
+```
+
+Follow the on-screen instructions to edit the configuration file (`/etc/sentrylogmon.yaml`) with your Sentry DSN before starting the service.
+
+### Manual systemd Service Setup
+
+If you prefer to configure it manually:
+
+1. Copy the binary to `/usr/local/bin/`.
+2. Create `/etc/systemd/system/sentrylogmon.service` (or use the provided `sentrylogmon.service` file):
 
 ```ini
 [Unit]
@@ -188,9 +261,8 @@ After=network.target
 
 [Service]
 Type=simple
-User=nobody
-Environment="SENTRY_DSN=https://your-dsn@sentry.io/project"
-ExecStart=/usr/local/bin/sentrylogmon --file=/var/log/app.log --environment=production
+User=root
+ExecStart=/usr/local/bin/sentrylogmon --config=/etc/sentrylogmon.yaml
 Restart=always
 RestartSec=10
 
@@ -198,7 +270,7 @@ RestartSec=10
 WantedBy=multi-user.target
 ```
 
-Enable and start the service:
+3. Enable and start the service:
 
 ```bash
 sudo systemctl daemon-reload
@@ -207,94 +279,92 @@ sudo systemctl start sentrylogmon
 sudo systemctl status sentrylogmon
 ```
 
+## Testing Utility: loggen
+
+A utility tool `loggen` is included to generate dummy logs for testing and benchmarking purposes.
+
+### Building loggen
+
+```bash
+go build -o loggen cmd/loggen/main.go
+```
+
+### Usage
+
+Generate 100MB of Nginx-formatted logs with errors:
+
+```bash
+./loggen --size=100MB --format=nginx --error-rate=5.0 > test.log
+```
+
+**Options:**
+- `--size`: Total size to generate (e.g., "100MB", "1GB").
+- `--format`: Log format ("nginx", "dmesg").
+- `--error-rate`: Percentage of error logs (0-100).
+
 ## Development
 
 ### Building
 
-Using Make (recommended):
+**Go version:**
 ```bash
-# Build both Go and Zig versions
-make build
-
-# Build only Go
 make build-go
-
-# Build only Zig
-make build-zig
-
-# Build Zig with maximum size optimization
-make build-zig-small
-
-# Compare binary sizes
-make compare-size
+# or
+go build -o sentrylogmon
 ```
 
-Building manually:
+**Rust version:**
 ```bash
-# Go version
-go build -o sentrylogmon
+make build-rust
+# or
+cd rust && cargo build --release
+```
 
-# Zig version
-cd zig && zig build
+**Both versions:**
+```bash
+make build-all
 ```
 
 ### Testing
 
+**Go tests:**
 ```bash
-# Go tests
 make test-go
 # or
 go test ./...
+```
 
-# Zig tests
-make test-zig
+**Rust tests:**
+```bash
+make test-rust
 # or
-cd zig && zig build test
+cd rust && cargo test
+```
+
+**All tests:**
+```bash
+make test-all
 ```
 
 ### Linting
 
+**Go:**
 ```bash
 golangci-lint run
 ```
 
-### Makefile Targets
-
-Run `make help` to see all available targets:
-
+**Rust:**
 ```bash
-make help
+cd rust && cargo clippy
 ```
 
-Available targets include:
-- `make build` - Build both Go and Zig binaries
-- `make clean` - Remove build artifacts
-- `make check-prereqs` - Check if Go and Zig are installed
-- `make install-prereqs` - Download and install prerequisites
-- `make test` - Run tests
-- `make compare-size` - Compare binary sizes
+### Binary Size Comparison
 
-## Configuration File Support (Future)
-
-Future versions may support configuration files for easier management of multiple monitors:
-
-```yaml
-# sentrylogmon.yaml
-sentry:
-  dsn: https://your-dsn@sentry.io/project
-  environment: production
-  release: v1.2.3
-
-monitors:
-  - name: nginx-errors
-    type: file
-    path: /var/log/nginx/error.log
-    pattern: "(?i)(error|critical)"
-  
-  - name: app-journal
-    type: journalctl
-    args: "--unit=myapp.service -f"
-    pattern: "(?i)(error|fatal|panic)"
+```bash
+make build-all
+# Shows sizes of both binaries
+# Go binary:   ~7.2MB
+# Rust binary: ~3.6MB (50% smaller)
 ```
 
 ## Contributing

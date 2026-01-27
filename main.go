@@ -1,168 +1,179 @@
 package main
 
 import (
-	"bufio"
-	"flag"
-	"fmt"
-	"io"
 	"log"
 	"os"
-	"os/exec"
-	"regexp"
+	"os/signal"
+	"runtime"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
+	"github.com/angch/sentrylogmon/config"
+	"github.com/angch/sentrylogmon/detectors"
+	"github.com/angch/sentrylogmon/monitor"
+	"github.com/angch/sentrylogmon/sources"
+	"github.com/angch/sentrylogmon/sysstat"
 	"github.com/getsentry/sentry-go"
 )
 
-var (
-	dsn         = flag.String("dsn", os.Getenv("SENTRY_DSN"), "Sentry DSN")
-	useDmesg    = flag.Bool("dmesg", false, "Monitor dmesg output")
-	inputFile   = flag.String("file", "", "Monitor a log file")
-	pattern     = flag.String("pattern", "Error", "Pattern to match (case sensitive)")
-	environment = flag.String("environment", "production", "Sentry environment")
-	release     = flag.String("release", "", "Sentry release version")
-	verbose     = flag.Bool("verbose", false, "Verbose logging")
-)
-
 func main() {
-	flag.Parse()
+	// Parse flags and load config
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("Failed to load configuration: %v", err)
+	}
 
-	if *dsn == "" {
-		log.Fatal("Sentry DSN is required. Set via --dsn flag or SENTRY_DSN environment variable")
+	if cfg.Sentry.DSN == "" {
+		log.Fatal("Sentry DSN is required. Set via --dsn flag, SENTRY_DSN environment variable, or config file")
 	}
 
 	// Initialize Sentry
-	err := sentry.Init(sentry.ClientOptions{
-		Dsn:         *dsn,
-		Environment: *environment,
-		Release:     *release,
+	err = sentry.Init(sentry.ClientOptions{
+		Dsn:         cfg.Sentry.DSN,
+		Environment: cfg.Sentry.Environment,
+		Release:     cfg.Sentry.Release,
 	})
 	if err != nil {
 		log.Fatalf("Failed to initialize Sentry: %v", err)
 	}
 	defer sentry.Flush(2 * time.Second)
 
-	if *verbose {
-		log.Printf("Initialized Sentry with DSN (environment=%s, release=%s)", *environment, *release)
+	if cfg.Verbose {
+		log.Printf("Initialized Sentry (env=%s, release=%s)", cfg.Sentry.Environment, cfg.Sentry.Release)
 	}
 
-	// Compile pattern
-	patternRegex, err := regexp.Compile(*pattern)
-	if err != nil {
-		log.Fatalf("Failed to compile pattern: %v", err)
-	}
-
-	var reader io.Reader
-	var logSource string
-
-	// Determine log source
-	if *useDmesg {
-		if *verbose {
-			log.Println("Starting dmesg monitor...")
-		}
-		cmd := exec.Command("dmesg", "-w")
-		stdout, err := cmd.StdoutPipe()
-		if err != nil {
-			log.Fatalf("Failed to create dmesg pipe: %v", err)
-		}
-		if err := cmd.Start(); err != nil {
-			log.Fatalf("Failed to start dmesg: %v", err)
-		}
+	if cfg.Verbose || cfg.OneShot {
 		defer func() {
-			if cmd.Process != nil {
-				cmd.Process.Kill()
-			}
+			var m runtime.MemStats
+			runtime.ReadMemStats(&m)
+			log.Printf("Final Memory Usage: Alloc = %v MiB, TotalAlloc = %v MiB, Sys = %v MiB, NumGC = %v",
+				m.Alloc/1024/1024,
+				m.TotalAlloc/1024/1024,
+				m.Sys/1024/1024,
+				m.NumGC,
+			)
 		}()
-		reader = stdout
-		logSource = "dmesg"
-	} else if *inputFile != "" {
-		if *verbose {
-			log.Printf("Monitoring file: %s", *inputFile)
-		}
-		file, err := os.Open(*inputFile)
-		if err != nil {
-			log.Fatalf("Failed to open file: %v", err)
-		}
-		defer file.Close()
-		reader = file
-		logSource = *inputFile
-	} else {
-		log.Fatal("Please specify a log source: --dmesg or --file")
 	}
 
-	// Monitor logs
-	monitor(reader, patternRegex, logSource)
-}
+	if len(cfg.Monitors) == 0 {
+		log.Fatal("No monitors configured. Use --file, --dmesg, --journalctl, --command, or config file.")
+	}
 
-// monitor reads log lines and groups by timestamp
-func monitor(reader io.Reader, pattern *regexp.Regexp, logSource string) {
-	scanner := bufio.NewScanner(reader)
-	
-	// Map to group lines by timestamp
-	timestampGroups := make(map[string][]string)
-	timestampRegex := regexp.MustCompile(`^\[\s*([0-9.]+)\]`)
+	// Start System Stats Collector
+	sysstatCollector := sysstat.New()
+	go sysstatCollector.Run()
 
-	for scanner.Scan() {
-		line := scanner.Text()
+	// Start monitors
+	var monitors []*monitor.Monitor
+	for _, monCfg := range cfg.Monitors {
+		var src sources.LogSource
 
-		// Check if line matches pattern
-		if !pattern.MatchString(line) {
+		switch monCfg.Type {
+		case "file":
+			if monCfg.Path == "" {
+				log.Printf("Skipping file monitor '%s': path is empty", monCfg.Name)
+				continue
+			}
+			src = sources.NewFileSource(monCfg.Name, monCfg.Path)
+		case "journalctl":
+			src = sources.NewJournalctlSource(monCfg.Name, monCfg.Args)
+		case "dmesg":
+			src = sources.NewDmesgSource(monCfg.Name)
+		case "command":
+			parts := strings.Fields(monCfg.Args)
+			if len(parts) > 0 {
+				src = sources.NewCommandSource(monCfg.Name, parts[0], parts[1:]...)
+			} else {
+				log.Printf("Skipping command monitor '%s': command is empty", monCfg.Name)
+				continue
+			}
+		default:
+			log.Printf("Unknown monitor type: %s", monCfg.Type)
 			continue
 		}
 
-		if *verbose {
-			log.Printf("Matched line: %s", line)
+		detectorFormat := determineDetectorFormat(monCfg)
+
+		det, err := detectors.GetDetector(detectorFormat, monCfg.Pattern)
+		if err != nil {
+			log.Printf("Failed to create detector for monitor '%s': %v", monCfg.Name, err)
+			continue
 		}
 
-		// Extract timestamp
-		matches := timestampRegex.FindStringSubmatch(line)
-		var timestamp string
-		if len(matches) > 1 {
-			timestamp = matches[1]
-		} else {
-			timestamp = "unknown"
+		m, err := monitor.New(src, det, sysstatCollector, cfg.Verbose)
+		if err != nil {
+			log.Printf("Failed to create monitor '%s': %v", monCfg.Name, err)
+			continue
 		}
-
-		// Group by timestamp
-		timestampGroups[timestamp] = append(timestampGroups[timestamp], line)
+		m.StopOnEOF = cfg.OneShot
+		monitors = append(monitors, m)
 	}
 
-	if err := scanner.Err(); err != nil {
-		log.Printf("Error reading log: %v", err)
+	if len(monitors) == 0 {
+		log.Fatal("No valid monitors to start.")
 	}
 
-	// Send grouped events to Sentry
-	for timestamp, lines := range timestampGroups {
-		sendToSentry(timestamp, lines, logSource)
+	var wg sync.WaitGroup
+	for _, m := range monitors {
+		wg.Add(1)
+		go func(mon *monitor.Monitor) {
+			defer wg.Done()
+			mon.Start()
+		}(m)
+	}
+
+	// Wait for signals
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+
+	if cfg.OneShot {
+		done := make(chan struct{})
+		go func() {
+			wg.Wait()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+			if cfg.Verbose {
+				log.Println("All monitors finished.")
+			}
+		case sig := <-c:
+			if cfg.Verbose {
+				log.Printf("Received signal %v, shutting down...", sig)
+			}
+		}
+	} else {
+		sig := <-c
+		if cfg.Verbose {
+			log.Printf("Received signal %v, shutting down...", sig)
+		}
+	}
+
+	// Clean up
+	for _, m := range monitors {
+		if err := m.Source.Close(); err != nil {
+			log.Printf("Error closing source %s: %v", m.Source.Name(), err)
+		}
 	}
 }
 
-// sendToSentry sends grouped log lines to Sentry
-func sendToSentry(timestamp string, lines []string, logSource string) {
-	message := fmt.Sprintf("Log errors at timestamp [%s]", timestamp)
-	
-	// Combine all lines for the event
-	eventDetails := strings.Join(lines, "\n")
-
-	if *verbose {
-		log.Printf("Sending to Sentry: %d line(s) for timestamp %s", len(lines), timestamp)
+func determineDetectorFormat(monCfg config.MonitorConfig) string {
+	if monCfg.Format != "" {
+		return monCfg.Format
 	}
-
-	// Send to Sentry using CaptureMessage
-	sentry.WithScope(func(scope *sentry.Scope) {
-		scope.SetContext("log_lines", map[string]interface{}{
-			"timestamp":   timestamp,
-			"line_count":  len(lines),
-			"lines":       eventDetails,
-		})
-		scope.SetTag("timestamp", timestamp)
-		scope.SetTag("source", logSource)
-		
-		sentry.CaptureMessage(message)
-	})
-
-	if *verbose {
-		log.Printf("Sent event to Sentry: %s", message)
+	// If pattern is present, assume custom (GenericDetector).
+	// This allows overriding the default dmesg detector for dmesg source if a custom pattern is provided.
+	if monCfg.Pattern != "" {
+		return "custom"
 	}
+	if monCfg.Type == "dmesg" {
+		return "dmesg"
+	}
+	if detectors.IsKnownDetector(monCfg.Name) {
+		return monCfg.Name
+	}
+	return "custom"
 }

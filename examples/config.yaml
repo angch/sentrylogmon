@@ -1,0 +1,26 @@
+# sentrylogmon.yaml example configuration
+
+sentry:
+  dsn: "https://your-dsn@sentry.io/project"
+  environment: "production"
+  release: "v1.0.0"
+
+monitors:
+  - name: "syslog"
+    type: "file"
+    path: "/var/log/syslog"
+    pattern: "(?i)(error|critical|alert|emerg)"
+
+  - name: "nginx-error"
+    type: "file"
+    path: "/var/log/nginx/error.log"
+    pattern: "(?i)error"
+
+  - name: "journal-app"
+    type: "journalctl"
+    args: "--unit=myapp.service -f"
+    pattern: "(?i)(error|panic)"
+
+  - name: "dmesg"
+    type: "dmesg"
+    pattern: "(?i)(error|warn)"

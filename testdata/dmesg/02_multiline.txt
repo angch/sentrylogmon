@@ -1,0 +1,5 @@
+[    1.000000] normal
+[    2.000000] Error: Something bad
+    at function_call (file.c:123)
+    at another_call (file.c:456)
+[    3.000000] normal

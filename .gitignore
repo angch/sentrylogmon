@@ -10,6 +10,7 @@
 
 # Built binary
 sentrylogmon
+loggen
 
 # Test binary, built with `go test -c`
 *.test
@@ -19,6 +20,8 @@ sentrylogmon
 coverage.*
 *.coverprofile
 profile.cov
+bench_config.yaml
+benchmark_output.txt
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
@@ -42,3 +45,7 @@ zig-out/
 
 # Zig binary
 sentrylogmon-zig
+
+# Rust
+rust/target/
+rust/Cargo.lock

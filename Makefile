@@ -1,15 +1,24 @@
-.PHONY: all build-go build-zig build clean check-prereqs install-prereqs help test
+.PHONY: all build build-go build-zig build-rust build-all clean clean-go clean-zig clean-rust clean-all check-prereqs install-prereqs help test test-go test-zig test-rust test-all validate-zig compare-size build-bench benchmark
 
-# Default target
-all: build
+# Default target builds all implementations
+all: build-all
 
-# Build both Go and Zig binaries
-build: build-go build-zig
+# Build all three implementations
+build-all: build-go build-zig build-rust
+	@echo ""
+	@echo "All binaries built successfully!"
+	@echo "Binary sizes:"
+	@ls -lh sentrylogmon 2>/dev/null || echo "  Go: not built"
+	@ls -lh zig/zig-out/bin/sentrylogmon-zig 2>/dev/null || echo "  Zig: not built"
+	@ls -lh rust/target/release/sentrylogmon 2>/dev/null || echo "  Rust: not built"
+
+# Alias for backward compatibility (builds Go + Zig + Rust)
+build: build-all
 
 # Build Go binary
 build-go:
 	@echo "Building Go binary..."
-	go build -o sentrylogmon main.go
+	CGO_ENABLED=0 GOARCH=amd64 go build -ldflags "-s -w" -o sentrylogmon .
 	@echo "Go binary built: sentrylogmon"
 
 # Build Zig binary
@@ -34,6 +43,17 @@ build-zig-small:
 		echo "Install Zig with 'make install-prereqs' or from https://ziglang.org/download/"; \
 	fi
 
+# Build Rust binary
+build-rust:
+	@if which cargo > /dev/null 2>&1; then \
+		echo "Building Rust binary..."; \
+		cd rust && cargo build --release && \
+		echo "Rust binary built: rust/target/release/sentrylogmon"; \
+	else \
+		echo "Rust/Cargo not found. Skipping Rust build."; \
+		echo "Install Rust with 'make install-prereqs' or from https://rustup.rs/"; \
+	fi
+
 # Check if all prerequisites are installed
 check-prereqs:
 	@echo "Checking prerequisites..."
@@ -41,6 +61,8 @@ check-prereqs:
 	@which go > /dev/null 2>&1 && echo "✓ Found: $$(go version)" || echo "✗ Not found"
 	@echo -n "Checking for Zig... "
 	@which zig > /dev/null 2>&1 && echo "✓ Found: $$(zig version)" || echo "✗ Not found"
+	@echo -n "Checking for Rust/Cargo... "
+	@which cargo > /dev/null 2>&1 && echo "✓ Found: $$(cargo --version)" || echo "✗ Not found"
 	@echo -n "Checking for curl... "
 	@which curl > /dev/null 2>&1 && echo "✓ Found" || echo "✗ Not found"
 	@echo -n "Checking for tar... "
@@ -49,34 +71,35 @@ check-prereqs:
 	@echo "Summary:"
 	@which go > /dev/null 2>&1 || (echo "  - Go is not installed. Run 'make install-prereqs' or install manually."; exit 0)
 	@which zig > /dev/null 2>&1 || (echo "  - Zig is not installed. Run 'make install-prereqs' or install manually."; exit 0)
-	@echo "All prerequisites are installed!"
+	@which cargo > /dev/null 2>&1 || (echo "  - Rust is not installed. Run 'make install-prereqs' or install manually."; exit 0)
+	@echo "Prerequisites check complete."
 
-# Install prerequisites (Go and Zig)
+# Install prerequisites (Go, Zig, and Rust)
 install-prereqs:
 	@echo "Installing prerequisites..."
 	@echo ""
-	@echo "This will attempt to download Go and Zig if not already present."
-	@echo "Installation will be done in /tmp/sentrylogmon-tools"
+	@echo "This will attempt to install Go, Zig, and Rust if not already present."
 	@echo ""
-	@mkdir -p /tmp/sentrylogmon-tools
 	@# Check and install Go
 	@if ! which go > /dev/null 2>&1; then \
 		echo "Installing Go..."; \
-		cd /tmp/sentrylogmon-tools && \
-		curl -sL https://go.dev/dl/go1.24.12.linux-amd64.tar.gz -o go.tar.gz && \
-		tar -xzf go.tar.gz && \
-		rm go.tar.gz && \
-		echo ""; \
-		echo "Go downloaded to /tmp/sentrylogmon-tools/go"; \
-		echo "Add to PATH: export PATH=/tmp/sentrylogmon-tools/go/bin:\$$PATH"; \
-		echo "Or install system-wide: sudo tar -C /usr/local -xzf /tmp/sentrylogmon-tools/go.tar.gz"; \
+		if [ -f /etc/debian_version ]; then \
+			echo "Detected Debian/Ubuntu system"; \
+			echo "Please install Go manually from https://golang.org/dl/ or run:"; \
+			echo "  wget https://go.dev/dl/go1.21.0.linux-amd64.tar.gz"; \
+			echo "  sudo tar -C /usr/local -xzf go1.21.0.linux-amd64.tar.gz"; \
+			echo "  export PATH=\$$PATH:/usr/local/go/bin"; \
+		else \
+			echo "Please install Go from https://golang.org/dl/"; \
+		fi; \
 	else \
 		echo "Go is already installed: $$(go version)"; \
 	fi
+	@echo ""
 	@# Check and install Zig
 	@if ! which zig > /dev/null 2>&1; then \
-		echo ""; \
 		echo "Installing Zig..."; \
+		mkdir -p /tmp/sentrylogmon-tools; \
 		echo "Attempting to download Zig 0.11.0..."; \
 		cd /tmp/sentrylogmon-tools && \
 		(curl -sL https://ziglang.org/download/0.11.0/zig-linux-x86_64-0.11.0.tar.xz -o zig.tar.xz && \
@@ -95,20 +118,53 @@ install-prereqs:
 		echo "Zig is already installed: $$(zig version)"; \
 	fi
 	@echo ""
+	@# Check and install Rust
+	@if ! which cargo > /dev/null 2>&1; then \
+		echo "Installing Rust..."; \
+		curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y; \
+		echo "Rust installed. Please run: source $$HOME/.cargo/env"; \
+	else \
+		echo "Rust is already installed: $$(cargo --version)"; \
+	fi
+	@echo ""
 	@echo "Installation complete!"
 	@echo "If tools were installed to /tmp, add them to your PATH:"
-	@echo "  export PATH=/tmp/sentrylogmon-tools/go/bin:/tmp/sentrylogmon-tools/zig:\$$PATH"
+	@echo "  export PATH=/tmp/sentrylogmon-tools/zig:\$$PATH"
+	@echo "If Rust was installed, run: source \$$HOME/.cargo/env"
 
 # Clean build artifacts
-clean:
-	@echo "Cleaning build artifacts..."
-	rm -f sentrylogmon
+clean-all: clean-go clean-zig clean-rust
+	@echo "All build artifacts cleaned"
+
+# Clean Go artifacts
+clean-go:
+	@echo "Cleaning Go build artifacts..."
+	rm -f sentrylogmon loggen bench_config.yaml benchmark_output.txt
+	@echo "Go artifacts cleaned"
+
+# Clean Zig artifacts
+clean-zig:
+	@echo "Cleaning Zig build artifacts..."
 	rm -rf zig/zig-out
 	rm -rf zig/.zig-cache
-	@echo "Clean complete"
+	@echo "Zig artifacts cleaned"
 
-# Run tests
-test: test-go
+# Clean Rust artifacts
+clean-rust:
+	@if which cargo > /dev/null 2>&1; then \
+		echo "Cleaning Rust build artifacts..."; \
+		cd rust && cargo clean && \
+		echo "Rust artifacts cleaned"; \
+	else \
+		echo "Cargo not found, skipping Rust clean"; \
+	fi
+
+# Alias for backward compatibility (clean Go only)
+clean: clean-go
+
+# Run all tests
+test-all: test-go test-zig test-rust
+	@echo "All tests completed"
 
 # Run Go tests
 test-go:
@@ -125,20 +181,46 @@ test-zig:
 		cd zig && ./validate.sh; \
 	fi
 
+# Run Rust tests
+test-rust:
+	@if which cargo > /dev/null 2>&1; then \
+		echo "Running Rust tests..."; \
+		cd rust && cargo test; \
+	else \
+		echo "Cargo not found, skipping Rust tests"; \
+	fi
+
+# Alias for backward compatibility (test Go only)
+test: test-go
+
 # Validate Zig implementation
 validate-zig:
 	@echo "Validating Zig implementation..."
 	@cd zig && ./validate.sh
 
 # Compare binary sizes
-compare-size: build
+compare-size: build-all
 	@echo "Binary size comparison:"
-	@echo "----------------------------------------"
-	@ls -lh sentrylogmon | awk '{print "Go binary:  " $$5 " (" $$9 ")"}'
-	@if [ -f zig/zig-out/bin/sentrylogmon-zig ]; then \
-		ls -lh zig/zig-out/bin/sentrylogmon-zig | awk '{print "Zig binary: " $$5 " (" $$9 ")"}'; \
+	@echo "=========================================="
+	@if [ -f sentrylogmon ]; then \
+		ls -lh sentrylogmon | awk '{print "Go binary:   " $$5 " (" $$9 ")"}'; \
 	fi
-	@echo "----------------------------------------"
+	@if [ -f zig/zig-out/bin/sentrylogmon-zig ]; then \
+		ls -lh zig/zig-out/bin/sentrylogmon-zig | awk '{print "Zig binary:  " $$5}'; \
+	fi
+	@if [ -f rust/target/release/sentrylogmon ]; then \
+		ls -lh rust/target/release/sentrylogmon | awk '{print "Rust binary: " $$5}'; \
+	fi
+	@echo "=========================================="
+
+# Build benchmark tool
+build-bench: build-go
+	go build -o loggen ./cmd/loggen
+
+# Run benchmark
+benchmark: build-bench
+	@echo "Running benchmark..."
+	@echo "This will test the log monitoring performance"
 
 # Help target
 help:
@@ -146,27 +228,38 @@ help:
 	@echo "====================="
 	@echo ""
 	@echo "Available targets:"
-	@echo "  make                    - Build both Go and Zig binaries (same as 'make build')"
-	@echo "  make build              - Build both Go and Zig binaries"
+	@echo "  make                    - Build all implementations (Go, Zig, Rust)"
+	@echo "  make build-all          - Build all implementations"
+	@echo "  make build              - Alias for build-all"
 	@echo "  make build-go           - Build only the Go binary"
 	@echo "  make build-zig          - Build only the Zig binary (ReleaseSafe)"
 	@echo "  make build-zig-small    - Build Zig binary with maximum size optimization"
-	@echo "  make check-prereqs      - Check if Go and Zig are installed"
-	@echo "  make install-prereqs    - Download and install Go and Zig to /tmp"
-	@echo "  make clean              - Remove build artifacts"
-	@echo "  make test               - Run tests"
+	@echo "  make build-rust         - Build only the Rust binary"
+	@echo "  make check-prereqs      - Check if Go, Zig, and Rust are installed"
+	@echo "  make install-prereqs    - Download and install prerequisites"
+	@echo "  make clean-all          - Remove all build artifacts"
+	@echo "  make clean-go           - Remove Go build artifacts"
+	@echo "  make clean-zig          - Remove Zig build artifacts"
+	@echo "  make clean-rust         - Remove Rust build artifacts"
+	@echo "  make clean              - Alias for clean-go"
+	@echo "  make test-all           - Run all tests"
 	@echo "  make test-go            - Run Go tests"
 	@echo "  make test-zig           - Run Zig tests (or validation if Zig not installed)"
+	@echo "  make test-rust          - Run Rust tests"
+	@echo "  make test               - Alias for test-go"
 	@echo "  make validate-zig       - Validate Zig code structure without building"
-	@echo "  make compare-size       - Compare binary sizes of Go and Zig versions"
+	@echo "  make compare-size       - Compare binary sizes of all implementations"
+	@echo "  make build-bench        - Build benchmark tool"
+	@echo "  make benchmark          - Run benchmark"
 	@echo "  make help               - Show this help message"
 	@echo ""
 	@echo "Prerequisites:"
 	@echo "  - Go 1.19 or later"
-	@echo "  - Zig 0.11.0 or later"
+	@echo "  - Zig 0.11.0 or later (optional)"
+	@echo "  - Rust/Cargo (optional)"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make check-prereqs      # Check if tools are installed"
 	@echo "  make install-prereqs    # Download and install tools"
-	@echo "  make build              # Build both binaries"
+	@echo "  make build-all          # Build all implementations"
 	@echo "  make compare-size       # Compare binary sizes"
