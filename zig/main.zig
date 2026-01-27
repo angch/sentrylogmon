@@ -1,5 +1,8 @@
 const std = @import("std");
 const http = std.http;
+const config_mod = @import("config.zig");
+const queue_mod = @import("queue.zig");
+const batcher_mod = @import("batcher.zig");
 
 const Args = struct {
     dsn: []const u8,
@@ -12,6 +15,7 @@ const Args = struct {
     release: []const u8 = "",
     verbose: bool = false,
     oneshot: bool = false,
+    config: ?[]const u8 = null,
 };
 
 pub fn main() !void {
@@ -25,8 +29,9 @@ pub fn main() !void {
     defer if (args.command) |c| allocator.free(c);
     defer if (args.journalctl) |j| allocator.free(j);
     defer if (args.release.len > 0) allocator.free(args.release);
+    defer if (args.config) |c| allocator.free(c);
 
-    if (args.dsn.len == 0) {
+    if (args.dsn.len == 0 and args.config == null) {
         std.debug.print("Sentry DSN is required. Set via --dsn flag or SENTRY_DSN environment variable\n", .{});
         std.process.exit(1);
     }
@@ -35,56 +40,186 @@ pub fn main() !void {
         std.debug.print("Initialized Sentry with DSN (environment={s}, release={s})\n", .{ args.environment, args.release });
     }
 
-    // Determine log source
-    if (args.use_dmesg) {
-        if (args.verbose) {
-            std.debug.print("Starting dmesg monitor...\n", .{});
-        }
-        var argv = std.ArrayList([]const u8).init(allocator);
-        defer argv.deinit();
-        try argv.append("dmesg");
-        if (!args.oneshot) try argv.append("-w");
+    // Initialize Queue
+    const queue_dir = ".sentrylogmon_queue";
+    try queue_mod.Queue.init(queue_dir);
+    var queue = queue_mod.Queue{ .dir_path = queue_dir };
 
-        try monitorCommand(allocator, argv.items, "dmesg", args);
-    } else if (args.file) |file_path| {
-        if (args.verbose) {
-            std.debug.print("Monitoring file: {s}\n", .{file_path});
+    // Try to flush queue
+    const RetryContext = struct {
+        allocator: std.mem.Allocator,
+        args: Args,
+        fn send(self: @This(), payload: []const u8) !void {
+            try sendSentryPayload(self.allocator, payload, self.args);
         }
-        try monitorFile(allocator, file_path, args);
-    } else if (args.command) |cmd| {
-        if (args.verbose) {
-            std.debug.print("Monitoring command: {s}\n", .{cmd});
-        }
-        var argv = std.ArrayList([]const u8).init(allocator);
-        defer argv.deinit();
-        var iter = std.mem.tokenizeScalar(u8, cmd, ' ');
-        while (iter.next()) |part| {
-            try argv.append(part);
+    };
+    const retry_ctx = RetryContext{ .allocator = allocator, .args = args };
+    queue.retryAll(allocator, retry_ctx, RetryContext.send) catch |err| {
+        if (args.verbose) std.debug.print("Failed to retry queued events: {}\n", .{err});
+    };
+
+    var config: ?config_mod.Config = null;
+    if (args.config) |cfg_path| {
+        config = try config_mod.parseConfig(allocator, cfg_path);
+    }
+    defer if (config) |*c| c.deinit(allocator);
+
+    if (config) |cfg| {
+        // Multi-monitor mode
+        var threads = std.ArrayList(std.Thread).init(allocator);
+        defer threads.deinit();
+
+        for (cfg.monitors.items) |monitor| {
+            var monitor_args = args;
+            if (cfg.sentry.dsn.len > 0) monitor_args.dsn = cfg.sentry.dsn;
+            if (cfg.sentry.environment.len > 0) monitor_args.environment = cfg.sentry.environment;
+            if (cfg.sentry.release.len > 0) monitor_args.release = cfg.sentry.release;
+
+            if (monitor_args.dsn.len == 0) {
+                 std.debug.print("Skipping monitor {s}: No DSN configured\n", .{monitor.name});
+                 continue;
+            }
+
+            const ctx = try allocator.create(MonitorContext);
+            ctx.* = MonitorContext{
+                .allocator = allocator,
+                .args = monitor_args,
+                .source_name = monitor.name,
+                .queue = &queue,
+            };
+
+            const batcher = try allocator.create(batcher_mod.Batcher);
+            batcher.* = batcher_mod.Batcher.init(allocator, ctx, MonitorContext.send);
+            try batcher.startFlusher();
+
+            if (args.verbose) {
+                std.debug.print("Starting monitor: {s}\n", .{monitor.name});
+            }
+
+            if (monitor.type == .file) {
+                 if (monitor.path) |p| {
+                     const t = try std.Thread.spawn(.{}, monitorFile, .{p, monitor.pattern, batcher, monitor_args});
+                     try threads.append(t);
+                 }
+            } else if (monitor.type == .journalctl) {
+                 var argv = std.ArrayList([]const u8).init(allocator);
+                 try argv.append("journalctl");
+                 if (monitor.args) |a| {
+                     var iter = std.mem.tokenizeScalar(u8, a, ' ');
+                     while (iter.next()) |part| {
+                         try argv.append(part);
+                     }
+                 }
+                 const t = try std.Thread.spawn(.{}, monitorCommand, .{allocator, argv.items, monitor.pattern, batcher, monitor_args});
+                 try threads.append(t);
+            } else if (monitor.type == .dmesg) {
+                 var argv = std.ArrayList([]const u8).init(allocator);
+                 try argv.append("dmesg");
+                 if (!args.oneshot) try argv.append("-w");
+                 const t = try std.Thread.spawn(.{}, monitorCommand, .{allocator, argv.items, monitor.pattern, batcher, monitor_args});
+                 try threads.append(t);
+            } else if (monitor.type == .command) {
+                 if (monitor.args) |cmd_str| {
+                     var argv = std.ArrayList([]const u8).init(allocator);
+                     var iter = std.mem.tokenizeScalar(u8, cmd_str, ' ');
+                     while (iter.next()) |part| {
+                         try argv.append(part);
+                     }
+                     const t = try std.Thread.spawn(.{}, monitorCommand, .{allocator, argv.items, monitor.pattern, batcher, monitor_args});
+                     try threads.append(t);
+                 }
+            }
         }
 
-        try monitorCommand(allocator, argv.items, "command", args);
-    } else if (args.journalctl) |jargs| {
-        if (args.verbose) {
-            std.debug.print("Monitoring journalctl: {s}\n", .{jargs});
+        for (threads.items) |t| {
+            t.join();
         }
-        var argv = std.ArrayList([]const u8).init(allocator);
-        defer argv.deinit();
-        try argv.append("journalctl");
-        var iter = std.mem.tokenizeScalar(u8, jargs, ' ');
-        while (iter.next()) |part| {
-            try argv.append(part);
+        return;
+    }
+
+    // Legacy
+    {
+        // Determine log source (Legacy)
+
+        // Prepare context and batcher
+        var source_name: []const u8 = "unknown";
+        if (args.use_dmesg) {
+            source_name = "dmesg";
+        } else if (args.file) |_| {
+            source_name = "file";
+        } else if (args.command) |_| {
+            source_name = "command";
+        } else if (args.journalctl) |_| {
+            source_name = "journalctl";
         }
 
-        try monitorCommand(allocator, argv.items, "journalctl", args);
-    } else {
-        std.debug.print("Please specify a log source: --dmesg, --file, --command or --journalctl\n", .{});
-        std.process.exit(1);
+        // If no source specified, exit
+        if (std.mem.eql(u8, source_name, "unknown") and args.config == null) {
+            std.debug.print("Please specify a log source: --dmesg, --file, --command, --journalctl, or --config\n", .{});
+            std.process.exit(1);
+        }
+
+        const ctx = try allocator.create(MonitorContext);
+        ctx.* = MonitorContext{
+            .allocator = allocator,
+            .args = args,
+            .source_name = source_name,
+            .queue = &queue,
+        };
+
+        const batcher = try allocator.create(batcher_mod.Batcher);
+        batcher.* = batcher_mod.Batcher.init(allocator, ctx, MonitorContext.send);
+        try batcher.startFlusher();
+
+        if (args.use_dmesg) {
+            if (args.verbose) {
+                std.debug.print("Starting dmesg monitor...\n", .{});
+            }
+            var argv = std.ArrayList([]const u8).init(allocator);
+            defer argv.deinit();
+            try argv.append("dmesg");
+            if (!args.oneshot) try argv.append("-w");
+
+            try monitorCommand(allocator, argv.items, args.pattern, batcher, args);
+        } else if (args.file) |file_path| {
+            if (args.verbose) {
+                std.debug.print("Monitoring file: {s}\n", .{file_path});
+            }
+            try monitorFile(file_path, args.pattern, batcher, args);
+        } else if (args.command) |cmd| {
+            if (args.verbose) {
+                std.debug.print("Monitoring command: {s}\n", .{cmd});
+            }
+            var argv = std.ArrayList([]const u8).init(allocator);
+            defer argv.deinit();
+            var iter = std.mem.tokenizeScalar(u8, cmd, ' ');
+            while (iter.next()) |part| {
+                try argv.append(part);
+            }
+
+            try monitorCommand(allocator, argv.items, args.pattern, batcher, args);
+        } else if (args.journalctl) |jargs| {
+            if (args.verbose) {
+                std.debug.print("Monitoring journalctl: {s}\n", .{jargs});
+            }
+            var argv = std.ArrayList([]const u8).init(allocator);
+            defer argv.deinit();
+            try argv.append("journalctl");
+            var iter = std.mem.tokenizeScalar(u8, jargs, ' ');
+            while (iter.next()) |part| {
+                try argv.append(part);
+            }
+
+            try monitorCommand(allocator, argv.items, args.pattern, batcher, args);
+        }
     }
 }
 
 fn printUsage() void {
     std.debug.print(
         \\Usage of sentrylogmon-zig:
+        \\  --config string
+        \\        Path to configuration file
         \\  --dsn string
         \\        Sentry DSN (or set SENTRY_DSN environment variable)
         \\  --file string
@@ -163,6 +298,10 @@ fn parseArgs(allocator: std.mem.Allocator) !Args {
             args.verbose = true;
         } else if (std.mem.eql(u8, arg, "--oneshot")) {
             args.oneshot = true;
+        } else if (std.mem.eql(u8, arg, "--config")) {
+            if (arg_iter.next()) |cfg| {
+                args.config = try allocator.dupe(u8, cfg);
+            }
         } else if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) {
             printUsage();
             std.process.exit(0);
@@ -172,7 +311,7 @@ fn parseArgs(allocator: std.mem.Allocator) !Args {
     return args;
 }
 
-fn monitorFile(allocator: std.mem.Allocator, file_path: []const u8, args: Args) !void {
+fn monitorFile(file_path: []const u8, pattern: []const u8, batcher: *batcher_mod.Batcher, args: Args) !void {
     const file = try std.fs.cwd().openFile(file_path, .{});
     defer file.close();
 
@@ -185,56 +324,23 @@ fn monitorFile(allocator: std.mem.Allocator, file_path: []const u8, args: Args) 
     var in_stream = buf_reader.reader();
 
     var line_buf: [4096]u8 = undefined;
-    var timestamp_groups = std.StringHashMap(std.ArrayList([]const u8)).init(allocator);
-    defer {
-        var iter = timestamp_groups.iterator();
-        while (iter.next()) |entry| {
-            for (entry.value_ptr.items) |line| {
-                allocator.free(line);
-            }
-            entry.value_ptr.deinit();
-        }
-        timestamp_groups.deinit();
-    }
 
     while (true) {
         const line_or_null = try in_stream.readUntilDelimiterOrEof(&line_buf, '\n');
 
         if (line_or_null) |line| {
             // Check if line matches pattern
-            if (containsPattern(line, args.pattern)) {
+            if (containsPattern(line, pattern)) {
                 if (args.verbose) {
                     std.debug.print("Matched line: {s}\n", .{line});
                 }
 
-                // Extract timestamp (simplified - just looking for [number])
                 const timestamp = extractTimestamp(line);
-                const timestamp_key = try allocator.dupe(u8, timestamp);
-
-                const result = try timestamp_groups.getOrPut(timestamp_key);
-                if (!result.found_existing) {
-                    result.value_ptr.* = std.ArrayList([]const u8).init(allocator);
-                } else {
-                    allocator.free(timestamp_key);
-                }
-
-                const line_copy = try allocator.dupe(u8, line);
-                try result.value_ptr.append(line_copy);
+                try batcher.add(timestamp, line);
             }
         } else {
-            // EOF reached - flush pending groups
-            var iter = timestamp_groups.iterator();
-            while (iter.next()) |entry| {
-                try sendToSentry(allocator, entry.key_ptr.*, entry.value_ptr.items, file_path, args);
-                // Clean up sent items
-                for (entry.value_ptr.items) |l| {
-                    allocator.free(l);
-                }
-                entry.value_ptr.deinit();
-            }
-            timestamp_groups.clearAndFree();
-
             if (args.oneshot) {
+                batcher.flush() catch {};
                 break;
             }
 
@@ -244,7 +350,7 @@ fn monitorFile(allocator: std.mem.Allocator, file_path: []const u8, args: Args) 
     }
 }
 
-fn monitorCommand(allocator: std.mem.Allocator, argv: []const []const u8, source_name: []const u8, args: Args) !void {
+fn monitorCommand(allocator: std.mem.Allocator, argv: []const []const u8, pattern: []const u8, batcher: *batcher_mod.Batcher, args: Args) !void {
     while (true) {
         if (args.verbose) {
             std.debug.print("Starting command: {s}\n", .{argv[0]});
@@ -268,56 +374,34 @@ fn monitorCommand(allocator: std.mem.Allocator, argv: []const []const u8, source
                 var in_stream = buf_reader.reader();
 
                 var line_buf: [4096]u8 = undefined;
-                var timestamp_groups = std.StringHashMap(std.ArrayList([]const u8)).init(allocator);
-                defer {
-                    var iter = timestamp_groups.iterator();
-                    while (iter.next()) |entry| {
-                        for (entry.value_ptr.items) |line| {
-                            allocator.free(line);
-                        }
-                        entry.value_ptr.deinit();
-                    }
-                    timestamp_groups.deinit();
-                }
 
                 while (true) {
                     const line_or_null = in_stream.readUntilDelimiterOrEof(&line_buf, '\n') catch break;
 
                     if (line_or_null) |line| {
-                        if (containsPattern(line, args.pattern)) {
+                        if (containsPattern(line, pattern)) {
                             if (args.verbose) {
                                 std.debug.print("Matched line: {s}\n", .{line});
                             }
 
                             const timestamp = extractTimestamp(line);
-                            const timestamp_key = try allocator.dupe(u8, timestamp);
-
-                            const result = try timestamp_groups.getOrPut(timestamp_key);
-                            if (!result.found_existing) {
-                                result.value_ptr.* = std.ArrayList([]const u8).init(allocator);
-                            } else {
-                                allocator.free(timestamp_key);
-                            }
-
-                            const line_copy = try allocator.dupe(u8, line);
-                            try result.value_ptr.append(line_copy);
+                            batcher.add(timestamp, line) catch |err| {
+                                std.debug.print("Error adding to batch: {}\n", .{err});
+                            };
                         }
                     } else {
                         break;
                     }
-                }
-
-                // Send grouped events to Sentry
-                var iter = timestamp_groups.iterator();
-                while (iter.next()) |entry| {
-                    try sendToSentry(allocator, entry.key_ptr.*, entry.value_ptr.items, source_name, args);
                 }
             }
         }
 
         _ = child.wait() catch {};
 
-        if (args.oneshot) break;
+        if (args.oneshot) {
+            batcher.flush() catch {};
+            break;
+        }
 
         if (args.verbose) {
             std.debug.print("Command exited, restarting in 1s...\n", .{});
@@ -354,14 +438,33 @@ fn extractTimestamp(line: []const u8) []const u8 {
     return "unknown";
 }
 
-fn sendToSentry(allocator: std.mem.Allocator, timestamp: []const u8, lines: []const []const u8, source: []const u8, args: Args) !void {
-    if (args.verbose) {
-        std.debug.print("Sending to Sentry: {} line(s) for timestamp {s}\n", .{ lines.len, timestamp });
-    }
+const MonitorContext = struct {
+    allocator: std.mem.Allocator,
+    args: Args,
+    source_name: []const u8,
+    queue: *queue_mod.Queue,
 
-    // Construct Sentry event payload
+    fn send(ctx_opaque: *anyopaque, timestamp: []const u8, lines: []const []const u8) !void {
+        const self: *@This() = @ptrCast(@alignCast(ctx_opaque));
+
+        // Build payload
+        const payload = try createSentryPayload(self.allocator, timestamp, lines, self.source_name, self.args);
+        defer self.allocator.free(payload);
+
+        // Try send
+        sendSentryPayload(self.allocator, payload, self.args) catch |err| {
+            std.debug.print("Failed to send to Sentry: {}. Queueing...\n", .{err});
+            // Queue
+            self.queue.push(self.allocator, payload) catch |qerr| {
+                std.debug.print("Failed to queue event: {}\n", .{qerr});
+            };
+        };
+    }
+};
+
+fn createSentryPayload(allocator: std.mem.Allocator, timestamp: []const u8, lines: []const []const u8, source: []const u8, args: Args) ![]const u8 {
     var payload = std.ArrayList(u8).init(allocator);
-    defer payload.deinit();
+    errdefer payload.deinit();
 
     const writer = payload.writer();
     try writer.writeAll("{\"message\":\"Log errors at timestamp [");
@@ -382,13 +485,29 @@ fn sendToSentry(allocator: std.mem.Allocator, timestamp: []const u8, lines: []co
     for (lines, 0..) |line, i| {
         if (i > 0) try writer.writeAll("\\n");
         for (line) |c| {
-            if (c == '"' or c == '\\') try writer.writeByte('\\');
-            try writer.writeByte(c);
+            switch (c) {
+                '"' => try writer.writeAll("\\\""),
+                '\\' => try writer.writeAll("\\\\"),
+                '\n' => try writer.writeAll("\\n"),
+                '\r' => try writer.writeAll("\\r"),
+                '\t' => try writer.writeAll("\\t"),
+                else => {
+                    if (std.ascii.isPrint(c)) {
+                        try writer.writeByte(c);
+                    } else {
+                        try writer.print("\\u{x:0>4}", .{c});
+                    }
+                },
+            }
         }
     }
 
     try writer.writeAll("\"}}}");
 
+    return payload.toOwnedSlice();
+}
+
+fn sendSentryPayload(allocator: std.mem.Allocator, payload: []const u8, args: Args) !void {
     // Parse DSN to extract project info
     const parsed_dsn = try parseDsn(allocator, args.dsn);
     defer allocator.free(parsed_dsn.host);
@@ -420,10 +539,10 @@ fn sendToSentry(allocator: std.mem.Allocator, timestamp: []const u8, lines: []co
     });
     defer request.deinit();
 
-    request.transfer_encoding = .{ .content_length = payload.items.len };
+    request.transfer_encoding = .{ .content_length = payload.len };
 
     try request.send();
-    try request.writeAll(payload.items);
+    try request.writeAll(payload);
     try request.finish();
 
     // Wait for response
@@ -465,4 +584,11 @@ fn parseDsn(allocator: std.mem.Allocator, dsn: []const u8) !ParsedDsn {
         .project_id = project_id_copy,
         .public_key = public_key,
     };
+}
+
+test {
+    std.testing.refAllDecls(@This());
+    _ = config_mod;
+    _ = queue_mod;
+    _ = batcher_mod;
 }
