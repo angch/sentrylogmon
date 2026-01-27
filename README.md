@@ -67,7 +67,7 @@ See [zig/README.md](zig/README.md) for Zig-specific documentation.
 - Cargo (comes with Rust)
 
 **For Zig version:**
-- Zig 0.11.0 or later
+- Zig 0.13.0 or later
 
 **Check prerequisites:**
 ```bash

@@ -4,7 +4,7 @@ This document describes how to test the Zig implementation of sentrylogmon.
 
 ## Prerequisites
 
-Ensure Zig 0.11.0 or later is installed:
+Ensure Zig 0.13.0 or later is installed:
 
 ```bash
 zig version
@@ -218,7 +218,7 @@ ping sentry.io
 
 ### Build errors
 
-Ensure you're using Zig 0.11.0 or later:
+Ensure you're using Zig 0.13.0 or later:
 ```bash
 zig version
 ```
