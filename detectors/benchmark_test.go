@@ -1,15 +1,15 @@
 package detectors
 
 import (
+	"bytes"
 	"regexp"
-	"strings"
 	"testing"
 )
 
 func BenchmarkGenericDetector_Literal(b *testing.B) {
 	pattern := "error"
 	detector, _ := NewGenericDetector(pattern)
-	line := "This is a log line containing an error message."
+	line := []byte("This is a log line containing an error message.")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -22,7 +22,7 @@ func BenchmarkGenericDetector_Literal(b *testing.B) {
 func BenchmarkGenericDetector_Regex(b *testing.B) {
 	pattern := "err[or]+"
 	detector, _ := NewGenericDetector(pattern)
-	line := "This is a log line containing an error message."
+	line := []byte("This is a log line containing an error message.")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -32,26 +32,26 @@ func BenchmarkGenericDetector_Regex(b *testing.B) {
 	}
 }
 
-func BenchmarkStringsContains(b *testing.B) {
-	pattern := "error"
-	line := "This is a log line containing an error message."
+func BenchmarkBytesContains(b *testing.B) {
+	pattern := []byte("error")
+	line := []byte("This is a log line containing an error message.")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if !strings.Contains(line, pattern) {
+		if !bytes.Contains(line, pattern) {
 			b.Fatal("should have detected")
 		}
 	}
 }
 
-func BenchmarkRegexpMatchString(b *testing.B) {
+func BenchmarkRegexpMatch(b *testing.B) {
 	pattern := "error"
 	re, _ := regexp.Compile(pattern)
-	line := "This is a log line containing an error message."
+	line := []byte("This is a log line containing an error message.")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if !re.MatchString(line) {
+		if !re.Match(line) {
 			b.Fatal("should have detected")
 		}
 	}

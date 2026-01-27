@@ -76,8 +76,9 @@ func (m *Monitor) Start() {
 		scanner.Buffer(buf, MaxScanTokenSize)
 
 		for scanner.Scan() {
-			line := scanner.Text()
-			if m.Detector.Detect(line) {
+			lineBytes := scanner.Bytes()
+			if m.Detector.Detect(lineBytes) {
+				line := string(lineBytes)
 				if m.Verbose {
 					log.Printf("[%s] Matched: %s", m.Source.Name(), line)
 				}
@@ -89,14 +90,21 @@ func (m *Monitor) Start() {
 		m.forceFlush()
 
 		if err := scanner.Err(); err != nil {
-			log.Printf("Error reading from source %s: %v", m.Source.Name(), err)
+			// Suppress specific errors when stopping on EOF is enabled
+			if !m.StopOnEOF || !strings.Contains(err.Error(), "file already closed") {
+				log.Printf("Error reading from source %s: %v", m.Source.Name(), err)
+			}
+		}
+
+		if m.StopOnEOF {
+			if m.Verbose {
+				log.Printf("Monitor for %s stopped (StopOnEOF set).", m.Source.Name())
+			}
+			break
 		}
 
 		if m.Verbose {
 			log.Printf("Monitor for %s stopped, restarting in 1s...", m.Source.Name())
-		}
-		if m.StopOnEOF {
-			return
 		}
 		time.Sleep(1 * time.Second)
 	}

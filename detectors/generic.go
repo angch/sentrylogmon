@@ -1,21 +1,21 @@
 package detectors
 
 import (
+	"bytes"
 	"regexp"
-	"strings"
 )
 
 // GenericDetector uses a regex pattern to detect issues.
 type GenericDetector struct {
 	pattern   *regexp.Regexp
-	literal   string
+	literal   []byte
 	isLiteral bool
 }
 
 func NewGenericDetector(pattern string) (*GenericDetector, error) {
 	if pattern == regexp.QuoteMeta(pattern) {
 		return &GenericDetector{
-			literal:   pattern,
+			literal:   []byte(pattern),
 			isLiteral: true,
 		}, nil
 	}
@@ -27,9 +27,9 @@ func NewGenericDetector(pattern string) (*GenericDetector, error) {
 	return &GenericDetector{pattern: re}, nil
 }
 
-func (d *GenericDetector) Detect(line string) bool {
+func (d *GenericDetector) Detect(line []byte) bool {
 	if d.isLiteral {
-		return strings.Contains(line, d.literal)
+		return bytes.Contains(line, d.literal)
 	}
-	return d.pattern.MatchString(line)
+	return d.pattern.Match(line)
 }
