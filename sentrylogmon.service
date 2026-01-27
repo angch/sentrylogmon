@@ -1,0 +1,14 @@
+[Unit]
+Description=Sentry Log Monitor
+After=network.target
+
+[Service]
+Type=simple
+User=root
+# Adjust path to binary and config file as needed
+ExecStart=/usr/local/bin/sentrylogmon --config=/etc/sentrylogmon.yaml
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

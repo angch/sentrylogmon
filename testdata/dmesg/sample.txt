@@ -1,0 +1,9 @@
+[    0.000000] Linux version 5.15.0-101-generic (buildd@lcy02-amd64-032) (gcc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0, GNU ld (GNU Binutils for Ubuntu) 2.38) #111-Ubuntu SMP Tue Mar 5 20:16:58 UTC 2024
+[    0.000000] Command line: BOOT_IMAGE=/boot/vmlinuz-5.15.0-101-generic root=UUID=0a322154-080c-4505-8840-06240d907085 ro console=tty1 console=ttyS0
+[    1.234567] This is a normal log line
+[    2.345678] Error: Failed to initialize hardware
+[    3.456789] Another normal line
+[    4.567890] Kernel panic - not syncing: Fatal exception
+[    5.678901] oops: dereferencing null pointer
+[    6.789012] Info: System is running fine
+[    7.890123] fail: network interface down

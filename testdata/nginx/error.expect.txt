@@ -1,0 +1,4 @@
+2024/01/27 10:00:01 [error] 1234#0: *2 directory index of "/var/www/html/" is forbidden, client: 127.0.0.1, server: localhost, request: "GET / HTTP/1.1", host: "localhost"
+2024/01/27 10:00:03 [crit] 1234#0: *4 connect() to unix:/var/run/php/php7.4-fpm.sock failed (2: No such file or directory) while connecting to upstream, client: 127.0.0.1, server: localhost, request: "GET /index.php HTTP/1.1", upstream: "fastcgi://unix:/var/run/php/php7.4-fpm.sock:", host: "localhost"
+2024/01/27 10:00:04 [alert] 1234#0: *5 low disk space
+2024/01/27 10:00:05 [emerg] 1234#0: *6 cannot open error log file: Permission denied
