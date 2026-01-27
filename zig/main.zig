@@ -337,7 +337,7 @@ fn monitorFile(file_path: []const u8, pattern: []const u8, batcher: *batcher_mod
 
         if (line_or_null) |line| {
             // Check if line matches pattern
-            if (shouldLog(line, args.format, pattern)) {
+            if (containsPattern(line, pattern)) {
                 if (args.verbose) {
                     std.debug.print("Matched line: {s}\n", .{line});
                 }
@@ -386,7 +386,7 @@ fn monitorCommand(allocator: std.mem.Allocator, argv: []const []const u8, patter
                     const line_or_null = in_stream.readUntilDelimiterOrEof(&line_buf, '\n') catch break;
 
                     if (line_or_null) |line| {
-                        if (shouldLog(line, args.format, pattern)) {
+                        if (containsPattern(line, pattern)) {
                             if (args.verbose) {
                                 std.debug.print("Matched line: {s}\n", .{line});
                             }
