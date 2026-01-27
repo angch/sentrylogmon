@@ -135,6 +135,11 @@ sentrylogmon --file=/var/log/app.log
 sentrylogmon --dsn="..." --file=/var/log/syslog
 ```
 
+**Monitor multiple log files (glob pattern):**
+```bash
+sentrylogmon --dsn="..." --file="/var/log/*.log"
+```
+
 **Monitor journalctl output:**
 ```bash
 sentrylogmon --dsn="..." --journalctl="--unit=myapp.service -f"
@@ -188,6 +193,10 @@ monitors:
     type: file
     path: /var/log/nginx/error.log
     format: nginx
+
+  - name: all-logs
+    type: file
+    path: /var/log/*.log
 
   - name: app-errors
     type: file
