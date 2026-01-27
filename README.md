@@ -20,6 +20,7 @@ The tool is optimized for low CPU and memory usage, making it suitable for deplo
 - **Pattern-based Detection**: Configurable regex patterns to identify issues
 - **Sentry Integration**: Direct integration with Sentry for error tracking and alerting
 - **System Status Context**: Automatically captures and attaches system state (CPU load, memory usage, top processes) to Sentry events
+- **Efficient File Watching**: Uses `fsnotify` for native file system notifications
 - **Lightweight**: Minimal CPU and memory footprint
 - **Flexible Configuration**: Command-line flags and environment variables
 - **Real-time Monitoring**: Continuous monitoring with configurable check intervals
@@ -109,6 +110,7 @@ sentrylogmon --dsn="..." --file=/var/log/app.log --pattern="(?i)(error|fatal|pan
 - `--environment`: Sentry environment tag (e.g., "production", "staging")
 - `--release`: Sentry release identifier
 - `--verbose`: Enable verbose logging
+- `--oneshot`: Run once and exit when input stream ends (useful for batch processing or benchmarking)
 
 ### Configuration File
 
@@ -177,9 +179,22 @@ sentrylogmon \
 
 ## Running as a Service
 
-### systemd Service
+### Automated Installation (Recommended)
 
-Create `/etc/systemd/system/sentrylogmon.service`:
+An installation script is provided to automatically build the binary, install it to `/usr/local/bin/`, create a default configuration, and set up the systemd service.
+
+```bash
+sudo ./install_service.sh
+```
+
+Follow the on-screen instructions to edit the configuration file (`/etc/sentrylogmon.yaml`) with your Sentry DSN before starting the service.
+
+### Manual systemd Service Setup
+
+If you prefer to configure it manually:
+
+1. Copy the binary to `/usr/local/bin/`.
+2. Create `/etc/systemd/system/sentrylogmon.service` (or use the provided `sentrylogmon.service` file):
 
 ```ini
 [Unit]
@@ -188,9 +203,8 @@ After=network.target
 
 [Service]
 Type=simple
-User=nobody
-Environment="SENTRY_DSN=https://your-dsn@sentry.io/project"
-ExecStart=/usr/local/bin/sentrylogmon --file=/var/log/app.log --environment=production
+User=root
+ExecStart=/usr/local/bin/sentrylogmon --config=/etc/sentrylogmon.yaml
 Restart=always
 RestartSec=10
 
@@ -198,7 +212,7 @@ RestartSec=10
 WantedBy=multi-user.target
 ```
 
-Enable and start the service:
+3. Enable and start the service:
 
 ```bash
 sudo systemctl daemon-reload
@@ -206,6 +220,29 @@ sudo systemctl enable sentrylogmon
 sudo systemctl start sentrylogmon
 sudo systemctl status sentrylogmon
 ```
+
+## Testing Utility: loggen
+
+A utility tool `loggen` is included to generate dummy logs for testing and benchmarking purposes.
+
+### Building loggen
+
+```bash
+go build -o loggen cmd/loggen/main.go
+```
+
+### Usage
+
+Generate 100MB of Nginx-formatted logs with errors:
+
+```bash
+./loggen --size=100MB --format=nginx --error-rate=5.0 > test.log
+```
+
+**Options:**
+- `--size`: Total size to generate (e.g., "100MB", "1GB").
+- `--format`: Log format ("nginx", "dmesg").
+- `--error-rate`: Percentage of error logs (0-100).
 
 ## Development
 
