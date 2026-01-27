@@ -142,6 +142,7 @@ func main() {
 	}
 
 	// Clean up
+	sysstatCollector.Stop()
 	for _, m := range monitors {
 		if err := m.Source.Close(); err != nil {
 			log.Printf("Error closing source %s: %v", m.Source.Name(), err)

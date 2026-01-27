@@ -2,6 +2,7 @@ package sysstat
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"runtime"
 	"sort"
@@ -28,6 +29,16 @@ type ProcessInfo struct {
 	memUsage float64
 }
 
+func (p ProcessInfo) ToMap() map[string]interface{} {
+	return map[string]interface{}{
+		"pid":     p.Pid,
+		"rss":     p.RSS,
+		"cpu":     p.CPU,
+		"mem":     p.MEM,
+		"command": p.Command,
+	}
+}
+
 type PressureInfo struct {
 	Avg10  float64 `json:"avg10"`
 	Avg60  float64 `json:"avg60"`
@@ -46,31 +57,98 @@ type SystemState struct {
 	ProcessSummary string                 `json:"process_summary"`
 }
 
+func (s *SystemState) ToMap() map[string]interface{} {
+	m := map[string]interface{}{
+		"timestamp":       s.Timestamp,
+		"uptime":          s.Uptime,
+		"process_summary": s.ProcessSummary,
+	}
+	if s.Load != nil {
+		m["load"] = s.Load
+	}
+	if s.Memory != nil {
+		m["memory"] = s.Memory
+	}
+	if s.DiskPressure != nil {
+		m["disk_pressure"] = s.DiskPressure
+	}
+	if len(s.TopCPU) > 0 {
+		topCpu := make([]map[string]interface{}, len(s.TopCPU))
+		for i, p := range s.TopCPU {
+			topCpu[i] = p.ToMap()
+		}
+		m["top_cpu"] = topCpu
+	}
+	if len(s.TopMem) > 0 {
+		topMem := make([]map[string]interface{}, len(s.TopMem))
+		for i, p := range s.TopMem {
+			topMem[i] = p.ToMap()
+		}
+		m["top_mem"] = topMem
+	}
+	return m
+}
+
 type Collector struct {
-	mu    sync.RWMutex
-	state *SystemState
+	mu       sync.RWMutex
+	state    *SystemState
+	stopChan chan struct{}
 }
 
 func New() *Collector {
 	return &Collector{
-		state: &SystemState{},
+		state:    &SystemState{},
+		stopChan: make(chan struct{}),
 	}
+}
+
+func (c *Collector) Stop() {
+	close(c.stopChan)
 }
 
 func (c *Collector) GetState() *SystemState {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.state
+	if c.state == nil {
+		return nil
+	}
+
+	// Deep copy to avoid data races
+	copyState := *c.state
+	if c.state.Load != nil {
+		loadCopy := *c.state.Load
+		copyState.Load = &loadCopy
+	}
+	if c.state.Memory != nil {
+		memCopy := *c.state.Memory
+		copyState.Memory = &memCopy
+	}
+	if c.state.DiskPressure != nil {
+		dpCopy := *c.state.DiskPressure
+		copyState.DiskPressure = &dpCopy
+	}
+	if c.state.TopCPU != nil {
+		topCPUCopy := make([]ProcessInfo, len(c.state.TopCPU))
+		copy(topCPUCopy, c.state.TopCPU)
+		copyState.TopCPU = topCPUCopy
+	}
+	if c.state.TopMem != nil {
+		topMemCopy := make([]ProcessInfo, len(c.state.TopMem))
+		copy(topMemCopy, c.state.TopMem)
+		copyState.TopMem = topMemCopy
+	}
+	return &copyState
 }
 
 func (c *Collector) Run() {
 	// Initial collection
 	c.collect()
+	timer := time.NewTimer(1 * time.Minute)
+	defer timer.Stop()
 
 	for {
-		sleepDuration := 1 * time.Minute
-
 		c.mu.RLock()
+		sleepDuration := 1 * time.Minute
 		if c.state.Load != nil {
 			// If Load1 > NumCPU, consider it high load and back off
 			if c.state.Load.Load1 > float64(runtime.NumCPU()) {
@@ -79,10 +157,18 @@ func (c *Collector) Run() {
 		}
 		c.mu.RUnlock()
 
-		time.Sleep(sleepDuration)
-		c.collect()
+		timer.Reset(sleepDuration)
+
+		select {
+		case <-c.stopChan:
+			return
+		case <-timer.C:
+			c.collect()
+		}
 	}
 }
+
+var diskPressureWarned bool
 
 func (c *Collector) collect() {
 	newState := &SystemState{
@@ -99,6 +185,13 @@ func (c *Collector) collect() {
 		newState.Memory = m
 	}
 	newState.DiskPressure = getDiskPressure()
+	if newState.DiskPressure == nil && !diskPressureWarned {
+		// Check if we are on Linux; if so, warn about missing PSI
+		if runtime.GOOS == "linux" {
+			log.Println("Warning: /proc/pressure/io not readable. PSI metrics will be missing.")
+		}
+		diskPressureWarned = true
+	}
 
 	procs, summary, err := getProcessStats(newState.Uptime, newState.Memory.Total)
 	if err == nil {
@@ -115,9 +208,6 @@ func (c *Collector) collect() {
 		}
 
 		// Sort by Memory (make a copy or re-sort)
-		// Since we want two different lists, we'll re-sort the full list
-		// but wait, newState.TopCPU holds references or copies? Copies.
-		// So we can re-sort the 'procs' slice.
 		sort.Slice(procs, func(i, j int) bool {
 			return procs[i].memUsage > procs[j].memUsage
 		})
@@ -183,8 +273,6 @@ func getProcessStats(uptime uint64, totalMem uint64) ([]ProcessInfo, string, err
 	var results []ProcessInfo
 	pageSize := os.Getpagesize()
 	clkTck := float64(100) // Default to 100Hz on most systems.
-	// To be more accurate we should use sysconf(_SC_CLK_TCK) but that requires CGO or more complex syscalls.
-	// For this estimation, 100Hz is a reasonable default for x86 Linux.
 
 	for _, p := range procs {
 		stat, err := p.Stat()

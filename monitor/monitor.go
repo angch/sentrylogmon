@@ -2,7 +2,6 @@ package monitor
 
 import (
 	"bufio"
-	"encoding/json"
 	"log"
 	"regexp"
 
@@ -75,11 +74,9 @@ func (m *Monitor) sendToSentry(line string) {
 
 		if m.Collector != nil {
 			state := m.Collector.GetState()
-			// Convert state to map[string]interface{} for SetContext
-			var stateMap map[string]interface{}
-			data, _ := json.Marshal(state)
-			json.Unmarshal(data, &stateMap)
-			scope.SetContext("Server State", stateMap)
+			if state != nil {
+				scope.SetContext("Server State", state.ToMap())
+			}
 		}
 
 		// We send the line as the message.
