@@ -28,6 +28,8 @@ func main() {
 	switch *formatFlag {
 	case "nginx":
 		generator = generateNginxLog
+	case "nginx-error":
+		generator = generateNginxErrorLog
 	case "dmesg":
 		generator = generateDmesgLog
 	default:
@@ -142,4 +144,28 @@ func generateDmesgLog() string {
 	}
 
 	return fmt.Sprintf("%s %s: %s", ts, source, msg)
+}
+
+func generateNginxErrorLog() string {
+	// Format: YYYY/MM/DD HH:MM:SS [error] PID#PID: *ID connect() failed (ERRNO: MSG) while connecting to upstream, client: IP, server: HOST, request: "METHOD PATH PROTO", upstream: "URL", host: "HOST"
+
+	ts := time.Now().Format("2006/01/02 15:04:05")
+	pid := rand.Intn(30000)
+	id := rand.Intn(100000000)
+
+	// Always error for this format
+	level := "error"
+
+	msg := "connect() failed (113: No route to host)"
+
+	client := fmt.Sprintf("%d.%d.%d.%d", rand.Intn(256), rand.Intn(256), rand.Intn(256), rand.Intn(256))
+	path := paths[rand.Intn(len(paths))]
+	method := httpMethods[rand.Intn(len(httpMethods))]
+
+	// upstream: "http://10.3.0.209:80..."
+	upstreamIP := fmt.Sprintf("10.%d.%d.%d", rand.Intn(256), rand.Intn(256), rand.Intn(256))
+	upstream := fmt.Sprintf("http://%s:80%s", upstreamIP, path)
+
+	return fmt.Sprintf("%s [%s] %d#%d: *%d %s while connecting to upstream, client: %s, server: example.com, request: \"%s %s HTTP/1.1\", upstream: \"%s\", host: \"example.com\"",
+		ts, level, pid, pid, id, msg, client, method, path, upstream)
 }
