@@ -110,6 +110,43 @@ sentrylogmon --dsn="..." --file=/var/log/app.log --pattern="(?i)(error|fatal|pan
 - `--release`: Sentry release identifier
 - `--verbose`: Enable verbose logging
 
+### Configuration File
+
+You can also use a configuration file to manage multiple monitors and settings. This is the recommended way for complex setups.
+
+Create `sentrylogmon.yaml`:
+
+```yaml
+# sentrylogmon.yaml
+sentry:
+  dsn: https://your-dsn@sentry.io/project
+  environment: production
+  release: v1.2.3
+
+monitors:
+  - name: nginx-errors
+    type: file
+    path: /var/log/nginx/error.log
+    format: nginx
+
+  - name: app-errors
+    type: file
+    path: /var/log/app.log
+    pattern: "(?i)(error|critical)"
+
+  - name: app-journal
+    type: journalctl
+    args: "--unit=myapp.service -f"
+    pattern: "(?i)(error|fatal|panic)"
+```
+
+Run with configuration file:
+```bash
+sentrylogmon --config=sentrylogmon.yaml
+```
+
+**Note:** If you provide Sentry configuration (DSN, environment, release) via flags or environment variables, they will be used as fallbacks if missing from the configuration file.
+
 ### Example Configurations
 
 **Production web server monitoring:**
@@ -188,29 +225,6 @@ go test ./...
 
 ```bash
 golangci-lint run
-```
-
-## Configuration File Support (Future)
-
-Future versions may support configuration files for easier management of multiple monitors:
-
-```yaml
-# sentrylogmon.yaml
-sentry:
-  dsn: https://your-dsn@sentry.io/project
-  environment: production
-  release: v1.2.3
-
-monitors:
-  - name: nginx-errors
-    type: file
-    path: /var/log/nginx/error.log
-    pattern: "(?i)(error|critical)"
-  
-  - name: app-journal
-    type: journalctl
-    args: "--unit=myapp.service -f"
-    pattern: "(?i)(error|fatal|panic)"
 ```
 
 ## Contributing

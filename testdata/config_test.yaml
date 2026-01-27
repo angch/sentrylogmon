@@ -1,0 +1,11 @@
+sentry:
+  dsn: https://test@sentry.io/123
+  environment: staging
+  release: v1.0.0
+
+monitors:
+  - name: test-monitor
+    type: file
+    path: /var/log/test.log
+    pattern: "(?i)error"
+    format: custom

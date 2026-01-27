@@ -79,28 +79,6 @@ func main() {
 			continue
 		}
 
-		// Use the monitor type as the detector format by default, unless pattern is provided
-		// Wait, config doesn't have a separate "Format" field yet, just "Pattern".
-		// But "Type" (file/journalctl/dmesg) often implies the format.
-		// However, "file" could be nginx, syslog, or java.
-		// So we should probably check if monCfg.Name (or a new field) matches a detector.
-		// But let's stick to: use monCfg.Pattern if present (Custom).
-		// If monCfg.Pattern is empty, maybe try to infer from monCfg.Type == "dmesg"?
-
-		// Actually, I should probably add a 'Format' field to MonitorConfig, but strictly following the prompt I should enable using these modules.
-		// Let's rely on monCfg.Pattern being passed to GetDetector as "custom" if it's set.
-		// If monCfg.Pattern is empty, we can try to guess or use a default.
-
-		// BETTER APPROACH:
-		// If monCfg.Type is "dmesg", use dmesg detector?
-		// But what if I want to monitor nginx log via "file" type? I need to tell it to use "nginx" detector.
-
-		// I will modify Config to include "Format". But first let's see what I can do with existing config.
-		// Existing config has Type and Pattern.
-
-		// If I don't modify config struct, I can't express "use nginx detector on this file".
-		// So I should modify Config struct.
-
 		detectorFormat := monCfg.Format
 		if detectorFormat == "" {
 			// Fallback logic

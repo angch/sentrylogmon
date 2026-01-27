@@ -66,7 +66,7 @@ Modern systems generate extensive logs from various sources (application logs, s
 - **Container-Friendly**: Environment variables work well in Docker/Kubernetes
 - **Security**: Sensitive data (DSN) can be kept out of command-line history via env vars
 
-**Future Consideration**: Configuration files (YAML/TOML) could be added for complex multi-monitor setups without breaking existing CLI interface.
+**Future Consideration**: Configuration files (YAML/TOML) could be added for complex multi-monitor setups without breaking existing CLI interface. (Implemented 2026-01-27)
 
 ### 5. Log Source Support
 
@@ -191,10 +191,10 @@ The `sysstat` package collects system metrics (Load, Memory, Top Processes) to p
 
 ### Planned Features
 
-1. **Configuration File Support**
+1. **Configuration File Support** (Implemented)
    - YAML/TOML format for defining multiple monitors
-   - Hot-reload capability to update config without restart
-   - Validate config before applying
+   - Hot-reload capability to update config without restart (Future)
+   - Validate config before applying (Future)
 
 2. **Metrics and Health Monitoring**
    - Expose Prometheus metrics (lines processed, issues detected, etc.)
@@ -331,6 +331,7 @@ When enhancing this project:
 | 2026-01-27 | Support for files, journalctl, dmesg | Cover 90% of common use cases |
 | 2026-01-27 | Added `sysstat` for system context | Provide crucial context (load, memory) for debugging errors |
 | 2026-01-27 | Ignore non-txt files in testdata | Prevent editor backups and artifacts from breaking data-driven tests |
+| 2026-01-27 | Added Configuration File Support | Support for complex multi-monitor setups via YAML config |
 
 ---
 
