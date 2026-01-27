@@ -79,15 +79,7 @@ func main() {
 			continue
 		}
 
-		detectorFormat := monCfg.Format
-		if detectorFormat == "" {
-			// Fallback logic
-			if monCfg.Type == "dmesg" {
-				detectorFormat = "dmesg"
-			} else {
-				detectorFormat = "custom"
-			}
-		}
+		detectorFormat := determineDetectorFormat(monCfg)
 
 		det, err := detectors.GetDetector(detectorFormat, monCfg.Pattern)
 		if err != nil {
@@ -125,4 +117,19 @@ func main() {
 			log.Printf("Error closing source %s: %v", m.Source.Name(), err)
 		}
 	}
+}
+
+func determineDetectorFormat(monCfg config.MonitorConfig) string {
+	if monCfg.Format != "" {
+		return monCfg.Format
+	}
+	// If pattern is present, assume custom (GenericDetector).
+	// This allows overriding the default dmesg detector for dmesg source if a custom pattern is provided.
+	if monCfg.Pattern != "" {
+		return "custom"
+	}
+	if monCfg.Type == "dmesg" {
+		return "dmesg"
+	}
+	return "custom"
 }
