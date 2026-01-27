@@ -18,6 +18,15 @@ import (
 
 var timestampRegex = regexp.MustCompile(`^\[\s*([0-9.]+)\]`)
 
+const (
+	// Max buffer size to prevent memory leaks (e.g. 1000 lines)
+	MaxBufferSize = 1000
+	// Scanner buffer size (1MB) to handle long log lines
+	MaxScanTokenSize = 1024 * 1024
+	// Flush interval
+	FlushInterval = 5 * time.Second
+)
+
 type Monitor struct {
 	Source    sources.LogSource
 	Detector  detectors.Detector
@@ -33,12 +42,18 @@ type Monitor struct {
 }
 
 func New(source sources.LogSource, detector detectors.Detector, collector *sysstat.Collector, verbose bool) (*Monitor, error) {
-	return &Monitor{
+	m := &Monitor{
 		Source:    source,
 		Detector:  detector,
 		Collector: collector,
 		Verbose:   verbose,
-	}, nil
+	}
+	// Initialize timer as stopped
+	m.flushTimer = time.AfterFunc(FlushInterval, func() {
+		m.flushBuffer()
+	})
+	m.flushTimer.Stop()
+	return m, nil
 }
 
 func (m *Monitor) Start() {
@@ -46,32 +61,40 @@ func (m *Monitor) Start() {
 		log.Printf("Starting monitor for %s", m.Source.Name())
 	}
 
-	reader, err := m.Source.Stream()
-	if err != nil {
-		log.Printf("Error starting source %s: %v", m.Source.Name(), err)
-		return
-	}
-
-	scanner := bufio.NewScanner(reader)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if m.Detector.Detect(line) {
-			if m.Verbose {
-				log.Printf("[%s] Matched: %s", m.Source.Name(), line)
-			}
-			m.processMatch(line)
+	for {
+		reader, err := m.Source.Stream()
+		if err != nil {
+			log.Printf("Error starting source %s: %v", m.Source.Name(), err)
+			time.Sleep(1 * time.Second)
+			continue
 		}
-	}
 
-	// Flush any remaining buffer
-	m.forceFlush()
+		scanner := bufio.NewScanner(reader)
+		// Increase buffer size to handle long lines
+		buf := make([]byte, 0, MaxScanTokenSize)
+		scanner.Buffer(buf, MaxScanTokenSize)
 
-	if err := scanner.Err(); err != nil {
-		log.Printf("Error reading from source %s: %v", m.Source.Name(), err)
-	}
+		for scanner.Scan() {
+			line := scanner.Text()
+			if m.Detector.Detect(line) {
+				if m.Verbose {
+					log.Printf("[%s] Matched: %s", m.Source.Name(), line)
+				}
+				m.processMatch(line)
+			}
+		}
 
-	if m.Verbose {
-		log.Printf("Monitor for %s stopped", m.Source.Name())
+		// Flush any remaining buffer
+		m.forceFlush()
+
+		if err := scanner.Err(); err != nil {
+			log.Printf("Error reading from source %s: %v", m.Source.Name(), err)
+		}
+
+		if m.Verbose {
+			log.Printf("Monitor for %s stopped, restarting in 1s...", m.Source.Name())
+		}
+		time.Sleep(1 * time.Second)
 	}
 }
 
@@ -92,17 +115,26 @@ func (m *Monitor) processMatch(line string) {
 		m.bufferStartTime = timestamp
 		m.resetTimerLocked()
 	} else {
-		// Group by 5 seconds window
-		if timestamp == 0 || (timestamp-m.bufferStartTime) <= 5.0 {
-			m.buffer = append(m.buffer, line)
-			m.resetTimerLocked()
-		} else {
-			// Flush current
+		// Check max buffer size to prevent memory leaks
+		if len(m.buffer) >= MaxBufferSize {
+			// Force flush current buffer and start new
 			msgToSend = strings.Join(m.buffer, "\n")
-			// Start new
 			m.buffer = []string{line}
 			m.bufferStartTime = timestamp
 			m.resetTimerLocked()
+		} else {
+			// Group by 5 seconds window
+			if timestamp == 0 || (timestamp-m.bufferStartTime) <= 5.0 {
+				m.buffer = append(m.buffer, line)
+				m.resetTimerLocked()
+			} else {
+				// Flush current
+				msgToSend = strings.Join(m.buffer, "\n")
+				// Start new
+				m.buffer = []string{line}
+				m.bufferStartTime = timestamp
+				m.resetTimerLocked()
+			}
 		}
 	}
 	m.bufferMutex.Unlock()
@@ -115,18 +147,17 @@ func (m *Monitor) processMatch(line string) {
 func (m *Monitor) resetTimerLocked() {
 	if m.flushTimer != nil {
 		m.flushTimer.Stop()
+		m.flushTimer.Reset(FlushInterval)
 	}
-	m.flushTimer = time.AfterFunc(5*time.Second, func() {
-		m.flushBuffer()
-	})
 }
 
 func (m *Monitor) flushBuffer() {
 	m.bufferMutex.Lock()
 	// Check for staleness to handle race conditions
-	// We use a slightly smaller duration than 5s to allow for scheduling jitter,
-	// but generally if it's very recent, it means it was just updated.
-	if time.Since(m.lastActivityTime) < 4500*time.Millisecond {
+	// If activity happened recently (less than FlushInterval), it means the timer was reset
+	// but this execution is from a previous firing that wasn't stopped in time (or just concurrent scheduling).
+	// We use a slightly smaller duration to allow for jitter.
+	if time.Since(m.lastActivityTime) < (FlushInterval - 100*time.Millisecond) {
 		m.bufferMutex.Unlock()
 		return
 	}
@@ -134,10 +165,6 @@ func (m *Monitor) flushBuffer() {
 	if len(m.buffer) == 0 {
 		m.bufferMutex.Unlock()
 		return
-	}
-
-	if m.flushTimer != nil {
-		m.flushTimer.Stop()
 	}
 
 	msg := strings.Join(m.buffer, "\n")
@@ -182,7 +209,7 @@ func (m *Monitor) sendToSentry(line string) {
 			// Convert state to map[string]interface{} for SetContext
 			var stateMap map[string]interface{}
 			data, _ := json.Marshal(state)
-			json.Unmarshal(data, &stateMap)
+			_ = json.Unmarshal(data, &stateMap)
 			scope.SetContext("Server State", stateMap)
 		}
 
