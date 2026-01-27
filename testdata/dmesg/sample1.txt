@@ -1,0 +1,15 @@
+[787739.009553] ata1.00: exception Emask 0x10 SAct 0x10000 SErr 0x40d0000 action 0xe frozen
+[787739.009558] ata1.00: irq_stat 0x00000040, connection status changed
+[787739.009559] ata1: SError: { PHYRdyChg CommWake 10B8B DevExch }
+[787739.009562] ata1.00: failed command: READ FPDMA QUEUED
+[787739.009562] ata1.00: cmd 60/08:80:a0:3b:6a/00:00:74:05:00/40 tag 16 ncq dma 4096 in
+                         res 40/00:01:06:4f:c2/00:00:00:00:00/00 Emask 0x10 (ATA bus error)
+[787739.009565] ata1.00: status: { DRDY }
+[787739.009567] ata1: hard resetting link
+[787739.898553] ata1: SATA link up 6.0 Gbps (SStatus 133 SControl 300)
+[787739.929456] ata1.00: configured for UDMA/133
+[787739.929625] ata1: EH complete
+[932367.622063] vfio-pci 0000:01:00.0: resetting
+[932367.622186] vfio-pci 0000:01:00.1: resetting
+[932367.873740] vfio-pci 0000:01:00.0: reset done
+[932367.873766] vfio-pci 0000:01:00.1: reset done
