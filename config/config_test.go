@@ -147,3 +147,28 @@ func TestLoadConfigFromFlags(t *testing.T) {
 		t.Errorf("Expected ExcludePattern 'Info', got '%s'", cfg.Monitors[0].ExcludePattern)
 	}
 }
+
+func TestLoadConfigFromFlags_Format(t *testing.T) {
+	// Reset config file
+	*configFile = ""
+
+	// Set flags
+	*inputFile = "/tmp/test.log"
+	defer func() { *inputFile = "" }()
+
+	*format = "nginx"
+	defer func() { *format = "" }()
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+
+	if len(cfg.Monitors) != 1 {
+		t.Fatalf("Expected 1 monitor, got %d", len(cfg.Monitors))
+	}
+
+	if cfg.Monitors[0].Format != "nginx" {
+		t.Errorf("Expected Format 'nginx', got '%s'", cfg.Monitors[0].Format)
+	}
+}
