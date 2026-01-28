@@ -37,7 +37,7 @@ pub const Config = struct {
             if (m.args) |a| allocator.free(a);
             allocator.free(m.pattern);
         }
-        self.monitors.deinit();
+        self.monitors.deinit(allocator);
     }
 };
 
@@ -55,7 +55,7 @@ pub fn parseConfig(allocator: std.mem.Allocator, file_path: []const u8) !Config 
 fn parseConfigString(allocator: std.mem.Allocator, content: []const u8) !Config {
     var config = Config{
         .sentry = .{},
-        .monitors = std.ArrayList(MonitorConfig).init(allocator),
+        .monitors = .empty,
     };
 
     var iter = std.mem.splitScalar(u8, content, '\n');
@@ -90,7 +90,7 @@ fn parseConfigString(allocator: std.mem.Allocator, content: []const u8) !Config 
             .Monitors => {
                 if (std.mem.startsWith(u8, trimmed, "-")) {
                      if (current_monitor) |m| {
-                        try config.monitors.append(m);
+                        try config.monitors.append(allocator, m);
                      }
                      current_monitor = MonitorConfig{
                          .name = try allocator.dupe(u8, "unnamed"),
@@ -113,7 +113,7 @@ fn parseConfigString(allocator: std.mem.Allocator, content: []const u8) !Config 
     }
 
     if (current_monitor) |m| {
-        try config.monitors.append(m);
+        try config.monitors.append(allocator, m);
     }
 
     return config;

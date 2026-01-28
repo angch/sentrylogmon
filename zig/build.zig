@@ -3,12 +3,18 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const strip = b.option(bool, "strip", "Strip debug symbols") orelse false;
 
-    const exe = b.addExecutable(.{
-        .name = "sentrylogmon-zig",
+    const exe_mod = b.createModule(.{
         .root_source_file = b.path("main.zig"),
         .target = target,
         .optimize = optimize,
+        .strip = strip,
+    });
+
+    const exe = b.addExecutable(.{
+        .name = "sentrylogmon-zig",
+        .root_module = exe_mod,
     });
 
     b.installArtifact(exe);
@@ -23,10 +29,14 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
-    const unit_tests = b.addTest(.{
+    const test_mod = b.createModule(.{
         .root_source_file = b.path("main.zig"),
         .target = target,
         .optimize = optimize,
+    });
+
+    const unit_tests = b.addTest(.{
+        .root_module = test_mod,
     });
 
     const run_unit_tests = b.addRunArtifact(unit_tests);

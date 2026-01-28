@@ -26,7 +26,7 @@ build-zig:
 	@export PATH=$(PWD)/.tools/zig:$$PATH; \
 	if which zig > /dev/null 2>&1; then \
 		echo "Building Zig binary..."; \
-		cd zig && zig build -Doptimize=ReleaseSafe && \
+		cd zig && zig build -Doptimize=ReleaseSafe -Dstrip=true && \
 		echo "Zig binary built: zig/zig-out/bin/sentrylogmon-zig"; \
 	else \
 		echo "Zig not found. Skipping Zig build."; \
@@ -38,7 +38,7 @@ build-zig-small:
 	@export PATH=$(PWD)/.tools/zig:$$PATH; \
 	if which zig > /dev/null 2>&1; then \
 		echo "Building Zig binary (size optimized)..."; \
-		cd zig && zig build -Doptimize=ReleaseSmall && \
+		cd zig && zig build -Doptimize=ReleaseSmall -Dstrip=true && \
 		echo "Zig binary built: zig/zig-out/bin/sentrylogmon-zig"; \
 	else \
 		echo "Zig not found. Skipping Zig build."; \
@@ -49,8 +49,8 @@ build-zig-small:
 build-rust:
 	@if which cargo > /dev/null 2>&1; then \
 		echo "Building Rust binary..."; \
-		cd rust && cargo build --release && \
-		echo "Rust binary built: rust/target/release/sentrylogmon"; \
+		cd rust && cargo build --release --target x86_64-unknown-linux-musl && \
+		echo "Rust binary built: rust/target/x86_64-unknown-linux-musl/release/sentrylogmon"; \
 	else \
 		echo "Rust/Cargo not found. Skipping Rust build."; \
 		echo "Install Rust with 'make install-prereqs' or from https://rustup.rs/"; \
@@ -102,14 +102,17 @@ install-prereqs:
 	@echo ""
 	@# Check and install Zig
 	@export PATH=$(PWD)/.tools/zig:$$PATH; \
-	if ! which zig > /dev/null 2>&1; then \
-		echo "Installing Zig..."; \
+	ZIG_VERSION="0.15.2"; \
+	CURRENT_ZIG=$$(zig version 2>/dev/null || echo "none"); \
+	if [ "$$CURRENT_ZIG" != "$$ZIG_VERSION" ]; then \
+		echo "Installing Zig $$ZIG_VERSION (found $$CURRENT_ZIG)..."; \
+		rm -rf .tools/zig; \
 		mkdir -p .tools; \
-		echo "Attempting to download Zig 0.13.0..."; \
+		echo "Attempting to download Zig $$ZIG_VERSION..."; \
 		cd .tools && \
-		(curl -sL https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz -o zig.tar.xz && \
+		(curl -sL https://ziglang.org/download/$$ZIG_VERSION/zig-x86_64-linux-$$ZIG_VERSION.tar.xz -o zig.tar.xz && \
 		tar -xf zig.tar.xz && \
-		mv zig-linux-x86_64-0.13.0 zig && \
+		mv zig-x86_64-linux-$$ZIG_VERSION zig && \
 		rm zig.tar.xz && \
 		echo "" && \
 		echo "Zig downloaded to $$(pwd)/zig" && \
@@ -120,7 +123,7 @@ install-prereqs:
 		echo "Please install Zig manually from: https://ziglang.org/download/" && \
 		echo "Or use your package manager if available."); \
 	else \
-		echo "Zig is already installed: $$(zig version)"; \
+		echo "Zig is already installed: $$CURRENT_ZIG"; \
 	fi
 	@echo ""
 	@# Check and install Rust
@@ -144,11 +147,6 @@ install-prereqs:
 clean-all: clean-go clean-zig clean-rust
 	@echo "All build artifacts cleaned"
 
-# Build Rust binary
-build-rust:
-	@echo "Building Rust binary..."
-	cd rust && cargo build --release --target x86_64-unknown-linux-musl
-	@echo "Rust binary built: rust/target/x86_64-unknown-linux-musl/release/sentrylogmon"
 # Clean Go artifacts
 clean-go:
 	@echo "Cleaning Go build artifacts..."

@@ -27,7 +27,7 @@ pub const Queue = struct {
         try file.writeAll(payload);
     }
 
-    pub fn retryAll(self: Queue, allocator: std.mem.Allocator, context: anytype, sendFn: fn (@TypeOf(context), []const u8) anyerror!void) !void {
+    pub fn retryAll(self: Queue, allocator: std.mem.Allocator, context: anytype, sendFn: fn (@TypeOf(context), []u8) anyerror!void) !void {
         var dir = std.fs.cwd().openDir(self.dir_path, .{ .iterate = true }) catch |err| {
              // If dir doesn't exist, nothing to retry
              if (err == error.FileNotFound) return;
