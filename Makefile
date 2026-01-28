@@ -10,7 +10,7 @@ build-all: build-go build-zig build-rust
 	@echo "Binary sizes:"
 	@ls -lh sentrylogmon 2>/dev/null || echo "  Go: not built"
 	@ls -lh zig/zig-out/bin/sentrylogmon-zig 2>/dev/null || echo "  Zig: not built"
-	@ls -lh rust/target/release/sentrylogmon 2>/dev/null || echo "  Rust: not built"
+	@ls -lh rust/target/x86_64-unknown-linux-musl/release/sentrylogmon 2>/dev/null || echo "  Rust: not built"
 
 # Alias for backward compatibility (builds Go + Zig + Rust)
 build: build-all
@@ -222,8 +222,8 @@ compare-size: build-all
 	@if [ -f zig/zig-out/bin/sentrylogmon-zig ]; then \
 		ls -lh zig/zig-out/bin/sentrylogmon-zig | awk '{print "Zig binary:  " $$5}'; \
 	fi
-	@if [ -f rust/target/release/sentrylogmon ]; then \
-		ls -lh rust/target/release/sentrylogmon | awk '{print "Rust binary: " $$5}'; \
+	@if [ -f rust/target/x86_64-unknown-linux-musl/release/sentrylogmon ]; then \
+		ls -lh rust/target/x86_64-unknown-linux-musl/release/sentrylogmon | awk '{print "Rust binary: " $$5}'; \
 	fi
 	@echo "=========================================="
 
