@@ -29,6 +29,8 @@ pub struct MonitorConfig {
     pub pattern: String,
     #[serde(default)]
     pub format: String,
+    #[serde(default)]
+    pub exclude_pattern: String,
 }
 
 fn default_pattern() -> String {
@@ -74,6 +76,10 @@ pub struct Args {
     /// Pattern to match
     #[arg(long, default_value = "Error")]
     pub pattern: String,
+
+    /// Pattern to exclude from reporting
+    #[arg(long)]
+    pub exclude: Option<String>,
 
     /// Sentry environment
     #[arg(long, default_value = "production")]
@@ -141,6 +147,7 @@ impl Config {
                     args: String::new(),
                     pattern: args.pattern.clone(),
                     format: "dmesg".to_string(),
+                    exclude_pattern: args.exclude.clone().unwrap_or_default(),
                 });
             } else if let Some(file_path) = &args.file {
                 monitors.push(MonitorConfig {
@@ -150,6 +157,7 @@ impl Config {
                     args: String::new(),
                     pattern: args.pattern.clone(),
                     format: String::new(),
+                    exclude_pattern: args.exclude.clone().unwrap_or_default(),
                 });
             } else if let Some(journalctl_args) = &args.journalctl {
                 monitors.push(MonitorConfig {
@@ -159,6 +167,7 @@ impl Config {
                     args: journalctl_args.clone(),
                     pattern: args.pattern.clone(),
                     format: String::new(),
+                    exclude_pattern: args.exclude.clone().unwrap_or_default(),
                 });
             } else if let Some(cmd) = &args.command {
                 monitors.push(MonitorConfig {
@@ -168,6 +177,7 @@ impl Config {
                     args: cmd.clone(),
                     pattern: args.pattern.clone(),
                     format: String::new(),
+                    exclude_pattern: args.exclude.clone().unwrap_or_default(),
                 });
             }
 

@@ -32,6 +32,7 @@ type Monitor struct {
 	ctx       context.Context
 	Source    sources.LogSource
 	Detector  detectors.Detector
+  ExclusionDetector detectors.Detector
 	Collector *sysstat.Collector
 	Verbose   bool
 	StopOnEOF bool
@@ -51,6 +52,13 @@ func New(ctx context.Context, source sources.LogSource, detector detectors.Detec
 		Detector:  detector,
 		Collector: collector,
 		Verbose:   verbose,
+	}
+	if excludePattern != "" {
+		ed, err := detectors.NewGenericDetector(excludePattern)
+		if err != nil {
+			return nil, err
+		}
+		m.ExclusionDetector = ed
 	}
 	// Initialize timer as stopped
 	m.flushTimer = time.AfterFunc(FlushInterval, func() {
@@ -81,6 +89,12 @@ func (m *Monitor) Start() {
 		for scanner.Scan() {
 			lineBytes := scanner.Bytes()
 			if m.Detector.Detect(lineBytes) {
+				if m.ExclusionDetector != nil && m.ExclusionDetector.Detect(lineBytes) {
+					if m.Verbose {
+						log.Printf("[%s] Excluded: %s", m.Source.Name(), string(lineBytes))
+					}
+					continue
+				}
 				line := string(lineBytes)
 				if m.Verbose {
 					log.Printf("[%s] Matched: %s", m.Source.Name(), line)

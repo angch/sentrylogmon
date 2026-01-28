@@ -20,6 +20,7 @@ static TIMESTAMP_REGEX: Lazy<Regex> = Lazy::new(|| {
 pub struct Monitor {
     source: Box<dyn LogSource>,
     detector: Box<dyn Detector>,
+    exclusion_detector: Option<Box<dyn Detector>>,
     collector: Arc<Collector>,
     verbose: bool,
     stop_on_eof: bool,
@@ -34,10 +35,23 @@ impl Monitor {
         collector: Arc<Collector>,
         verbose: bool,
         stop_on_eof: bool,
+        exclude_pattern: Option<String>,
     ) -> Self {
+        let exclusion_detector = if let Some(pattern) = exclude_pattern {
+            if !pattern.is_empty() {
+                // Use generic detector for exclusion
+                crate::detectors::get_detector("custom", &pattern).ok()
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         Self {
             source,
             detector,
+            exclusion_detector,
             collector,
             verbose,
             stop_on_eof,
@@ -89,6 +103,15 @@ impl Monitor {
             while let Ok(Some(line)) = lines.next_line().await {
                 let line_bytes = line.as_bytes();
                 if self.detector.detect(line_bytes) {
+                    if let Some(ed) = &self.exclusion_detector {
+                        if ed.detect(line_bytes) {
+                            if self.verbose {
+                                tracing::info!("[{}] Excluded: {}", self.source.name(), line);
+                            }
+                            continue;
+                        }
+                    }
+
                     if self.verbose {
                         tracing::info!("[{}] Matched: {}", self.source.name(), line);
                     }

@@ -105,6 +105,7 @@ async fn main() -> Result<()> {
             collector.clone(),
             cfg.verbose,
             cfg.oneshot,
+            Some(mon_cfg.exclude_pattern.clone()),
         );
 
         let handle = tokio::spawn(async move {

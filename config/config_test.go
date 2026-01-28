@@ -83,3 +83,67 @@ monitors:
 		t.Errorf("Expected fallback Environment '%s', got '%s'", expectedEnv, cfg.Sentry.Environment)
 	}
 }
+
+func TestMonitorConfigExcludeParsing(t *testing.T) {
+	// Test parsing of exclude_pattern
+	yamlConfig := `
+monitors:
+  - name: exclude-test
+    type: file
+    path: /tmp/test.log
+    exclude_pattern: "ignore me"
+`
+	tmpfile, err := os.CreateTemp("", "config_exclude_*.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpfile.Name())
+	if _, err := tmpfile.Write([]byte(yamlConfig)); err != nil {
+		t.Fatal(err)
+	}
+	tmpfile.Close()
+
+	*configFile = tmpfile.Name()
+	defer func() { *configFile = "" }()
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+
+	if len(cfg.Monitors) != 1 {
+		t.Fatalf("Expected 1 monitor, got %d", len(cfg.Monitors))
+	}
+
+	if cfg.Monitors[0].ExcludePattern != "ignore me" {
+		t.Errorf("Expected ExcludePattern 'ignore me', got '%s'", cfg.Monitors[0].ExcludePattern)
+	}
+}
+
+func TestLoadConfigFromFlags(t *testing.T) {
+	// Reset config file
+	*configFile = ""
+
+	// Set flags
+	*inputFile = "/tmp/test.log"
+	defer func() { *inputFile = "" }()
+
+	*pattern = "Error"
+	defer func() { *pattern = "Error" }()
+
+	*excludePattern = "Info"
+	defer func() { *excludePattern = "" }()
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+
+	if len(cfg.Monitors) != 1 {
+		t.Fatalf("Expected 1 monitor, got %d", len(cfg.Monitors))
+	}
+
+	if cfg.Monitors[0].ExcludePattern != "Info" {
+		t.Errorf("Expected ExcludePattern 'Info', got '%s'", cfg.Monitors[0].ExcludePattern)
+	}
+}
