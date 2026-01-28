@@ -122,7 +122,7 @@ func main() {
 			return
 		}
 
-		m, err := monitor.New(ctx, src, det, sysstatCollector, cfg.Verbose)
+		m, err := monitor.New(ctx, src, det, sysstatCollector, cfg.Verbose, monCfg.ExcludePattern)
 		if err != nil {
 			log.Printf("Failed to create monitor '%s': %v", monCfg.Name, err)
 			return

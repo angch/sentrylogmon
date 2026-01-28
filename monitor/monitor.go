@@ -45,7 +45,7 @@ type Monitor struct {
 	lastActivityTime time.Time
 }
 
-func New(ctx context.Context, source sources.LogSource, detector detectors.Detector, collector *sysstat.Collector, verbose bool) (*Monitor, error) {
+func New(ctx context.Context, source sources.LogSource, detector detectors.Detector, collector *sysstat.Collector, verbose bool, excludePattern string) (*Monitor, error) {
 	m := &Monitor{
 		ctx:       ctx,
 		Source:    source,
