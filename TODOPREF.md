@@ -4,7 +4,7 @@ This document tracks potential performance improvements for the `sentrylogmon` p
 
 ## Go Implementation
 
-- [ ] **Lazy Load Process Command Lines in `sysstat`**
+- [x] **Lazy Load Process Command Lines in `sysstat`**
   - **Current Behavior:** The `getProcessStats` function iterates over all processes and calls `p.CmdLine()` (which reads `/proc/<pid>/cmdline`) for *every* process before sorting.
   - **Proposed Change:** Collect only lightweight stats (PID, CPU, Memory) first, sort to find the top K processes, and *then* fetch the command line only for those top K processes.
   - **Expected Impact:** Significant reduction in I/O operations (from N reads to ~10 reads per collection cycle).
