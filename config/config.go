@@ -38,6 +38,7 @@ var (
 	inputFile   = flag.String("file", "", "Monitor a log file")
 	journalctl  = flag.String("journalctl", "", "Monitor journalctl output (pass args)")
 	command     = flag.String("command", "", "Monitor custom command output")
+	format      = flag.String("format", "", "Detector format (dmesg, nginx, custom)")
 	pattern     = flag.String("pattern", "Error", "Pattern to match (case sensitive)")
 	excludePattern = flag.String("exclude", "", "Pattern to exclude from reporting (case sensitive)")
 	environment = flag.String("environment", "production", "Sentry environment")
@@ -100,8 +101,9 @@ func Load() (*Config, error) {
 	}
 
 	monitor := MonitorConfig{
-		Pattern: *pattern,
+		Pattern:        *pattern,
 		ExcludePattern: *excludePattern,
+		Format:         *format,
 	}
 
 	if *useDmesg {
