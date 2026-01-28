@@ -10,6 +10,8 @@ func GetDetector(format string, pattern string) (Detector, error) {
 		return NewDmesgDetector(), nil
 	case "nginx":
 		return NewNginxDetector(), nil
+	case "nginx-error":
+		return NewNginxErrorDetector(), nil
 	case "custom", "":
 		if pattern == "" {
 			return nil, fmt.Errorf("pattern is required for custom detector")
@@ -23,7 +25,7 @@ func GetDetector(format string, pattern string) (Detector, error) {
 // IsKnownDetector checks if the given name matches a known detector type.
 func IsKnownDetector(name string) bool {
 	switch name {
-	case "dmesg", "nginx":
+	case "dmesg", "nginx", "nginx-error":
 		return true
 	default:
 		return false

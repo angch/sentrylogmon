@@ -11,6 +11,7 @@ const Args = struct {
     command: ?[]const u8 = null,
     journalctl: ?[]const u8 = null,
     pattern: []const u8 = "Error",
+    format: ?[]const u8 = null,
     environment: []const u8 = "production",
     release: []const u8 = "",
     verbose: bool = false,
@@ -232,6 +233,8 @@ fn printUsage() void {
         \\        Monitor journalctl output (args passed to journalctl)
         \\  --pattern string
         \\        Regex pattern to match (default "Error")
+        \\  --format string
+        \\        Log format (nginx, nginx-error, dmesg)
         \\  --environment string
         \\        Sentry environment (default "production")
         \\  --release string
@@ -285,6 +288,10 @@ fn parseArgs(allocator: std.mem.Allocator) !Args {
         } else if (std.mem.eql(u8, arg, "--pattern")) {
             if (arg_iter.next()) |pattern| {
                 args.pattern = pattern;
+            }
+        } else if (std.mem.eql(u8, arg, "--format")) {
+            if (arg_iter.next()) |format| {
+                args.format = format;
             }
         } else if (std.mem.eql(u8, arg, "--environment")) {
             if (arg_iter.next()) |env| {
@@ -408,6 +415,26 @@ fn monitorCommand(allocator: std.mem.Allocator, argv: []const []const u8, patter
         }
         std.time.sleep(1 * std.time.ns_per_s);
     }
+}
+
+fn shouldLog(line: []const u8, format: ?[]const u8, pattern: []const u8) bool {
+    if (format) |fmt| {
+        if (std.mem.eql(u8, fmt, "nginx") or std.mem.eql(u8, fmt, "nginx-error")) {
+            const patterns = [_][]const u8{ "error", "critical", "crit", "alert", "emerg" };
+            return containsAny(line, &patterns);
+        } else if (std.mem.eql(u8, fmt, "dmesg")) {
+            const patterns = [_][]const u8{ "error", "fail", "panic", "oops", "exception" };
+            return containsAny(line, &patterns);
+        }
+    }
+    return containsPattern(line, pattern);
+}
+
+fn containsAny(haystack: []const u8, needles: []const []const u8) bool {
+    for (needles) |needle| {
+        if (containsPattern(haystack, needle)) return true;
+    }
+    return false;
 }
 
 fn containsPattern(haystack: []const u8, needle: []const u8) bool {

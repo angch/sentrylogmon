@@ -67,7 +67,7 @@ func TestMonitorGrouping(t *testing.T) {
 	source := &MockSource{content: input}
 	detector := &MockDetector{}
 
-	mon, err := New(source, detector, nil, false, "")
+	mon, err := New(context.Background(), source, detector, nil, false)
 	if err != nil {
 		t.Fatalf("Failed to create monitor: %v", err)
 	}

@@ -45,6 +45,23 @@ impl Detector for NginxDetector {
     }
 }
 
+pub struct NginxErrorDetector {
+    detector: GenericDetector,
+}
+
+impl NginxErrorDetector {
+    pub fn new() -> Result<Self> {
+        let detector = GenericDetector::new("(?i)(error|critical|crit|alert|emerg)")?;
+        Ok(Self { detector })
+    }
+}
+
+impl Detector for NginxErrorDetector {
+    fn detect(&self, line: &[u8]) -> bool {
+        self.detector.detect(line)
+    }
+}
+
 struct DmesgState {
     last_match_time: f64,
     last_match_header: String,
@@ -164,6 +181,7 @@ pub fn get_detector(format: &str, pattern: &str) -> Result<Box<dyn Detector>> {
 
     match format {
         "nginx" => Ok(Box::new(NginxDetector::new()?)),
+        "nginx-error" => Ok(Box::new(NginxErrorDetector::new()?)),
         "dmesg" => Ok(Box::new(DmesgDetector::new()?)),
         _ => Ok(Box::new(GenericDetector::new("(?i)error")?)),
     }
@@ -201,7 +219,7 @@ mod tests {
 
             // Skip directories that are not detectors we know about (though we should support all in testdata)
             // But for now we only have nginx and dmesg
-            if detector_name != "nginx" && detector_name != "dmesg" {
+            if detector_name != "nginx" && detector_name != "dmesg" && detector_name != "nginx-error" {
                  continue;
             }
 

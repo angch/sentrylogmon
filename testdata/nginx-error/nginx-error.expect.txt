@@ -1,0 +1,2 @@
+2026/01/16 06:25:34 [error] 20771#20771: *44063945 connect() failed (113: No route to host) while connecting to upstream, client: 127.0.0.1, server: example.com, request: "GET /path/to/resource HTTP/1.1", upstream: "http://127.0.0.1:80/path/to/resource", host: "example.com"
+2026/01/16 06:25:37 [error] 20771#20771: *44061203 connect() failed (113: No route to host) while connecting to upstream, client: 127.0.0.2, server: example.com, request: "GET /another/resource HTTP/1.1", upstream: "http://127.0.0.1:80/another/resource", host: "example.com"

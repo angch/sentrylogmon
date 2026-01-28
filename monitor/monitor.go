@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"log"
 	"regexp"
@@ -28,12 +29,13 @@ const (
 )
 
 type Monitor struct {
-	Source            sources.LogSource
-	Detector          detectors.Detector
-	ExclusionDetector detectors.Detector
-	Collector         *sysstat.Collector
-	Verbose           bool
-	StopOnEOF         bool
+	ctx       context.Context
+	Source    sources.LogSource
+	Detector  detectors.Detector
+  ExclusionDetector detectors.Detector
+	Collector *sysstat.Collector
+	Verbose   bool
+	StopOnEOF bool
 
 	// Buffering
 	buffer           []string
@@ -43,8 +45,9 @@ type Monitor struct {
 	lastActivityTime time.Time
 }
 
-func New(source sources.LogSource, detector detectors.Detector, collector *sysstat.Collector, verbose bool, excludePattern string) (*Monitor, error) {
+func New(ctx context.Context, source sources.LogSource, detector detectors.Detector, collector *sysstat.Collector, verbose bool) (*Monitor, error) {
 	m := &Monitor{
+		ctx:       ctx,
 		Source:    source,
 		Detector:  detector,
 		Collector: collector,
@@ -120,7 +123,11 @@ func (m *Monitor) Start() {
 		if m.Verbose {
 			log.Printf("Monitor for %s stopped, restarting in 1s...", m.Source.Name())
 		}
-		time.Sleep(1 * time.Second)
+		select {
+		case <-m.ctx.Done():
+			return
+		case <-time.After(1 * time.Second):
+		}
 	}
 }
 
