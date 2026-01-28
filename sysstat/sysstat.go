@@ -57,6 +57,25 @@ func New() *Collector {
 	}
 }
 
+func (s *SystemState) ToMap() map[string]interface{} {
+	if s == nil {
+		return nil
+	}
+	m := map[string]interface{}{
+		"timestamp":       s.Timestamp,
+		"uptime":          s.Uptime,
+		"load":            s.Load,
+		"memory":          s.Memory,
+		"top_cpu":         s.TopCPU,
+		"top_mem":         s.TopMem,
+		"process_summary": s.ProcessSummary,
+	}
+	if s.DiskPressure != nil {
+		m["disk_pressure"] = s.DiskPressure
+	}
+	return m
+}
+
 func (c *Collector) GetState() *SystemState {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
