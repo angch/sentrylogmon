@@ -32,6 +32,9 @@ func TestCollect(t *testing.T) {
 		if len(state.TopCPU) > 5 {
 			t.Error("TopCPU has too many entries")
 		}
+		if state.TopCPU[0].Command == "" {
+			t.Error("TopCPU process command should not be empty")
+		}
 	}
 
 	if time.Since(state.Timestamp) > 1*time.Minute {

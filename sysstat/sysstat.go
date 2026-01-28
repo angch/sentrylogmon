@@ -26,6 +26,7 @@ type ProcessInfo struct {
 	// Internal fields for sorting
 	cpuUsage float64
 	memUsage float64
+	proc     procfs.Proc
 }
 
 type PressureInfo struct {
@@ -127,11 +128,17 @@ func (c *Collector) collect() {
 		newState.TopCPU = getTopKProcesses(procs, 5, func(i, j ProcessInfo) bool {
 			return i.cpuUsage > j.cpuUsage
 		})
+		for i := range newState.TopCPU {
+			fetchCommand(&newState.TopCPU[i])
+		}
 
 		// Get Top Memory
 		newState.TopMem = getTopKProcesses(procs, 5, func(i, j ProcessInfo) bool {
 			return i.memUsage > j.memUsage
 		})
+		for i := range newState.TopMem {
+			fetchCommand(&newState.TopMem[i])
+		}
 	} else {
 		newState.ProcessSummary = fmt.Sprintf("Error collecting process stats: %v", err)
 	}
@@ -175,6 +182,23 @@ func getDiskPressure() *PressureInfo {
 	return nil
 }
 
+func fetchCommand(p *ProcessInfo) {
+	if p.Command != "" {
+		return
+	}
+	cmd, err := p.proc.CmdLine()
+	if err != nil || len(cmd) == 0 {
+		// Fallback to Comm if CmdLine is empty or error
+		comm, err := p.proc.Comm()
+		if err == nil {
+			cmd = []string{comm}
+		} else {
+			cmd = []string{"unknown"}
+		}
+	}
+	p.Command = strings.Join(cmd, " ")
+}
+
 func getProcessStats(uptime uint64, totalMem uint64) ([]ProcessInfo, string, error) {
 	fs, err := procfs.NewFS("/proc")
 	if err != nil {
@@ -197,18 +221,6 @@ func getProcessStats(uptime uint64, totalMem uint64) ([]ProcessInfo, string, err
 		if err != nil {
 			continue
 		}
-
-		cmd, err := p.CmdLine()
-		if err != nil || len(cmd) == 0 {
-			// Fallback to Comm if CmdLine is empty or error
-			comm, err := p.Comm()
-			if err == nil {
-				cmd = []string{comm}
-			} else {
-				cmd = []string{"unknown"}
-			}
-		}
-		commandStr := strings.Join(cmd, " ")
 
 		// CPU Usage: (utime + stime) / (uptime - starttime)
 		// Times are in jiffies.
@@ -235,9 +247,10 @@ func getProcessStats(uptime uint64, totalMem uint64) ([]ProcessInfo, string, err
 			RSS:      fmt.Sprintf("%.0f", rssBytes), // Bytes
 			CPU:      fmt.Sprintf("%.1f", cpuUsage),
 			MEM:      fmt.Sprintf("%.1f", memUsage),
-			Command:  commandStr,
+			Command:  "",
 			cpuUsage: cpuUsage,
 			memUsage: memUsage,
+			proc:     p,
 		})
 	}
 
