@@ -288,9 +288,14 @@ func determineDetectorFormat(monCfg config.MonitorConfig) string {
 	if monCfg.Pattern != "" {
 		return "custom"
 	}
+
+	// Infer detector format from monitor type.
+	// Specifically, 'dmesg' source type defaults to 'dmesg' detector format.
 	if monCfg.Type == "dmesg" {
 		return "dmesg"
 	}
+
+	// Infer detector format from monitor name if it matches a known detector (e.g. "nginx").
 	if detectors.IsKnownDetector(monCfg.Name) {
 		return monCfg.Name
 	}
