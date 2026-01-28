@@ -58,6 +58,13 @@ func TestDetermineDetectorFormat(t *testing.T) {
 			},
 			expected: "nginx",
 		},
+		{
+			name: "Infer from known detector type (e.g. nginx)",
+			monCfg: config.MonitorConfig{
+				Type: "nginx",
+			},
+			expected: "nginx",
+		},
 	}
 
 	for _, tt := range tests {
