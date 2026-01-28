@@ -318,6 +318,20 @@ fn parseArgs(allocator: std.mem.Allocator) !Args {
     return args;
 }
 
+fn readLine(reader: *std.io.Reader, buffer: []u8) !?[]u8 {
+    var fbs = std.io.Writer.fixed(buffer);
+    _ = reader.streamDelimiter(&fbs, '\n') catch |err| {
+        if (err == error.EndOfStream) {
+            if (fbs.end > 0) {
+                return buffer[0..fbs.end];
+            }
+            return null;
+        }
+        return err;
+    };
+    return buffer[0..fbs.end];
+}
+
 fn monitorFile(file_path: []const u8, pattern: []const u8, batcher: *batcher_mod.Batcher, args: Args) !void {
     const file = try std.fs.cwd().openFile(file_path, .{});
     defer file.close();
@@ -329,12 +343,12 @@ fn monitorFile(file_path: []const u8, pattern: []const u8, batcher: *batcher_mod
 
     var reader_buf: [4096]u8 = undefined;
     var file_reader = file.reader(&reader_buf);
-    var in_stream = &file_reader.interface;
+    const in_stream = &file_reader.interface;
 
     var line_buf: [4096]u8 = undefined;
 
     while (true) {
-        const line_or_null = try in_stream.*.readUntilDelimiterOrEof(&line_buf, '\n');
+        const line_or_null = try readLine(in_stream, &line_buf);
 
         if (line_or_null) |line| {
             // Check if line matches pattern
@@ -380,12 +394,12 @@ fn monitorCommand(allocator: std.mem.Allocator, argv: []const []const u8, patter
             if (child.stdout) |stdout| {
                 var reader_buf: [4096]u8 = undefined;
                 var stdout_reader = stdout.reader(&reader_buf);
-                var in_stream = &stdout_reader.interface;
+                const in_stream = &stdout_reader.interface;
 
                 var line_buf: [4096]u8 = undefined;
 
                 while (true) {
-                    const line_or_null = in_stream.*.readUntilDelimiterOrEof(&line_buf, '\n') catch break;
+                    const line_or_null = readLine(in_stream, &line_buf) catch break;
 
                     if (line_or_null) |line| {
                         if (containsPattern(line, pattern)) {
