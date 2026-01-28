@@ -81,13 +81,13 @@ func (s *FileSource) run(watcher *fsnotify.Watcher, pw *io.PipeWriter) {
 	defer pw.Close()
 
 	var file *os.File
+	buf := make([]byte, 4096)
 
 	// Helper to safely read from file
 	readUntilEOF := func() {
 		if file == nil {
 			return
 		}
-		buf := make([]byte, 4096)
 		for {
 			n, err := file.Read(buf)
 			if n > 0 {
