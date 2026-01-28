@@ -50,7 +50,7 @@ pub fn main() !void {
     const RetryContext = struct {
         allocator: std.mem.Allocator,
         args: Args,
-        fn send(self: @This(), payload: []const u8) !void {
+        fn send(self: @This(), payload: []u8) !void {
             try sendSentryPayload(self.allocator, payload, self.args);
         }
     };
@@ -67,8 +67,8 @@ pub fn main() !void {
 
     if (config) |cfg| {
         // Multi-monitor mode
-        var threads = std.ArrayList(std.Thread).init(allocator);
-        defer threads.deinit();
+        var threads = std.ArrayList(std.Thread).empty;
+        defer threads.deinit(allocator);
 
         for (cfg.monitors.items) |monitor| {
             var monitor_args = args;
@@ -100,34 +100,34 @@ pub fn main() !void {
             if (monitor.type == .file) {
                  if (monitor.path) |p| {
                      const t = try std.Thread.spawn(.{}, monitorFile, .{p, monitor.pattern, batcher, monitor_args});
-                     try threads.append(t);
+                     try threads.append(allocator, t);
                  }
             } else if (monitor.type == .journalctl) {
-                 var argv = std.ArrayList([]const u8).init(allocator);
-                 try argv.append("journalctl");
+                 var argv = std.ArrayList([]const u8).empty;
+                 try argv.append(allocator, "journalctl");
                  if (monitor.args) |a| {
                      var iter = std.mem.tokenizeScalar(u8, a, ' ');
                      while (iter.next()) |part| {
-                         try argv.append(part);
+                         try argv.append(allocator, part);
                      }
                  }
                  const t = try std.Thread.spawn(.{}, monitorCommand, .{allocator, argv.items, monitor.pattern, batcher, monitor_args});
-                 try threads.append(t);
+                 try threads.append(allocator, t);
             } else if (monitor.type == .dmesg) {
-                 var argv = std.ArrayList([]const u8).init(allocator);
-                 try argv.append("dmesg");
-                 if (!args.oneshot) try argv.append("-w");
+                 var argv = std.ArrayList([]const u8).empty;
+                 try argv.append(allocator, "dmesg");
+                 if (!args.oneshot) try argv.append(allocator, "-w");
                  const t = try std.Thread.spawn(.{}, monitorCommand, .{allocator, argv.items, monitor.pattern, batcher, monitor_args});
-                 try threads.append(t);
+                 try threads.append(allocator, t);
             } else if (monitor.type == .command) {
                  if (monitor.args) |cmd_str| {
-                     var argv = std.ArrayList([]const u8).init(allocator);
+                     var argv = std.ArrayList([]const u8).empty;
                      var iter = std.mem.tokenizeScalar(u8, cmd_str, ' ');
                      while (iter.next()) |part| {
-                         try argv.append(part);
+                         try argv.append(allocator, part);
                      }
                      const t = try std.Thread.spawn(.{}, monitorCommand, .{allocator, argv.items, monitor.pattern, batcher, monitor_args});
-                     try threads.append(t);
+                     try threads.append(allocator, t);
                  }
             }
         }
@@ -176,10 +176,10 @@ pub fn main() !void {
             if (args.verbose) {
                 std.debug.print("Starting dmesg monitor...\n", .{});
             }
-            var argv = std.ArrayList([]const u8).init(allocator);
-            defer argv.deinit();
-            try argv.append("dmesg");
-            if (!args.oneshot) try argv.append("-w");
+            var argv = std.ArrayList([]const u8).empty;
+            defer argv.deinit(allocator);
+            try argv.append(allocator, "dmesg");
+            if (!args.oneshot) try argv.append(allocator, "-w");
 
             try monitorCommand(allocator, argv.items, args.pattern, batcher, args);
         } else if (args.file) |file_path| {
@@ -191,11 +191,11 @@ pub fn main() !void {
             if (args.verbose) {
                 std.debug.print("Monitoring command: {s}\n", .{cmd});
             }
-            var argv = std.ArrayList([]const u8).init(allocator);
-            defer argv.deinit();
+            var argv = std.ArrayList([]const u8).empty;
+            defer argv.deinit(allocator);
             var iter = std.mem.tokenizeScalar(u8, cmd, ' ');
             while (iter.next()) |part| {
-                try argv.append(part);
+                try argv.append(allocator, part);
             }
 
             try monitorCommand(allocator, argv.items, args.pattern, batcher, args);
@@ -203,12 +203,12 @@ pub fn main() !void {
             if (args.verbose) {
                 std.debug.print("Monitoring journalctl: {s}\n", .{jargs});
             }
-            var argv = std.ArrayList([]const u8).init(allocator);
-            defer argv.deinit();
-            try argv.append("journalctl");
+            var argv = std.ArrayList([]const u8).empty;
+            defer argv.deinit(allocator);
+            try argv.append(allocator, "journalctl");
             var iter = std.mem.tokenizeScalar(u8, jargs, ' ');
             while (iter.next()) |part| {
-                try argv.append(part);
+                try argv.append(allocator, part);
             }
 
             try monitorCommand(allocator, argv.items, args.pattern, batcher, args);
@@ -327,13 +327,14 @@ fn monitorFile(file_path: []const u8, pattern: []const u8, batcher: *batcher_mod
         try file.seekFromEnd(0);
     }
 
-    var buf_reader = std.io.bufferedReader(file.reader());
-    var in_stream = buf_reader.reader();
+    var reader_buf: [4096]u8 = undefined;
+    var file_reader = file.reader(&reader_buf);
+    var in_stream = &file_reader.interface;
 
     var line_buf: [4096]u8 = undefined;
 
     while (true) {
-        const line_or_null = try in_stream.readUntilDelimiterOrEof(&line_buf, '\n');
+        const line_or_null = try in_stream.*.readUntilDelimiterOrEof(&line_buf, '\n');
 
         if (line_or_null) |line| {
             // Check if line matches pattern
@@ -352,7 +353,7 @@ fn monitorFile(file_path: []const u8, pattern: []const u8, batcher: *batcher_mod
             }
 
             // Sleep and retry (simple polling)
-            std.time.sleep(1 * std.time.ns_per_s);
+            std.Thread.sleep(1 * std.time.ns_per_s);
         }
     }
 }
@@ -369,7 +370,7 @@ fn monitorCommand(allocator: std.mem.Allocator, argv: []const []const u8, patter
         child.spawn() catch |err| {
             std.debug.print("Failed to spawn command: {}\n", .{err});
             if (args.oneshot) return err;
-            std.time.sleep(1 * std.time.ns_per_s);
+            std.Thread.sleep(1 * std.time.ns_per_s);
             continue;
         };
 
@@ -377,13 +378,14 @@ fn monitorCommand(allocator: std.mem.Allocator, argv: []const []const u8, patter
             defer _ = child.kill() catch {};
 
             if (child.stdout) |stdout| {
-                var buf_reader = std.io.bufferedReader(stdout.reader());
-                var in_stream = buf_reader.reader();
+                var reader_buf: [4096]u8 = undefined;
+                var stdout_reader = stdout.reader(&reader_buf);
+                var in_stream = &stdout_reader.interface;
 
                 var line_buf: [4096]u8 = undefined;
 
                 while (true) {
-                    const line_or_null = in_stream.readUntilDelimiterOrEof(&line_buf, '\n') catch break;
+                    const line_or_null = in_stream.*.readUntilDelimiterOrEof(&line_buf, '\n') catch break;
 
                     if (line_or_null) |line| {
                         if (containsPattern(line, pattern)) {
@@ -413,7 +415,7 @@ fn monitorCommand(allocator: std.mem.Allocator, argv: []const []const u8, patter
         if (args.verbose) {
             std.debug.print("Command exited, restarting in 1s...\n", .{});
         }
-        std.time.sleep(1 * std.time.ns_per_s);
+        std.Thread.sleep(1 * std.time.ns_per_s);
     }
 }
 
@@ -489,11 +491,11 @@ const MonitorContext = struct {
     }
 };
 
-fn createSentryPayload(allocator: std.mem.Allocator, timestamp: []const u8, lines: []const []const u8, source: []const u8, args: Args) ![]const u8 {
-    var payload = std.ArrayList(u8).init(allocator);
-    errdefer payload.deinit();
+fn createSentryPayload(allocator: std.mem.Allocator, timestamp: []const u8, lines: []const []const u8, source: []const u8, args: Args) ![]u8 {
+    var payload = std.ArrayList(u8).empty;
+    errdefer payload.deinit(allocator);
 
-    const writer = payload.writer();
+    const writer = payload.writer(allocator);
     try writer.writeAll("{\"message\":\"Log errors at timestamp [");
     try writer.writeAll(timestamp);
     try writer.writeAll("]\",\"level\":\"error\",\"environment\":\"");
@@ -531,10 +533,10 @@ fn createSentryPayload(allocator: std.mem.Allocator, timestamp: []const u8, line
 
     try writer.writeAll("\"}}}");
 
-    return payload.toOwnedSlice();
+    return payload.toOwnedSlice(allocator);
 }
 
-fn sendSentryPayload(allocator: std.mem.Allocator, payload: []const u8, args: Args) !void {
+fn sendSentryPayload(allocator: std.mem.Allocator, payload: []u8, args: Args) !void {
     // Parse DSN to extract project info
     const parsed_dsn = try parseDsn(allocator, args.dsn);
     defer allocator.free(parsed_dsn.host);
@@ -558,26 +560,26 @@ fn sendSentryPayload(allocator: std.mem.Allocator, payload: []const u8, args: Ar
         .{ .name = "Content-Type", .value = "application/json" },
     };
 
-    var server_header_buffer: [4096]u8 = undefined;
-
-    var request = try client.open(.POST, uri, .{
-        .server_header_buffer = &server_header_buffer,
+    var request = try client.request(.POST, uri, .{
         .extra_headers = extra_headers,
     });
     defer request.deinit();
 
-    request.transfer_encoding = .{ .content_length = payload.len };
-
-    try request.send();
-    try request.writeAll(payload);
-    try request.finish();
+    try request.sendBodyComplete(payload);
 
     // Wait for response
-    try request.wait();
+    var redirect_buffer: [1024]u8 = undefined;
+    const response = try request.receiveHead(&redirect_buffer);
 
     if (args.verbose) {
-        std.debug.print("Sent event to Sentry: {}\n", .{request.response.status});
+        std.debug.print("Sent event to Sentry: {}\n", .{response.head.status});
     }
+
+    // Read and discard body to allow connection reuse
+    var body_buf: [1024]u8 = undefined;
+    var mut_response = response;
+    const reader = mut_response.reader(&body_buf);
+    _ = try reader.discardRemaining();
 }
 
 const ParsedDsn = struct {

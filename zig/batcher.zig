@@ -34,7 +34,7 @@ pub const Batcher = struct {
             for (entry.value_ptr.items) |line| {
                 self.allocator.free(line);
             }
-            entry.value_ptr.deinit();
+            entry.value_ptr.deinit(self.allocator);
         }
         self.buffer.deinit();
     }
@@ -47,12 +47,12 @@ pub const Batcher = struct {
         if (!result.found_existing) {
              // New entry, dupe key
              result.key_ptr.* = try self.allocator.dupe(u8, timestamp);
-             result.value_ptr.* = std.ArrayList([]const u8).init(self.allocator);
+             result.value_ptr.* = .empty;
         }
 
         const line_copy = try self.allocator.dupe(u8, line);
         errdefer self.allocator.free(line_copy);
-        try result.value_ptr.append(line_copy);
+        try result.value_ptr.append(self.allocator, line_copy);
     }
 
     pub fn flush(self: *Batcher) !void {
@@ -78,7 +78,7 @@ pub const Batcher = struct {
             for (lines) |line| {
                 self.allocator.free(line);
             }
-            entry.value_ptr.deinit();
+            entry.value_ptr.deinit(self.allocator);
         }
         old_buffer.deinit();
     }
@@ -90,7 +90,7 @@ pub const Batcher = struct {
 
     fn flusherLoop(self: *Batcher) void {
         while (true) {
-            std.time.sleep(5 * std.time.ns_per_s);
+            std.Thread.sleep(5 * std.time.ns_per_s);
             self.flush() catch |err| {
                 std.debug.print("Error in flusher: {}\n", .{err});
             };

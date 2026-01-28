@@ -26,7 +26,7 @@ build-zig:
 	@export PATH=$(PWD)/.tools/zig:$$PATH; \
 	if which zig > /dev/null 2>&1; then \
 		echo "Building Zig binary..."; \
-		cd zig && zig build -Doptimize=ReleaseSafe && \
+		cd zig && zig build -Doptimize=ReleaseSafe -Dstrip=true && \
 		echo "Zig binary built: zig/zig-out/bin/sentrylogmon-zig"; \
 	else \
 		echo "Zig not found. Skipping Zig build."; \
@@ -38,7 +38,7 @@ build-zig-small:
 	@export PATH=$(PWD)/.tools/zig:$$PATH; \
 	if which zig > /dev/null 2>&1; then \
 		echo "Building Zig binary (size optimized)..."; \
-		cd zig && zig build -Doptimize=ReleaseSmall && \
+		cd zig && zig build -Doptimize=ReleaseSmall -Dstrip=true && \
 		echo "Zig binary built: zig/zig-out/bin/sentrylogmon-zig"; \
 	else \
 		echo "Zig not found. Skipping Zig build."; \
