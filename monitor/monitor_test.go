@@ -67,7 +67,7 @@ func TestMonitorGrouping(t *testing.T) {
 	source := &MockSource{content: input}
 	detector := &MockDetector{}
 
-	mon, err := New(context.Background(), source, detector, nil, false)
+	mon, err := New(context.Background(), source, detector, nil, false, "")
 	if err != nil {
 		t.Fatalf("Failed to create monitor: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestMonitorExclusion(t *testing.T) {
 	detector := &MockDetector{} // Detects everything
 
 	// Create monitor with exclude pattern
-	mon, err := New(source, detector, nil, false, "ignore me")
+	mon, err := New(context.Background(), source, detector, nil, false, "ignore me")
 	if err != nil {
 		t.Fatalf("Failed to create monitor: %v", err)
 	}
