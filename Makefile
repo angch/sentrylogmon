@@ -48,8 +48,9 @@ build-zig-small:
 # Build Rust binary
 build-rust:
 	@if which cargo > /dev/null 2>&1; then \
-		echo "Building Rust binary..."; \
-		cd rust && cargo build --release --target x86_64-unknown-linux-musl && \
+		echo "Building Rust binary (static linking with Zig)..."; \
+		chmod +x scripts/build_rust_static.sh; \
+		./scripts/build_rust_static.sh && \
 		echo "Rust binary built: rust/target/x86_64-unknown-linux-musl/release/sentrylogmon"; \
 	else \
 		echo "Rust/Cargo not found. Skipping Rust build."; \
@@ -196,8 +197,9 @@ test-zig:
 # Run Rust tests
 test-rust:
 	@if which cargo > /dev/null 2>&1; then \
-		echo "Running Rust tests..."; \
-		cd rust && cargo test; \
+		echo "Running Rust tests (static target with Zig)..."; \
+		chmod +x scripts/test_rust.sh; \
+		./scripts/test_rust.sh; \
 	else \
 		echo "Cargo not found, skipping Rust tests"; \
 	fi
