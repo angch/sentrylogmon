@@ -104,28 +104,15 @@ func (c *Collector) collect() {
 	if err == nil {
 		newState.ProcessSummary = summary
 
-		// Sort by CPU
-		sort.Slice(procs, func(i, j int) bool {
-			return procs[i].cpuUsage > procs[j].cpuUsage
+		// Get Top CPU
+		newState.TopCPU = getTopKProcesses(procs, 5, func(i, j ProcessInfo) bool {
+			return i.cpuUsage > j.cpuUsage
 		})
-		if len(procs) > 5 {
-			newState.TopCPU = procs[:5]
-		} else {
-			newState.TopCPU = procs
-		}
 
-		// Sort by Memory (make a copy or re-sort)
-		// Since we want two different lists, we'll re-sort the full list
-		// but wait, newState.TopCPU holds references or copies? Copies.
-		// So we can re-sort the 'procs' slice.
-		sort.Slice(procs, func(i, j int) bool {
-			return procs[i].memUsage > procs[j].memUsage
+		// Get Top Memory
+		newState.TopMem = getTopKProcesses(procs, 5, func(i, j ProcessInfo) bool {
+			return i.memUsage > j.memUsage
 		})
-		if len(procs) > 5 {
-			newState.TopMem = procs[:5]
-		} else {
-			newState.TopMem = procs
-		}
 	} else {
 		newState.ProcessSummary = fmt.Sprintf("Error collecting process stats: %v", err)
 	}
@@ -237,4 +224,38 @@ func getProcessStats(uptime uint64, totalMem uint64) ([]ProcessInfo, string, err
 
 	summary := fmt.Sprintf("Total Processes: %d", len(procs))
 	return results, summary, nil
+}
+
+func getTopKProcesses(procs []ProcessInfo, k int, more func(i, j ProcessInfo) bool) []ProcessInfo {
+	if len(procs) <= k {
+		result := make([]ProcessInfo, len(procs))
+		copy(result, procs)
+		sort.Slice(result, func(i, j int) bool {
+			return more(result[i], result[j])
+		})
+		return result
+	}
+
+	result := make([]ProcessInfo, 0, k)
+
+	for _, p := range procs {
+		if len(result) < k {
+			result = append(result, p)
+			if len(result) == k {
+				sort.Slice(result, func(i, j int) bool {
+					return more(result[i], result[j])
+				})
+			}
+		} else {
+			if more(p, result[k-1]) {
+				pos := k - 1
+				for pos > 0 && more(p, result[pos-1]) {
+					result[pos] = result[pos-1]
+					pos--
+				}
+				result[pos] = p
+			}
+		}
+	}
+	return result
 }
