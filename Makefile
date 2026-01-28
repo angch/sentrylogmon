@@ -23,7 +23,8 @@ build-go:
 
 # Build Zig binary
 build-zig:
-	@if which zig > /dev/null 2>&1; then \
+	@export PATH=$(PWD)/.tools/zig:$$PATH; \
+	if which zig > /dev/null 2>&1; then \
 		echo "Building Zig binary..."; \
 		cd zig && zig build -Doptimize=ReleaseSafe && \
 		echo "Zig binary built: zig/zig-out/bin/sentrylogmon-zig"; \
@@ -34,7 +35,8 @@ build-zig:
 
 # Build Zig binary with maximum size optimization
 build-zig-small:
-	@if which zig > /dev/null 2>&1; then \
+	@export PATH=$(PWD)/.tools/zig:$$PATH; \
+	if which zig > /dev/null 2>&1; then \
 		echo "Building Zig binary (size optimized)..."; \
 		cd zig && zig build -Doptimize=ReleaseSmall && \
 		echo "Zig binary built: zig/zig-out/bin/sentrylogmon-zig"; \
@@ -60,7 +62,8 @@ check-prereqs:
 	@echo -n "Checking for Go... "
 	@which go > /dev/null 2>&1 && echo "✓ Found: $$(go version)" || echo "✗ Not found"
 	@echo -n "Checking for Zig... "
-	@which zig > /dev/null 2>&1 && echo "✓ Found: $$(zig version)" || echo "✗ Not found"
+	@export PATH=$(PWD)/.tools/zig:$$PATH; \
+	which zig > /dev/null 2>&1 && echo "✓ Found: $$(zig version)" || echo "✗ Not found"
 	@echo -n "Checking for Rust/Cargo... "
 	@which cargo > /dev/null 2>&1 && echo "✓ Found: $$(cargo --version)" || echo "✗ Not found"
 	@echo -n "Checking for curl... "
@@ -70,7 +73,8 @@ check-prereqs:
 	@echo ""
 	@echo "Summary:"
 	@which go > /dev/null 2>&1 || (echo "  - Go is not installed. Run 'make install-prereqs' or install manually."; exit 0)
-	@which zig > /dev/null 2>&1 || (echo "  - Zig is not installed. Run 'make install-prereqs' or install manually."; exit 0)
+	@export PATH=$(PWD)/.tools/zig:$$PATH; \
+	which zig > /dev/null 2>&1 || (echo "  - Zig is not installed. Run 'make install-prereqs' or install manually."; exit 0)
 	@which cargo > /dev/null 2>&1 || (echo "  - Rust is not installed. Run 'make install-prereqs' or install manually."; exit 0)
 	@echo "Prerequisites check complete."
 
@@ -97,19 +101,20 @@ install-prereqs:
 	fi
 	@echo ""
 	@# Check and install Zig
-	@if ! which zig > /dev/null 2>&1; then \
+	@export PATH=$(PWD)/.tools/zig:$$PATH; \
+	if ! which zig > /dev/null 2>&1; then \
 		echo "Installing Zig..."; \
-		mkdir -p /tmp/sentrylogmon-tools; \
+		mkdir -p .tools; \
 		echo "Attempting to download Zig 0.13.0..."; \
-		cd /tmp/sentrylogmon-tools && \
+		cd .tools && \
 		(curl -sL https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz -o zig.tar.xz && \
 		tar -xf zig.tar.xz && \
 		mv zig-linux-x86_64-0.13.0 zig && \
 		rm zig.tar.xz && \
 		echo "" && \
-		echo "Zig downloaded to /tmp/sentrylogmon-tools/zig" && \
-		echo "Add to PATH: export PATH=/tmp/sentrylogmon-tools/zig:\$$PATH" && \
-		echo "Or install system-wide: sudo cp -r /tmp/sentrylogmon-tools/zig /usr/local/") || \
+		echo "Zig downloaded to $$(pwd)/zig" && \
+		echo "Add to PATH: export PATH=$$(pwd)/zig:\$$PATH" && \
+		echo "Or install system-wide: sudo cp -r $$(pwd)/zig /usr/local/") || \
 		(echo "" && \
 		echo "Failed to download Zig automatically." && \
 		echo "Please install Zig manually from: https://ziglang.org/download/" && \
@@ -131,8 +136,8 @@ install-prereqs:
 	@rustup target add x86_64-unknown-linux-musl || echo "Failed to add target, please ensure rustup is installed"
 	@echo ""
 	@echo "Installation complete!"
-	@echo "If tools were installed to /tmp, add them to your PATH:"
-	@echo "  export PATH=/tmp/sentrylogmon-tools/zig:\$$PATH"
+	@echo "If tools were installed locally, add them to your PATH:"
+	@echo "  export PATH=$$(pwd)/.tools/zig:\$$PATH"
 	@echo "If Rust was installed, run: source \$$HOME/.cargo/env"
 
 # Clean build artifacts
@@ -181,7 +186,8 @@ test-go:
 
 # Run Zig tests
 test-zig:
-	@if which zig > /dev/null 2>&1; then \
+	@export PATH=$(PWD)/.tools/zig:$$PATH; \
+	if which zig > /dev/null 2>&1; then \
 		echo "Running Zig tests..."; \
 		cd zig && zig build test; \
 	else \

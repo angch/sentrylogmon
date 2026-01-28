@@ -49,3 +49,6 @@ sentrylogmon-zig
 # Rust
 rust/target/
 rust/Cargo.lock
+
+# Local tools installation
+.tools/
