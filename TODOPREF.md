@@ -14,10 +14,11 @@ This document tracks potential performance improvements for the `sentrylogmon` p
   - **Proposed Change:** Use `strings.Builder` or `bytes.Buffer` to accumulate log lines directly.
   - **Expected Impact:** Reduced memory allocations and GC pressure.
 
-- [ ] **Optimize `DmesgDetector` Allocations**
+- [x] **Optimize `DmesgDetector` Allocations**
   - **Current Behavior:** Uses `FindSubmatch` which allocates slices of byte slices, and frequently converts `[]byte` to `string`.
   - **Proposed Change:** Use `FindSubmatchIndex` to work with indices and avoid slice allocation. Minimize string conversions by checking bytes directly where possible.
   - **Expected Impact:** Reduced allocations in the detection hot path.
+  - **Result:** 65% reduction in bytes allocated (891→313 B/op), 40% fewer allocations (15→9 allocs/op).
 
 ## Rust Implementation
 

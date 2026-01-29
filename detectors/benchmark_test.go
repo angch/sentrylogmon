@@ -56,3 +56,29 @@ func BenchmarkRegexpMatch(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkDmesgDetector_Detect measures allocations in the DmesgDetector.Detect hot path.
+// This benchmark exercises:
+// - Regex parsing of dmesg lines (timestamp + header extraction)
+// - Error pattern detection
+// - Context header tracking
+func BenchmarkDmesgDetector_Detect(b *testing.B) {
+	detector := NewDmesgDetector()
+	// Realistic dmesg lines with timestamps and headers
+	lines := [][]byte{
+		[]byte("[787739.009553] ata1.00: exception Emask 0x10 SAct 0x10000 SErr 0x40d0000"),
+		[]byte("[787739.009558] ata1.00: irq_stat 0x00000040, connection status changed"),
+		[]byte("[787739.009559] ata1: SError: { PHYRdyChg CommWake 10B8B DevExch }"),
+		[]byte("[787739.009562] ata1.00: failed command: READ FPDMA QUEUED"),
+		[]byte("[787739.898553] ata1: SATA link up 6.0 Gbps (SStatus 133 SControl 300)"),
+		[]byte("[787739.929456] ata1.00: configured for UDMA/133"),
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		for _, line := range lines {
+			detector.Detect(line)
+		}
+	}
+}

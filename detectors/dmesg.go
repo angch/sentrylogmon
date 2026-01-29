@@ -35,20 +35,22 @@ func (d *DmesgDetector) Detect(line []byte) bool {
 	// 2. Check if it looks like a new dmesg line (starts with timestamp)
 	isDmesgLine := dmesgStartRegex.Match(line)
 
-	// 3. Parse the line for detailed info
-	matches := dmesgLineRegex.FindSubmatch(line)
+	// 3. Parse the line for detailed info using FindSubmatchIndex to avoid allocations.
+	// FindSubmatchIndex returns []int with indices instead of allocating [][]byte slices.
+	// For each capture group, we get a pair of indices [start, end).
+	// indices[0:2] = full match, indices[2:4] = first group (timestamp), indices[4:6] = second group (header)
+	indices := dmesgLineRegex.FindSubmatchIndex(line)
 	var timestamp float64
 	var headerBytes []byte
-	var err error
 
-	if len(matches) >= 3 {
-		// matches[1] is timestamp, matches[2] is header
-		// We use string conversion for ParseFloat, which is unavoidable unless we write custom parser
-		timestamp, err = strconv.ParseFloat(string(matches[1]), 64)
-		if err != nil {
-			timestamp = 0
-		}
-		headerBytes = matches[2]
+	if len(indices) >= 6 {
+		// Extract timestamp and header by slicing the original line bytes directly.
+		// This avoids the allocation that FindSubmatch would create.
+		timestampBytes := line[indices[2]:indices[3]]
+		headerBytes = line[indices[4]:indices[5]]
+
+		// ParseFloat requires a string, but this allocation is unavoidable for float parsing.
+		timestamp, _ = strconv.ParseFloat(string(timestampBytes), 64)
 	}
 
 	if isError {
@@ -57,6 +59,7 @@ func (d *DmesgDetector) Detect(line []byte) bool {
 			d.lastMatchTime = timestamp
 		}
 		if len(headerBytes) > 0 {
+			// String conversion here is necessary for storing the header for later comparison.
 			d.lastMatchHeader = string(headerBytes)
 		}
 		return true
