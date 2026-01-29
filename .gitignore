@@ -54,3 +54,4 @@ rust/Cargo.lock
 .tools/
 zig/zig-cache
 *~
+dev.sh

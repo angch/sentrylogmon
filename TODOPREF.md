@@ -22,10 +22,11 @@ This document tracks potential performance improvements for the `sentrylogmon` p
 
 ## Rust Implementation
 
-- [ ] **Optimize `sysstat` System Refresh**
+- [x] **Optimize `sysstat` System Refresh**
   - **Current Behavior:** Calls `sys.refresh_all()` which updates all system information including all processes and their details.
   - **Proposed Change:** Use `sysinfo`'s more granular refresh methods (e.g., `refresh_cpu`, `refresh_memory`, `refresh_processes_specifics`) to only update what is necessary.
   - **Expected Impact:** Lower CPU usage during system stats collection.
+  - **Result:** Replaced `refresh_all()` with `refresh_memory()` and `refresh_processes()` to skip disk, network, and sensor refreshes.
 
 ## General
 

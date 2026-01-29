@@ -63,7 +63,11 @@ impl Collector {
             let mut sys = System::new_all();
 
             loop {
-                sys.refresh_all();
+                // Performance optimization: Use granular refresh methods instead of
+                // refresh_all() to avoid refreshing unnecessary data (disks, networks,
+                // temperature sensors, etc.). We only need memory and process info.
+                sys.refresh_memory();
+                sys.refresh_processes();
 
                 let load_avg = System::load_average();
                 let total_mem = sys.total_memory();
