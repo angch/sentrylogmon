@@ -454,21 +454,7 @@ fn containsAny(haystack: []const u8, needles: []const []const u8) bool {
 }
 
 fn containsPattern(haystack: []const u8, needle: []const u8) bool {
-    // Simple case-insensitive substring match (simplified from regex)
-    var i: usize = 0;
-    while (i + needle.len <= haystack.len) : (i += 1) {
-        var match = true;
-        for (needle, 0..) |c, j| {
-            const h = haystack[i + j];
-            const n = c;
-            if (std.ascii.toLower(h) != std.ascii.toLower(n)) {
-                match = false;
-                break;
-            }
-        }
-        if (match) return true;
-    }
-    return false;
+    return std.ascii.indexOfIgnoreCase(haystack, needle) != null;
 }
 
 fn extractTimestamp(line: []const u8) []const u8 {
@@ -634,4 +620,11 @@ test {
     _ = config_mod;
     _ = queue_mod;
     _ = batcher_mod;
+}
+
+test "containsPattern" {
+    const haystack = "Hello World";
+    try std.testing.expect(containsPattern(haystack, "world"));
+    try std.testing.expect(containsPattern(haystack, "HELLO"));
+    try std.testing.expect(!containsPattern(haystack, "foo"));
 }

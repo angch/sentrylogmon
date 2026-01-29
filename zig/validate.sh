@@ -62,7 +62,7 @@ else
 fi
 
 # Check for Sentry integration
-if grep -q "sendToSentry" main.zig; then
+if grep -q "sendSentryPayload" main.zig; then
     echo "✓ Sentry integration function found"
 else
     echo "✗ Sentry integration function not found"
