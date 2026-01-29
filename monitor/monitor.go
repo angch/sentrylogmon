@@ -28,13 +28,13 @@ const (
 )
 
 type Monitor struct {
-	ctx       context.Context
-	Source    sources.LogSource
-	Detector  detectors.Detector
-  ExclusionDetector detectors.Detector
-	Collector *sysstat.Collector
-	Verbose   bool
-	StopOnEOF bool
+	ctx               context.Context
+	Source            sources.LogSource
+	Detector          detectors.Detector
+	ExclusionDetector detectors.Detector
+	Collector         *sysstat.Collector
+	Verbose           bool
+	StopOnEOF         bool
 
 	// Buffering
 	buffer           []string

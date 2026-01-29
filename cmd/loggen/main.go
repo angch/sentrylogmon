@@ -127,7 +127,7 @@ func generateDmesgLog() string {
 	// Format: [TIMESTAMP] source: message
 	// Or context lines
 
-	ts := fmt.Sprintf("[%.6f]", float64(time.Now().Unix()) + rand.Float64())
+	ts := fmt.Sprintf("[%.6f]", float64(time.Now().Unix())+rand.Float64())
 
 	if rand.Float64() < 0.1 {
 		// Continuation line (stack trace or hex dump)

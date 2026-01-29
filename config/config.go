@@ -2,6 +2,7 @@ package config
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
 
@@ -15,12 +16,12 @@ type SentryConfig struct {
 }
 
 type MonitorConfig struct {
-	Name    string `yaml:"name"`
-	Type    string `yaml:"type"`    // file, journalctl, dmesg, command
-	Path    string `yaml:"path"`    // for file
-	Args    string `yaml:"args"`    // for journalctl or command
-	Pattern string `yaml:"pattern"` // regex pattern for custom format
-	Format  string `yaml:"format"`  // dmesg, nginx, custom (default: custom if pattern set)
+	Name           string `yaml:"name"`
+	Type           string `yaml:"type"`            // file, journalctl, dmesg, command
+	Path           string `yaml:"path"`            // for file
+	Args           string `yaml:"args"`            // for journalctl or command
+	Pattern        string `yaml:"pattern"`         // regex pattern for custom format
+	Format         string `yaml:"format"`          // dmesg, nginx, custom (default: custom if pattern set)
 	ExcludePattern string `yaml:"exclude_pattern"` // regex pattern to exclude from reporting
 }
 
@@ -32,25 +33,40 @@ type Config struct {
 }
 
 var (
-	configFile  = flag.String("config", "", "Path to configuration file")
-	dsn         = flag.String("dsn", os.Getenv("SENTRY_DSN"), "Sentry DSN")
-	useDmesg    = flag.Bool("dmesg", false, "Monitor dmesg output")
-	inputFile   = flag.String("file", "", "Monitor a log file")
-	journalctl  = flag.String("journalctl", "", "Monitor journalctl output (pass args)")
-	command     = flag.String("command", "", "Monitor custom command output")
-	format      = flag.String("format", "", "Detector format (dmesg, nginx, custom)")
-	pattern     = flag.String("pattern", "Error", "Pattern to match (case sensitive)")
+	configFile     = flag.String("config", "", "Path to configuration file")
+	dsn            = flag.String("dsn", os.Getenv("SENTRY_DSN"), "Sentry DSN")
+	useDmesg       = flag.Bool("dmesg", false, "Monitor dmesg output")
+	inputFile      = flag.String("file", "", "Monitor a log file")
+	journalctl     = flag.String("journalctl", "", "Monitor journalctl output (pass args)")
+	command        = flag.String("command", "", "Monitor custom command output")
+	format         = flag.String("format", "", "Detector format (dmesg, nginx, custom)")
+	pattern        = flag.String("pattern", "Error", "Pattern to match (case sensitive)")
 	excludePattern = flag.String("exclude", "", "Pattern to exclude from reporting (case sensitive)")
-	environment = flag.String("environment", "production", "Sentry environment")
-	release     = flag.String("release", "", "Sentry release version")
-	verbose     = flag.Bool("verbose", false, "Verbose logging")
-	oneshot     = flag.Bool("oneshot", false, "Run once and exit when input stream ends")
+	environment    = flag.String("environment", "production", "Sentry environment")
+	release        = flag.String("release", "", "Sentry release version")
+	verbose        = flag.Bool("verbose", false, "Verbose logging")
+	oneshot        = flag.Bool("oneshot", false, "Run once and exit when input stream ends")
 )
 
 // ParseFlags parses the command line flags.
 // It must be called before Load.
 func ParseFlags() {
 	if !flag.Parsed() {
+		flag.Usage = func() {
+			out := flag.CommandLine.Output()
+			fmt.Fprintf(out, "Sentry Log Monitor\n")
+			fmt.Fprintf(out, "A lightweight tool to monitor logs and report errors to Sentry.\n\n")
+			fmt.Fprintf(out, "Usage:\n  sentrylogmon [flags]\n\n")
+			fmt.Fprintf(out, "Examples:\n")
+			fmt.Fprintf(out, "  # Monitor a file for errors\n")
+			fmt.Fprintf(out, "  sentrylogmon --dsn=https://... --file=/var/log/syslog\n\n")
+			fmt.Fprintf(out, "  # Monitor with config file\n")
+			fmt.Fprintf(out, "  sentrylogmon --config=sentrylogmon.yaml\n\n")
+			fmt.Fprintf(out, "  # Monitor journalctl\n")
+			fmt.Fprintf(out, "  sentrylogmon --dsn=... --journalctl=\"--unit=nginx -f\"\n\n")
+			fmt.Fprintf(out, "Flags:\n")
+			flag.PrintDefaults()
+		}
 		flag.Parse()
 	}
 }
