@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/angch/sentrylogmon/detectors"
+	"github.com/getsentry/sentry-go"
 )
 
 func BenchmarkMonitorLoop(b *testing.B) {
@@ -44,5 +45,28 @@ func BenchmarkMonitorLoop(b *testing.B) {
 				_ = line
 			}
 		}
+	}
+}
+
+func BenchmarkProcessMatch(b *testing.B) {
+	// Setup Sentry Mock
+	transport := &MockTransport{}
+	_ = sentry.Init(sentry.ClientOptions{
+		Transport: transport,
+	})
+
+	mon := &Monitor{
+		Source: &MockSource{content: ""},
+	}
+	// Pre-allocate buffer to avoid nil check issues if any (though slice defaults to nil is fine)
+
+	// Use a long line
+	line := "[100.0] " + strings.Repeat("a", 100)
+	lineBytes := []byte(line)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		mon.processMatch(lineBytes)
 	}
 }

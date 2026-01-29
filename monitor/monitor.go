@@ -37,7 +37,8 @@ type Monitor struct {
 	StopOnEOF         bool
 
 	// Buffering
-	buffer           []string
+	buffer           strings.Builder
+	bufferCount      int
 	bufferMutex      sync.Mutex
 	bufferStartTime  float64
 	flushTimer       *time.Timer
@@ -94,11 +95,10 @@ func (m *Monitor) Start() {
 					}
 					continue
 				}
-				line := string(lineBytes)
 				if m.Verbose {
-					log.Printf("[%s] Matched: %s", m.Source.Name(), line)
+					log.Printf("[%s] Matched: %s", m.Source.Name(), string(lineBytes))
 				}
-				m.processMatch(line)
+				m.processMatch(lineBytes)
 			}
 		}
 
@@ -130,40 +130,47 @@ func (m *Monitor) Start() {
 	}
 }
 
-func (m *Monitor) processMatch(line string) {
+func (m *Monitor) processMatch(line []byte) {
 	m.bufferMutex.Lock()
 	m.lastActivityTime = time.Now()
 
-	matches := timestampRegex.FindStringSubmatch(line)
+	matches := timestampRegex.FindSubmatch(line)
 	var timestamp float64
 	if len(matches) > 1 {
-		timestamp, _ = strconv.ParseFloat(matches[1], 64)
+		// ParseFloat requires string, but the timestamp part is short
+		timestamp, _ = strconv.ParseFloat(string(matches[1]), 64)
 	}
 
 	var msgToSend string
 
-	if len(m.buffer) == 0 {
-		m.buffer = []string{line}
+	if m.bufferCount == 0 {
+		m.buffer.Write(line)
+		m.bufferCount = 1
 		m.bufferStartTime = timestamp
 		m.resetTimerLocked()
 	} else {
 		// Check max buffer size to prevent memory leaks
-		if len(m.buffer) >= MaxBufferSize {
+		if m.bufferCount >= MaxBufferSize {
 			// Force flush current buffer and start new
-			msgToSend = strings.Join(m.buffer, "\n")
-			m.buffer = []string{line}
+			msgToSend = m.buffer.String()
+			m.buffer.Reset()
+			m.buffer.Write(line)
+			m.bufferCount = 1
 			m.bufferStartTime = timestamp
 			m.resetTimerLocked()
 		} else {
 			// Group by 5 seconds window
 			if timestamp == 0 || (timestamp-m.bufferStartTime) <= 5.0 {
-				m.buffer = append(m.buffer, line)
+				m.buffer.WriteByte('\n')
+				m.buffer.Write(line)
+				m.bufferCount++
 				m.resetTimerLocked()
 			} else {
 				// Flush current
-				msgToSend = strings.Join(m.buffer, "\n")
-				// Start new
-				m.buffer = []string{line}
+				msgToSend = m.buffer.String()
+				m.buffer.Reset()
+				m.buffer.Write(line)
+				m.bufferCount = 1
 				m.bufferStartTime = timestamp
 				m.resetTimerLocked()
 			}
@@ -194,13 +201,14 @@ func (m *Monitor) flushBuffer() {
 		return
 	}
 
-	if len(m.buffer) == 0 {
+	if m.bufferCount == 0 {
 		m.bufferMutex.Unlock()
 		return
 	}
 
-	msg := strings.Join(m.buffer, "\n")
-	m.buffer = nil
+	msg := m.buffer.String()
+	m.buffer.Reset()
+	m.bufferCount = 0
 	m.bufferMutex.Unlock()
 
 	m.sendToSentry(msg)
@@ -212,13 +220,14 @@ func (m *Monitor) forceFlush() {
 		m.flushTimer.Stop()
 	}
 
-	if len(m.buffer) == 0 {
+	if m.bufferCount == 0 {
 		m.bufferMutex.Unlock()
 		return
 	}
 
-	msg := strings.Join(m.buffer, "\n")
-	m.buffer = nil
+	msg := m.buffer.String()
+	m.buffer.Reset()
+	m.bufferCount = 0
 	m.bufferMutex.Unlock()
 
 	m.sendToSentry(msg)

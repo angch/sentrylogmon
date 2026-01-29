@@ -9,7 +9,7 @@ This document tracks potential performance improvements for the `sentrylogmon` p
   - **Proposed Change:** Collect only lightweight stats (PID, CPU, Memory) first, sort to find the top K processes, and *then* fetch the command line only for those top K processes.
   - **Expected Impact:** Significant reduction in I/O operations (from N reads to ~10 reads per collection cycle).
 
-- [ ] **Optimize Buffering in `Monitor`**
+- [x] **Optimize Buffering in `Monitor`**
   - **Current Behavior:** Uses `[]string` to buffer log lines and `strings.Join` to concatenate them before sending to Sentry. This causes extra allocations.
   - **Proposed Change:** Use `strings.Builder` or `bytes.Buffer` to accumulate log lines directly.
   - **Expected Impact:** Reduced memory allocations and GC pressure.
