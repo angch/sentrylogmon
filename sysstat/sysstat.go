@@ -196,7 +196,7 @@ func fetchCommand(p *ProcessInfo) {
 			cmd = []string{"unknown"}
 		}
 	}
-	p.Command = strings.Join(cmd, " ")
+	p.Command = SanitizeCommand(cmd)
 }
 
 func getProcessStats(uptime uint64, totalMem uint64) ([]ProcessInfo, string, error) {
