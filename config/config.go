@@ -28,10 +28,11 @@ type MonitorConfig struct {
 }
 
 type Config struct {
-	Sentry   SentryConfig    `yaml:"sentry"`
-	Monitors []MonitorConfig `yaml:"monitors"`
-	Verbose  bool            `yaml:"-"`
-	OneShot  bool            `yaml:"-"`
+	Sentry      SentryConfig    `yaml:"sentry"`
+	Monitors    []MonitorConfig `yaml:"monitors"`
+	Verbose     bool            `yaml:"-"`
+	OneShot     bool            `yaml:"-"`
+	MetricsPort int             `yaml:"metrics_port"`
 }
 
 var (
@@ -48,6 +49,7 @@ var (
 	release        = flag.String("release", "", "Sentry release version")
 	verbose        = flag.Bool("verbose", false, "Verbose logging")
 	oneshot        = flag.Bool("oneshot", false, "Run once and exit when input stream ends")
+	metricsPort    = flag.Int("metrics-port", 0, "Port to expose Prometheus metrics (0 to disable)")
 )
 
 // ParseFlags parses the command line flags.
@@ -105,6 +107,11 @@ func Load() (*Config, error) {
 			cfg.Sentry.Release = *release
 		}
 
+		// Flags override config file
+		if *metricsPort != 0 {
+			cfg.MetricsPort = *metricsPort
+		}
+
 		// Verbose flag always overrides
 		cfg.Verbose = *verbose
 		cfg.OneShot = *oneshot
@@ -117,6 +124,8 @@ func Load() (*Config, error) {
 		Environment: *environment,
 		Release:     *release,
 	}
+
+	cfg.MetricsPort = *metricsPort
 
 	monitor := MonitorConfig{
 		Pattern:        *pattern,

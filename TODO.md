@@ -13,9 +13,10 @@ This file tracks potential features and improvements for `sentrylogmon`.
   - Add a new `LogSource` for syslog (UDP/TCP listener).
   - Parse syslog severity/facility.
 
-- [ ] **Prometheus Metrics**
+- [x] **Prometheus Metrics**
   - Expose an HTTP endpoint (e.g., `/metrics`) with Prometheus metrics.
   - Track lines processed, issues detected, Sentry errors, etc.
+  - *Implemented using `github.com/prometheus/client_golang`.*
 
 - [ ] **Configuration Hot-Reload**
   - Watch the configuration file for changes.
