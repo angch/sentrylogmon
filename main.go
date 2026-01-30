@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"text/tabwriter"
 	"time"
 
 	"github.com/angch/sentrylogmon/config"
@@ -40,9 +41,19 @@ func main() {
 		if err != nil {
 			log.Fatalf("Error listing instances: %v", err)
 		}
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		enc.Encode(instances)
+
+		isTerminal := false
+		if fi, err := os.Stdout.Stat(); err == nil {
+			isTerminal = (fi.Mode() & os.ModeCharDevice) != 0
+		}
+
+		if isTerminal {
+			printInstanceTable(instances)
+		} else {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			enc.Encode(instances)
+		}
 		return
 	}
 
@@ -320,4 +331,22 @@ func determineDetectorFormat(monCfg config.MonitorConfig) string {
 		return monCfg.Name
 	}
 	return "custom"
+}
+
+func printInstanceTable(instances []ipc.StatusResponse) {
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(w, "PID\tSTART TIME\tUPTIME\tVERSION\tMONITORS")
+	for _, inst := range instances {
+		uptime := time.Since(inst.StartTime).Round(time.Second)
+		monitors := 0
+		if inst.Config != nil {
+			monitors = len(inst.Config.Monitors)
+		}
+		version := inst.Version
+		if version == "" {
+			version = "?"
+		}
+		fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%d\n", inst.PID, inst.StartTime.Format(time.RFC3339), uptime, version, monitors)
+	}
+	w.Flush()
 }
