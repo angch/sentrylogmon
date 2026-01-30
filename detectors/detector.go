@@ -11,3 +11,9 @@ type ContextExtractor interface {
 	// GetContext returns a map of context data from the log line.
 	GetContext(line []byte) map[string]interface{}
 }
+
+// MessageTransformer is an interface for transforming the log line before sending.
+type MessageTransformer interface {
+	// TransformMessage returns the transformed message.
+	TransformMessage(line []byte) []byte
+}

@@ -16,10 +16,10 @@ type SentryConfig struct {
 }
 
 type MonitorConfig struct {
-	Name           string `yaml:"name"`
-	Type           string `yaml:"type"`            // file, journalctl, dmesg, command
-	Path           string `yaml:"path"`            // for file
-	Args           string `yaml:"args"`            // for journalctl or command
+	Name            string `yaml:"name"`
+	Type            string `yaml:"type"`            // file, journalctl, dmesg, command
+	Path            string `yaml:"path"`            // for file
+	Args            string `yaml:"args"`            // for journalctl or command
 	Pattern         string `yaml:"pattern"`         // regex pattern for custom format
 	Format          string `yaml:"format"`          // dmesg, nginx, custom (default: custom if pattern set)
 	ExcludePattern  string `yaml:"exclude_pattern"` // regex pattern to exclude from reporting

@@ -1,6 +1,7 @@
 package detectors
 
 import (
+	"bytes"
 	"regexp"
 	"strconv"
 	"strings"
@@ -89,6 +90,17 @@ func (d *DmesgDetector) Detect(line []byte) bool {
 	}
 
 	return false
+}
+
+// TransformMessage strips the timestamp from the dmesg line.
+func (d *DmesgDetector) TransformMessage(line []byte) []byte {
+	// Check if it starts with timestamp
+	if loc := dmesgStartRegex.FindIndex(line); loc != nil {
+		// loc[1] is the index after the timestamp (including brackets)
+		// Return the rest of the line, trimmed of whitespace
+		return bytes.TrimSpace(line[loc[1]:])
+	}
+	return line
 }
 
 func areHeadersRelated(h1, h2 string) bool {
