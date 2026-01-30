@@ -3,6 +3,7 @@ const http = std.http;
 const config_mod = @import("config.zig");
 const queue_mod = @import("queue.zig");
 const batcher_mod = @import("batcher.zig");
+const detectors = @import("detectors.zig");
 
 const RateLimiter = struct {
     limit: usize,
@@ -118,6 +119,7 @@ pub fn main() !void {
             if (cfg.sentry.dsn.len > 0) monitor_args.dsn = cfg.sentry.dsn;
             if (cfg.sentry.environment.len > 0) monitor_args.environment = cfg.sentry.environment;
             if (cfg.sentry.release.len > 0) monitor_args.release = cfg.sentry.release;
+            if (monitor.format) |fmt| monitor_args.format = fmt;
 
             if (monitor_args.dsn.len == 0) {
                  std.debug.print("Skipping monitor {s}: No DSN configured\n", .{monitor.name});
@@ -154,7 +156,7 @@ pub fn main() !void {
 
             if (monitor.type == .file) {
                  if (monitor.path) |p| {
-                     const t = try std.Thread.spawn(.{}, monitorFile, .{p, monitor.pattern, monitor.exclude_pattern, batcher, monitor_args});
+                     const t = try std.Thread.spawn(.{}, monitorFile, .{allocator, p, monitor.pattern, monitor.exclude_pattern, batcher, monitor_args});
                      try threads.append(allocator, t);
                  }
             } else if (monitor.type == .journalctl) {
@@ -247,7 +249,7 @@ pub fn main() !void {
             if (args.verbose) {
                 std.debug.print("Monitoring file: {s}\n", .{file_path});
             }
-            try monitorFile(file_path, args.pattern, args.exclude_pattern, batcher, args);
+            try monitorFile(allocator, file_path, args.pattern, args.exclude_pattern, batcher, args);
         } else if (args.command) |cmd| {
             if (args.verbose) {
                 std.debug.print("Monitoring command: {s}\n", .{cmd});
@@ -399,7 +401,7 @@ fn readLine(reader: *std.io.Reader, buffer: []u8) !?[]u8 {
     return buffer[0..fbs.end];
 }
 
-fn monitorFile(file_path: []const u8, pattern: []const u8, exclude_pattern: ?[]const u8, batcher: *batcher_mod.Batcher, args: Args) !void {
+fn monitorFile(allocator: std.mem.Allocator, file_path: []const u8, pattern: []const u8, exclude_pattern: ?[]const u8, batcher: *batcher_mod.Batcher, args: Args) !void {
     const file = try std.fs.cwd().openFile(file_path, .{});
     defer file.close();
 
@@ -414,19 +416,45 @@ fn monitorFile(file_path: []const u8, pattern: []const u8, exclude_pattern: ?[]c
 
     var line_buf: [4096]u8 = undefined;
 
+    // Initialize detectors
+    const detector = try detectors.createDetector(allocator, args.format, pattern);
+    var exclude_detector: ?detectors.Detector = null;
+    if (exclude_pattern) |ep| {
+        // For exclusion, we generally use string matching, but let's assume if format is JSON, exclusion might also be JSON?
+        // To be safe and simple: use createDetector with the same format.
+        // But if format is JSON, pattern is "key:val". Exclude pattern might be "val" or "key:val".
+        // If exclude pattern is just a string, createDetector will fail if format is JSON?
+        // Detectors.createDetector("json", "foo") -> JsonDetector(key="message", val="foo").
+        // Detectors.createDetector("json", "k:v") -> JsonDetector(key="k", val="v").
+        // This seems reasonable for exclude too.
+        exclude_detector = try detectors.createDetector(allocator, args.format, ep);
+    }
+
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+
     while (true) {
         const line_or_null = try readLine(in_stream, &line_buf);
 
         if (line_or_null) |line| {
+            // Reset arena for per-line allocations (e.g. JSON parsing)
+            const arena_alloc = arena.allocator();
+            defer _ = arena.reset(.retain_capacity);
+
             // Check if line matches pattern
-            if (containsPattern(line, pattern)) {
-                if (exclude_pattern) |ep| {
-                    if (containsPattern(line, ep)) {
-                        if (args.verbose) {
-                            std.debug.print("Excluded line: {s}\n", .{line});
-                        }
-                        continue;
+            if (detector.match(arena_alloc, line)) {
+                var excluded = false;
+                if (exclude_detector) |ed| {
+                    if (ed.match(arena_alloc, line)) {
+                        excluded = true;
                     }
+                }
+
+                if (excluded) {
+                    if (args.verbose) {
+                        std.debug.print("Excluded line: {s}\n", .{line});
+                    }
+                    continue;
                 }
 
                 if (args.verbose) {
@@ -449,6 +477,16 @@ fn monitorFile(file_path: []const u8, pattern: []const u8, exclude_pattern: ?[]c
 }
 
 fn monitorCommand(allocator: std.mem.Allocator, argv: []const []const u8, pattern: []const u8, exclude_pattern: ?[]const u8, batcher: *batcher_mod.Batcher, args: Args) !void {
+    // Initialize detectors
+    const detector = try detectors.createDetector(allocator, args.format, pattern);
+    var exclude_detector: ?detectors.Detector = null;
+    if (exclude_pattern) |ep| {
+        exclude_detector = try detectors.createDetector(allocator, args.format, ep);
+    }
+
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+
     while (true) {
         if (args.verbose) {
             std.debug.print("Starting command: {s}\n", .{argv[0]});
@@ -478,14 +516,23 @@ fn monitorCommand(allocator: std.mem.Allocator, argv: []const []const u8, patter
                     const line_or_null = readLine(in_stream, &line_buf) catch break;
 
                     if (line_or_null) |line| {
-                        if (containsPattern(line, pattern)) {
-                            if (exclude_pattern) |ep| {
-                                if (containsPattern(line, ep)) {
-                                    if (args.verbose) {
-                                        std.debug.print("Excluded line: {s}\n", .{line});
-                                    }
-                                    continue;
+                        // Reset arena for per-line allocations
+                        const arena_alloc = arena.allocator();
+                        defer _ = arena.reset(.retain_capacity);
+
+                        if (detector.match(arena_alloc, line)) {
+                            var excluded = false;
+                            if (exclude_detector) |ed| {
+                                if (ed.match(arena_alloc, line)) {
+                                    excluded = true;
                                 }
+                            }
+
+                            if (excluded) {
+                                if (args.verbose) {
+                                    std.debug.print("Excluded line: {s}\n", .{line});
+                                }
+                                continue;
                             }
 
                             if (args.verbose) {
@@ -713,6 +760,7 @@ test {
     _ = config_mod;
     _ = queue_mod;
     _ = batcher_mod;
+    _ = detectors;
 }
 
 test "containsPattern" {
