@@ -205,6 +205,9 @@ func main() {
 				log.Printf("Skipping command monitor '%s': command is empty", monCfg.Name)
 				continue
 			}
+		case "syslog":
+			src := sources.NewSyslogSource(monCfg.Name, monCfg.Path)
+			addMonitor(src, monCfg)
 		default:
 			log.Printf("Unknown monitor type: %s", monCfg.Type)
 			continue

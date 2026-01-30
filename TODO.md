@@ -10,8 +10,8 @@ This file tracks potential features and improvements for `sentrylogmon`.
   - Extract metadata from log fields to populate Sentry tags/context.
 
 - [ ] **Syslog Support**
-  - Add a new `LogSource` for syslog (UDP/TCP listener).
-  - Parse syslog severity/facility.
+  - [x] Add a new `LogSource` for syslog (UDP/TCP listener).
+  - [ ] Parse syslog severity/facility.
 
 - [x] **Prometheus Metrics**
   - Expose an HTTP endpoint (e.g., `/metrics`) with Prometheus metrics.
