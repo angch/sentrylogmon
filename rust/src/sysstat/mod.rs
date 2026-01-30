@@ -3,6 +3,8 @@ use std::sync::Arc;
 use sysinfo::System;
 use tokio::sync::RwLock;
 
+mod sanitizer;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemState {
     pub load_avg: LoadAverage,
@@ -31,6 +33,7 @@ pub struct ProcessInfo {
     pub name: String,
     pub cpu_percent: f32,
     pub memory_mb: u64,
+    pub command: String,
 }
 
 pub struct Collector {
@@ -89,6 +92,8 @@ impl Collector {
                         name: p.name().to_string(),
                         cpu_percent: p.cpu_usage(),
                         memory_mb: p.memory() / 1024 / 1024,
+                        // Retrieve and sanitize command line arguments to prevent leaking sensitive info (passwords, tokens)
+                        command: sanitizer::sanitize_command(p.cmd()),
                     })
                     .collect();
 

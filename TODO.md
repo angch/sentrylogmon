@@ -57,7 +57,7 @@ This file tracks potential features and improvements for `sentrylogmon`.
   - Implement self-restart logic.
 - [ ] **Enhance `sysstat`**
   - Add Disk Pressure collection (/proc/pressure/io).
-  - Retrieve full command line arguments for top processes (currently only process name).
+  - [x] Retrieve full command line arguments for top processes (currently only process name).
 - [x] **Implement Context Extraction**
   - Add `ContextExtractor` trait to detectors to allow returning metadata map.
 
