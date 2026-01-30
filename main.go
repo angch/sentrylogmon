@@ -236,8 +236,8 @@ func main() {
 
 	// Start IPC Server
 	socketDir := "/tmp/sentrylogmon"
-	if err := os.MkdirAll(socketDir, 0700); err != nil {
-		log.Printf("Failed to create IPC directory: %v", err)
+	if err := ipc.EnsureSecureDirectory(socketDir); err != nil {
+		log.Printf("Failed to ensure secure IPC directory: %v", err)
 	} else {
 		socketPath := filepath.Join(socketDir, fmt.Sprintf("sentrylogmon.%d.sock", os.Getpid()))
 
