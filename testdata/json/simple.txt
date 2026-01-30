@@ -1,0 +1,5 @@
+{"level":"info", "msg":"starting up"}
+{"level":"error", "msg":"something went wrong", "user_id":123}
+{"level":"debug", "msg":"debugging"}
+{"level":"error", "msg":"another error"}
+{"level":"warning", "msg":"be careful"}

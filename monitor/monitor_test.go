@@ -29,6 +29,14 @@ func (d *MockDetector) Detect(line []byte) bool {
 	return true // Detect everything
 }
 
+// MockContextDetector implements detectors.Detector and detectors.ContextExtractor
+type MockContextDetector struct{}
+
+func (d *MockContextDetector) Detect(line []byte) bool { return true }
+func (d *MockContextDetector) GetContext(line []byte) map[string]interface{} {
+	return map[string]interface{}{"extracted_key": "extracted_value"}
+}
+
 // MockTransport captures Sentry events
 type MockTransport struct {
 	mu     sync.Mutex
@@ -113,6 +121,60 @@ func TestMonitorGrouping(t *testing.T) {
 		expected2 := "[106.0] Line 3\n[107.0] Line 4"
 		if msg2 != expected2 {
 			t.Errorf("Event 2 content mismatch.\nExpected:\n%s\nGot:\n%s", expected2, msg2)
+		}
+	}
+}
+
+func TestContextExtraction(t *testing.T) {
+	// Setup Sentry Mock
+	transport := &MockTransport{}
+	err := sentry.Init(sentry.ClientOptions{
+		Transport: transport,
+	})
+	if err != nil {
+		t.Fatalf("Failed to init sentry: %v", err)
+	}
+
+	input := `[100.0] Line 1`
+	source := &MockSource{content: input}
+	detector := &MockContextDetector{}
+
+	mon, err := New(context.Background(), source, detector, nil, Options{})
+	if err != nil {
+		t.Fatalf("Failed to create monitor: %v", err)
+	}
+	mon.StopOnEOF = true
+
+	go mon.Start()
+
+	// Wait for processing
+	time.Sleep(100 * time.Millisecond)
+
+	// Flush sentry
+	sentry.Flush(time.Second)
+
+	transport.mu.Lock()
+	defer transport.mu.Unlock()
+
+	if len(transport.events) != 1 {
+		t.Errorf("Expected 1 event, got %d", len(transport.events))
+	} else {
+		event := transport.events[0]
+		// Check contexts
+		if event.Contexts == nil {
+			t.Errorf("Expected contexts, got nil")
+		} else {
+			if logData, ok := event.Contexts["Log Data"]; ok {
+				if val, ok := logData["extracted_key"]; ok {
+					if val != "extracted_value" {
+						t.Errorf("Expected extracted_value, got %v", val)
+					}
+				} else {
+					t.Errorf("Context missing extracted_key")
+				}
+			} else {
+				t.Errorf("Context missing 'Log Data'")
+			}
 		}
 	}
 }

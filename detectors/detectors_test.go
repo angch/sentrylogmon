@@ -39,14 +39,24 @@ func TestDetectorsWithTestData(t *testing.T) {
 					continue
 				}
 
+				if file.Name() == "pattern.txt" {
+					continue
+				}
+
 				inputFilename := file.Name()
 				// Construct expect filename: foo.txt -> foo.expect.txt
 				baseName := strings.TrimSuffix(inputFilename, filepath.Ext(inputFilename))
 				expectFilename := baseName + ".expect.txt"
 
 				t.Run(inputFilename, func(t *testing.T) {
+					pattern := ""
+					patternPath := filepath.Join(dirPath, "pattern.txt")
+					if content, err := os.ReadFile(patternPath); err == nil {
+						pattern = strings.TrimSpace(string(content))
+					}
+
 					// Create detector for each file to ensure fresh state
-					detector, err := GetDetector(detectorName, "")
+					detector, err := GetDetector(detectorName, pattern)
 					if err != nil {
 						t.Fatalf("Failed to get detector for %s: %v", detectorName, err)
 					}

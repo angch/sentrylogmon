@@ -358,6 +358,17 @@ func (m *Monitor) sendToSentry(line string) {
 			scope.SetContext("Server State", state.ToMap())
 		}
 
+		if extractor, ok := m.Detector.(detectors.ContextExtractor); ok {
+			// Extract context from the first line
+			firstLine := line
+			if idx := strings.IndexByte(line, '\n'); idx != -1 {
+				firstLine = line[:idx]
+			}
+			if ctx := extractor.GetContext([]byte(firstLine)); ctx != nil {
+				scope.SetContext("Log Data", ctx)
+			}
+		}
+
 		// We send the line as the message.
 		// Sentry will group these based on the message content.
 		sentry.CaptureMessage(line)

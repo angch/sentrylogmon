@@ -5,3 +5,9 @@ type Detector interface {
 	// Detect returns true if the line contains an issue.
 	Detect(line []byte) bool
 }
+
+// ContextExtractor is an interface for extracting context from log lines.
+type ContextExtractor interface {
+	// GetContext returns a map of context data from the log line.
+	GetContext(line []byte) map[string]interface{}
+}
