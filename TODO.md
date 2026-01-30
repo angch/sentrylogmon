@@ -52,7 +52,7 @@ This file tracks potential features and improvements for `sentrylogmon`.
 
 - [x] **Implement `JsonDetector`**
   - Support `key:regex` matching similar to Go.
-- [ ] **Implement IPC Mechanism**
+- [x] **Implement IPC Mechanism**
   - Add Unix socket listener for `/status` and `/update`.
   - Implement self-restart logic.
 - [ ] **Enhance `sysstat`**

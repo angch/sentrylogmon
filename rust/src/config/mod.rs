@@ -100,14 +100,26 @@ pub struct Args {
     /// Run once and exit when input stream ends
     #[arg(long)]
     pub oneshot: bool,
+
+    /// List running instances
+    #[arg(long)]
+    pub status: bool,
+
+    /// Update/Restart all running instances
+    #[arg(long)]
+    pub update: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub sentry: SentryConfig,
     pub monitors: Vec<MonitorConfig>,
     pub verbose: bool,
     pub oneshot: bool,
+    #[serde(skip)]
+    pub status: bool,
+    #[serde(skip)]
+    pub update: bool,
 }
 
 impl Config {
@@ -125,6 +137,8 @@ impl Config {
                 monitors: file_config.monitors,
                 verbose: args.verbose,
                 oneshot: args.oneshot,
+                status: args.status,
+                update: args.update,
             };
 
             // Override with CLI args if provided
@@ -202,8 +216,14 @@ impl Config {
                 monitors,
                 verbose: args.verbose,
                 oneshot: args.oneshot,
+                status: args.status,
+                update: args.update,
             }
         };
+
+        if config.status || config.update {
+            return Ok(config);
+        }
 
         if config.sentry.dsn.is_empty() {
             anyhow::bail!("Sentry DSN is required. Set via --dsn flag, SENTRY_DSN environment variable, or config file");

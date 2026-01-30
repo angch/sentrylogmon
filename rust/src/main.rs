@@ -1,5 +1,6 @@
 mod config;
 mod detectors;
+mod ipc;
 mod monitor;
 mod sources;
 mod sysstat;
@@ -7,6 +8,7 @@ mod sysstat;
 use anyhow::Result;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::SystemTime;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -15,6 +17,40 @@ async fn main() -> Result<()> {
 
     // Load configuration
     let cfg = config::Config::load()?;
+
+    if cfg.status {
+        let socket_dir = PathBuf::from("/tmp/sentrylogmon");
+        let instances = ipc::list_instances(&socket_dir)?;
+
+        println!("PID\tSTART TIME (Unix)\tVERSION\tMONITORS");
+        for inst in instances {
+            let monitors = inst.config.map(|c| c.monitors.len()).unwrap_or(0);
+            let start_time = match inst.start_time.duration_since(SystemTime::UNIX_EPOCH) {
+                Ok(d) => d.as_secs(),
+                Err(_) => 0,
+            };
+            println!(
+                "{}\t{}\t{}\t{}",
+                inst.pid, start_time, inst.version, monitors
+            );
+        }
+        return Ok(());
+    }
+
+    if cfg.update {
+        let socket_dir = PathBuf::from("/tmp/sentrylogmon");
+        let instances = ipc::list_instances(&socket_dir)?;
+        for inst in instances {
+            let socket_path = socket_dir.join(format!("sentrylogmon.{}.sock", inst.pid));
+            println!("Requesting update for PID {}...", inst.pid);
+            if let Err(e) = ipc::request_update(&socket_path) {
+                println!("Failed to update PID {}: {}", inst.pid, e);
+            } else {
+                println!("Update requested for PID {}", inst.pid);
+            }
+        }
+        return Ok(());
+    }
 
     if cfg.sentry.dsn.is_empty() {
         anyhow::bail!("Sentry DSN is required");
@@ -49,6 +85,21 @@ async fn main() -> Result<()> {
     // Start system stats collector
     let collector = Arc::new(sysstat::Collector::new());
     collector.run().await;
+
+    // Start IPC server
+    let socket_dir = PathBuf::from("/tmp/sentrylogmon");
+    if let Err(e) = ipc::ensure_secure_directory(&socket_dir) {
+        tracing::error!("Failed to ensure secure IPC directory: {}", e);
+    } else {
+        let socket_path = socket_dir.join(format!("sentrylogmon.{}.sock", std::process::id()));
+
+        let cfg_clone = cfg.clone();
+        tokio::spawn(async move {
+            if let Err(e) = ipc::start_server(socket_path, cfg_clone, SystemTime::now()).await {
+                tracing::error!("IPC Server error: {}", e);
+            }
+        });
+    }
 
     // Start monitors
     let mut handles = Vec::new();
