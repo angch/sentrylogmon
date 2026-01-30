@@ -47,3 +47,28 @@ This file tracks potential features and improvements for `sentrylogmon`.
 
 - [ ] **End-to-End Tests**
   - Containerized tests using Docker Compose (Sentry mock + log generator + sentrylogmon).
+
+## Feature Parity (Rust)
+
+- [ ] **Implement `JsonDetector`**
+  - Support `key:regex` matching similar to Go.
+- [ ] **Implement IPC Mechanism**
+  - Add Unix socket listener for `/status` and `/update`.
+  - Implement self-restart logic.
+- [ ] **Enhance `sysstat`**
+  - Add Disk Pressure collection (/proc/pressure/io).
+  - Retrieve full command line arguments for top processes (currently only process name).
+- [ ] **Implement Context Extraction**
+  - Add `ContextExtractor` trait to detectors to allow returning metadata map.
+
+## Feature Parity (Zig)
+
+- [ ] **Implement IPC Mechanism**
+  - Add Unix socket listener for `/status` and `/update`.
+- [ ] **Implement System Statistics**
+  - Collect CPU, Memory, Load Average, and Top Processes.
+  - Attach system state to Sentry events.
+- [ ] **Implement `JsonDetector`**
+  - Basic JSON parsing to match keys against patterns.
+- [ ] **Support Exclusion Patterns**
+  - Implement logic to ignore lines matching an exclude pattern.
