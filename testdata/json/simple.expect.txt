@@ -1,0 +1,2 @@
+{"level":"error", "msg":"something went wrong", "user_id":123}
+{"level":"error", "msg":"another error"}
