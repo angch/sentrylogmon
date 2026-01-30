@@ -31,7 +31,7 @@ This file tracks potential features and improvements for `sentrylogmon`.
   - Implement Boyer-Moore or use a proper regex library (if available/lightweight) or `std.mem.indexOf` optimizations.
   - *Implemented using `std.ascii.indexOfIgnoreCase`.*
 
-- [ ] **Better Date Parsing**
+- [x] **Better Date Parsing**
   - Support more timestamp formats in `extractTimestamp`.
   - Handle timezone conversions correctly.
 

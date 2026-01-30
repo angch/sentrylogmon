@@ -16,7 +16,60 @@ import (
 	"github.com/getsentry/sentry-go"
 )
 
-var timestampRegex = regexp.MustCompile(`^\[\s*([0-9.]+)\]`)
+var (
+	// [1234.5678]
+	timestampRegexDmesg = regexp.MustCompile(`^\[\s*([0-9.]+)\]`)
+	// 2006-01-02T15:04:05Z07:00 or 2006-01-02 15:04:05
+	timestampRegexISO = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)`)
+	// Oct 27 10:00:00
+	timestampRegexSyslog = regexp.MustCompile(`^([A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})`)
+)
+
+func extractTimestamp(line []byte) (float64, string) {
+	// 1. Try dmesg format first (fastest/most common for this tool initially)
+	if matches := timestampRegexDmesg.FindSubmatch(line); len(matches) > 1 {
+		tsStr := string(matches[1])
+		// ParseFloat requires string, but the timestamp part is short
+		if ts, err := strconv.ParseFloat(tsStr, 64); err == nil {
+			return ts, tsStr
+		}
+	}
+
+	// 2. Try ISO8601/RFC3339
+	if matches := timestampRegexISO.FindSubmatch(line); len(matches) > 1 {
+		tsStr := string(matches[1])
+		// Try parsing with common layouts
+		layouts := []string{
+			time.RFC3339,
+			time.RFC3339Nano,
+			"2006-01-02 15:04:05",
+			"2006-01-02T15:04:05",
+		}
+		for _, layout := range layouts {
+			if t, err := time.Parse(layout, tsStr); err == nil {
+				return float64(t.Unix()) + float64(t.Nanosecond())/1e9, tsStr
+			}
+		}
+	}
+
+	// 3. Try Syslog (Oct 27 10:00:00)
+	if matches := timestampRegexSyslog.FindSubmatch(line); len(matches) > 1 {
+		tsStr := string(matches[1])
+		// Syslog usually doesn't have year. We assume current year.
+		if t, err := time.Parse(time.Stamp, tsStr); err == nil {
+			// time.Parse(time.Stamp) returns year 0. Add current year.
+			now := time.Now()
+			t = t.AddDate(now.Year(), 0, 0)
+			// Simple heuristic for year boundary: if result is more than 30 days in future, assume previous year
+			if t.Sub(now) > 30*24*time.Hour {
+				t = t.AddDate(-1, 0, 0)
+			}
+			return float64(t.Unix()) + float64(t.Nanosecond())/1e9, tsStr
+		}
+	}
+
+	return 0, ""
+}
 
 const (
 	// Max buffer size to prevent memory leaks (e.g. 1000 lines)
@@ -187,12 +240,7 @@ func (m *Monitor) processMatch(line []byte) {
 	m.bufferMutex.Lock()
 	m.lastActivityTime = time.Now()
 
-	matches := timestampRegex.FindSubmatch(line)
-	var timestamp float64
-	if len(matches) > 1 {
-		// ParseFloat requires string, but the timestamp part is short
-		timestamp, _ = strconv.ParseFloat(string(matches[1]), 64)
-	}
+	timestamp, _ := extractTimestamp(line)
 
 	var msgToSend string
 
@@ -298,9 +346,9 @@ func (m *Monitor) sendToSentry(line string) {
 		scope.SetTag("source", m.Source.Name())
 
 		// Try to extract timestamp for metadata from the first line
-		matches := timestampRegex.FindStringSubmatch(line)
-		if len(matches) > 1 {
-			scope.SetTag("log_timestamp", matches[1])
+		_, tsStr := extractTimestamp([]byte(line))
+		if tsStr != "" {
+			scope.SetTag("log_timestamp", tsStr)
 		}
 
 		scope.SetExtra("raw_line", line)
