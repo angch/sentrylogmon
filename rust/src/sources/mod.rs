@@ -1,10 +1,10 @@
 use anyhow::Result;
 use async_trait::async_trait;
 
+pub mod command;
+pub mod dmesg;
 pub mod file;
 pub mod journalctl;
-pub mod dmesg;
-pub mod command;
 
 #[async_trait]
 pub trait LogSource: Send + Sync {

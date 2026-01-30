@@ -50,7 +50,7 @@ This file tracks potential features and improvements for `sentrylogmon`.
 
 ## Feature Parity (Rust)
 
-- [ ] **Implement `JsonDetector`**
+- [x] **Implement `JsonDetector`**
   - Support `key:regex` matching similar to Go.
 - [ ] **Implement IPC Mechanism**
   - Add Unix socket listener for `/status` and `/update`.
@@ -58,7 +58,7 @@ This file tracks potential features and improvements for `sentrylogmon`.
 - [ ] **Enhance `sysstat`**
   - Add Disk Pressure collection (/proc/pressure/io).
   - Retrieve full command line arguments for top processes (currently only process name).
-- [ ] **Implement Context Extraction**
+- [x] **Implement Context Extraction**
   - Add `ContextExtractor` trait to detectors to allow returning metadata map.
 
 ## Feature Parity (Zig)

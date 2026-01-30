@@ -13,9 +13,7 @@ use crate::sysstat::Collector;
 const MAX_BUFFER_SIZE: usize = 1000;
 const FLUSH_INTERVAL: Duration = Duration::from_secs(5);
 
-static TIMESTAMP_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"^\[\s*([0-9.]+)\]").unwrap()
-});
+static TIMESTAMP_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\[\s*([0-9.]+)\]").unwrap());
 
 struct RateLimiter {
     limit: u32,
@@ -142,7 +140,14 @@ impl Monitor {
                     let msg = buf.join("\n");
                     buf.clear();
                     drop(buf);
-                    Self::send_to_sentry(&source_name, &msg, Some(&collector), &rate_limiter, verbose).await;
+                    Self::send_to_sentry(
+                        &source_name,
+                        &msg,
+                        Some(&collector),
+                        &rate_limiter,
+                        verbose,
+                    )
+                    .await;
                 }
             }
         });
@@ -188,7 +193,10 @@ impl Monitor {
             }
 
             if self.verbose {
-                tracing::info!("Monitor for {} stopped, restarting in 1s...", self.source.name());
+                tracing::info!(
+                    "Monitor for {} stopped, restarting in 1s...",
+                    self.source.name()
+                );
             }
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
@@ -206,7 +214,14 @@ impl Monitor {
             let msg = buffer.join("\n");
             buffer.clear();
             drop(buffer);
-            Self::send_to_sentry(self.source.name(), &msg, Some(&self.collector), &self.rate_limiter, self.verbose).await;
+            Self::send_to_sentry(
+                self.source.name(),
+                &msg,
+                Some(&self.collector),
+                &self.rate_limiter,
+                self.verbose,
+            )
+            .await;
         }
     }
 
@@ -216,11 +231,24 @@ impl Monitor {
             let msg = buffer.join("\n");
             buffer.clear();
             drop(buffer);
-            Self::send_to_sentry(self.source.name(), &msg, Some(&self.collector), &self.rate_limiter, self.verbose).await;
+            Self::send_to_sentry(
+                self.source.name(),
+                &msg,
+                Some(&self.collector),
+                &self.rate_limiter,
+                self.verbose,
+            )
+            .await;
         }
     }
 
-    async fn send_to_sentry(source_name: &str, message: &str, collector: Option<&Collector>, rate_limiter: &Mutex<RateLimiter>, verbose: bool) {
+    async fn send_to_sentry(
+        source_name: &str,
+        message: &str,
+        collector: Option<&Collector>,
+        rate_limiter: &Mutex<RateLimiter>,
+        verbose: bool,
+    ) {
         {
             let mut limiter = rate_limiter.lock().await;
             if !limiter.allow() {
@@ -241,7 +269,7 @@ impl Monitor {
         sentry::with_scope(
             |scope| {
                 scope.set_tag("source", source_name);
-                
+
                 // Try to extract timestamp
                 if let Some(caps) = TIMESTAMP_REGEX.captures(message) {
                     if let Some(ts) = caps.get(1) {

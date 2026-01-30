@@ -31,9 +31,10 @@ impl LogSource for DmesgSource {
             .stdout(std::process::Stdio::piped())
             .spawn()?;
 
-        let stdout = child.stdout.take().ok_or_else(|| {
-            anyhow::anyhow!("Failed to capture stdout from dmesg")
-        })?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("Failed to capture stdout from dmesg"))?;
 
         self.process = Some(child);
         Ok(Box::new(BufReader::new(stdout)))

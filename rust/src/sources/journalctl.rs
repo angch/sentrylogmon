@@ -34,9 +34,10 @@ impl LogSource for JournalctlSource {
             .stdout(std::process::Stdio::piped())
             .spawn()?;
 
-        let stdout = child.stdout.take().ok_or_else(|| {
-            anyhow::anyhow!("Failed to capture stdout from journalctl")
-        })?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("Failed to capture stdout from journalctl"))?;
 
         self.process = Some(child);
         Ok(Box::new(BufReader::new(stdout)))
