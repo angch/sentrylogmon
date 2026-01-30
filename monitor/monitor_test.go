@@ -291,3 +291,55 @@ func TestRateLimiting(t *testing.T) {
 		}
 	}
 }
+
+// MockTransformerDetector implements detectors.Detector and detectors.MessageTransformer
+type MockTransformerDetector struct {
+	MockDetector
+}
+
+func (d *MockTransformerDetector) TransformMessage(line []byte) []byte {
+	return []byte(strings.ReplaceAll(string(line), "foo", "bar"))
+}
+
+func TestMessageTransformation(t *testing.T) {
+	// Setup Sentry Mock
+	transport := &MockTransport{}
+	err := sentry.Init(sentry.ClientOptions{
+		Transport: transport,
+	})
+	if err != nil {
+		t.Fatalf("Failed to init sentry: %v", err)
+	}
+
+	input := "[100.0] foo something bar"
+	source := &MockSource{content: input}
+	detector := &MockTransformerDetector{}
+
+	mon, err := New(context.Background(), source, detector, nil, Options{})
+	if err != nil {
+		t.Fatalf("Failed to create monitor: %v", err)
+	}
+	mon.StopOnEOF = true
+
+	go mon.Start()
+
+	// Wait for processing
+	time.Sleep(100 * time.Millisecond)
+
+	// Flush sentry
+	sentry.Flush(time.Second)
+
+	transport.mu.Lock()
+	defer transport.mu.Unlock()
+
+	if len(transport.events) != 1 {
+		t.Errorf("Expected 1 event, got %d", len(transport.events))
+	} else {
+		msg := transport.events[0].Message
+		// "foo" -> "bar"
+		expected := "[100.0] bar something bar"
+		if msg != expected {
+			t.Errorf("Event content mismatch.\nExpected:\n%s\nGot:\n%s", expected, msg)
+		}
+	}
+}

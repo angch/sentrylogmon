@@ -246,6 +246,10 @@ func (m *Monitor) processMatch(line []byte) {
 
 	timestamp, _ := extractTimestamp(line)
 
+	if transformer, ok := m.Detector.(detectors.MessageTransformer); ok {
+		line = transformer.TransformMessage(line)
+	}
+
 	var msgToSend string
 
 	if m.bufferCount == 0 {
