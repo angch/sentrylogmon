@@ -42,6 +42,7 @@ var (
 	inputFile      = flag.String("file", "", "Monitor a log file")
 	journalctl     = flag.String("journalctl", "", "Monitor journalctl output (pass args)")
 	command        = flag.String("command", "", "Monitor custom command output")
+	syslogAddr     = flag.String("syslog", "", "Syslog address (e.g. udp:127.0.0.1:5514 or :5514)")
 	format         = flag.String("format", "", "Detector format (dmesg, nginx, custom)")
 	pattern        = flag.String("pattern", "Error", "Pattern to match (case sensitive)")
 	excludePattern = flag.String("exclude", "", "Pattern to exclude from reporting (case sensitive)")
@@ -68,6 +69,8 @@ func ParseFlags() {
 			fmt.Fprintf(out, "  sentrylogmon --config=sentrylogmon.yaml\n\n")
 			fmt.Fprintf(out, "  # Monitor journalctl\n")
 			fmt.Fprintf(out, "  sentrylogmon --dsn=... --journalctl=\"--unit=nginx -f\"\n\n")
+			fmt.Fprintf(out, "  # Monitor syslog\n")
+			fmt.Fprintf(out, "  sentrylogmon --dsn=... --syslog=:5514\n\n")
 			fmt.Fprintf(out, "Flags:\n")
 			flag.PrintDefaults()
 		}
@@ -148,6 +151,10 @@ func Load() (*Config, error) {
 		monitor.Name = "command"
 		monitor.Type = "command"
 		monitor.Args = *command
+	} else if *syslogAddr != "" {
+		monitor.Name = "syslog"
+		monitor.Type = "syslog"
+		monitor.Path = *syslogAddr
 	}
 
 	if monitor.Type != "" {
