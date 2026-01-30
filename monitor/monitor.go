@@ -29,8 +29,8 @@ var (
 
 func extractTimestamp(line []byte) (float64, string) {
 	// 1. Try dmesg format first (fastest/most common for this tool initially)
-	if matches := timestampRegexDmesg.FindSubmatch(line); len(matches) > 1 {
-		tsStr := string(matches[1])
+	if indices := timestampRegexDmesg.FindSubmatchIndex(line); len(indices) >= 4 {
+		tsStr := string(line[indices[2]:indices[3]])
 		// ParseFloat requires string, but the timestamp part is short
 		if ts, err := strconv.ParseFloat(tsStr, 64); err == nil {
 			return ts, tsStr
@@ -38,8 +38,8 @@ func extractTimestamp(line []byte) (float64, string) {
 	}
 
 	// 2. Try ISO8601/RFC3339
-	if matches := timestampRegexISO.FindSubmatch(line); len(matches) > 1 {
-		tsStr := string(matches[1])
+	if indices := timestampRegexISO.FindSubmatchIndex(line); len(indices) >= 4 {
+		tsStr := string(line[indices[2]:indices[3]])
 		// Try parsing with common layouts
 		layouts := []string{
 			time.RFC3339,
@@ -55,8 +55,8 @@ func extractTimestamp(line []byte) (float64, string) {
 	}
 
 	// 3. Try Syslog (Oct 27 10:00:00)
-	if matches := timestampRegexSyslog.FindSubmatch(line); len(matches) > 1 {
-		tsStr := string(matches[1])
+	if indices := timestampRegexSyslog.FindSubmatchIndex(line); len(indices) >= 4 {
+		tsStr := string(line[indices[2]:indices[3]])
 		// Syslog usually doesn't have year. We assume current year.
 		if t, err := time.Parse(time.Stamp, tsStr); err == nil {
 			// time.Parse(time.Stamp) returns year 0. Add current year.
