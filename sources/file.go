@@ -81,7 +81,8 @@ func (s *FileSource) run(watcher *fsnotify.Watcher, pw *io.PipeWriter) {
 	defer pw.Close()
 
 	var file *os.File
-	buf := make([]byte, 4096)
+	// Reuse buffer to avoid allocation in loop. Increased to 32KB for better I/O performance.
+	buf := make([]byte, 32768)
 
 	// Helper to safely read from file
 	readUntilEOF := func() {
