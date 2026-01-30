@@ -52,6 +52,7 @@ const Args = struct {
     command: ?[]const u8 = null,
     journalctl: ?[]const u8 = null,
     pattern: []const u8 = "Error",
+    exclude_pattern: ?[]const u8 = null,
     format: ?[]const u8 = null,
     environment: []const u8 = "production",
     release: []const u8 = "",
@@ -70,6 +71,7 @@ pub fn main() !void {
     defer if (args.file) |f| allocator.free(f);
     defer if (args.command) |c| allocator.free(c);
     defer if (args.journalctl) |j| allocator.free(j);
+    defer if (args.exclude_pattern) |e| allocator.free(e);
     defer if (args.release.len > 0) allocator.free(args.release);
     defer if (args.config) |c| allocator.free(c);
 
@@ -152,7 +154,7 @@ pub fn main() !void {
 
             if (monitor.type == .file) {
                  if (monitor.path) |p| {
-                     const t = try std.Thread.spawn(.{}, monitorFile, .{p, monitor.pattern, batcher, monitor_args});
+                     const t = try std.Thread.spawn(.{}, monitorFile, .{p, monitor.pattern, monitor.exclude_pattern, batcher, monitor_args});
                      try threads.append(allocator, t);
                  }
             } else if (monitor.type == .journalctl) {
@@ -164,13 +166,13 @@ pub fn main() !void {
                          try argv.append(allocator, part);
                      }
                  }
-                 const t = try std.Thread.spawn(.{}, monitorCommand, .{allocator, argv.items, monitor.pattern, batcher, monitor_args});
+                 const t = try std.Thread.spawn(.{}, monitorCommand, .{allocator, argv.items, monitor.pattern, monitor.exclude_pattern, batcher, monitor_args});
                  try threads.append(allocator, t);
             } else if (monitor.type == .dmesg) {
                  var argv = std.ArrayList([]const u8).empty;
                  try argv.append(allocator, "dmesg");
                  if (!args.oneshot) try argv.append(allocator, "-w");
-                 const t = try std.Thread.spawn(.{}, monitorCommand, .{allocator, argv.items, monitor.pattern, batcher, monitor_args});
+                 const t = try std.Thread.spawn(.{}, monitorCommand, .{allocator, argv.items, monitor.pattern, monitor.exclude_pattern, batcher, monitor_args});
                  try threads.append(allocator, t);
             } else if (monitor.type == .command) {
                  if (monitor.args) |cmd_str| {
@@ -179,7 +181,7 @@ pub fn main() !void {
                      while (iter.next()) |part| {
                          try argv.append(allocator, part);
                      }
-                     const t = try std.Thread.spawn(.{}, monitorCommand, .{allocator, argv.items, monitor.pattern, batcher, monitor_args});
+                     const t = try std.Thread.spawn(.{}, monitorCommand, .{allocator, argv.items, monitor.pattern, monitor.exclude_pattern, batcher, monitor_args});
                      try threads.append(allocator, t);
                  }
             }
@@ -240,12 +242,12 @@ pub fn main() !void {
             try argv.append(allocator, "dmesg");
             if (!args.oneshot) try argv.append(allocator, "-w");
 
-            try monitorCommand(allocator, argv.items, args.pattern, batcher, args);
+            try monitorCommand(allocator, argv.items, args.pattern, args.exclude_pattern, batcher, args);
         } else if (args.file) |file_path| {
             if (args.verbose) {
                 std.debug.print("Monitoring file: {s}\n", .{file_path});
             }
-            try monitorFile(file_path, args.pattern, batcher, args);
+            try monitorFile(file_path, args.pattern, args.exclude_pattern, batcher, args);
         } else if (args.command) |cmd| {
             if (args.verbose) {
                 std.debug.print("Monitoring command: {s}\n", .{cmd});
@@ -257,7 +259,7 @@ pub fn main() !void {
                 try argv.append(allocator, part);
             }
 
-            try monitorCommand(allocator, argv.items, args.pattern, batcher, args);
+            try monitorCommand(allocator, argv.items, args.pattern, args.exclude_pattern, batcher, args);
         } else if (args.journalctl) |jargs| {
             if (args.verbose) {
                 std.debug.print("Monitoring journalctl: {s}\n", .{jargs});
@@ -270,7 +272,7 @@ pub fn main() !void {
                 try argv.append(allocator, part);
             }
 
-            try monitorCommand(allocator, argv.items, args.pattern, batcher, args);
+            try monitorCommand(allocator, argv.items, args.pattern, args.exclude_pattern, batcher, args);
         }
     }
 }
@@ -292,6 +294,8 @@ fn printUsage() void {
         \\        Monitor journalctl output (args passed to journalctl)
         \\  --pattern string
         \\        Regex pattern to match (default "Error")
+        \\  --exclude string
+        \\        Regex pattern to exclude (default null)
         \\  --format string
         \\        Log format (nginx, nginx-error, dmesg)
         \\  --environment string
@@ -348,6 +352,10 @@ fn parseArgs(allocator: std.mem.Allocator) !Args {
             if (arg_iter.next()) |pattern| {
                 args.pattern = pattern;
             }
+        } else if (std.mem.eql(u8, arg, "--exclude")) {
+            if (arg_iter.next()) |ep| {
+                args.exclude_pattern = try allocator.dupe(u8, ep);
+            }
         } else if (std.mem.eql(u8, arg, "--format")) {
             if (arg_iter.next()) |format| {
                 args.format = format;
@@ -391,7 +399,7 @@ fn readLine(reader: *std.io.Reader, buffer: []u8) !?[]u8 {
     return buffer[0..fbs.end];
 }
 
-fn monitorFile(file_path: []const u8, pattern: []const u8, batcher: *batcher_mod.Batcher, args: Args) !void {
+fn monitorFile(file_path: []const u8, pattern: []const u8, exclude_pattern: ?[]const u8, batcher: *batcher_mod.Batcher, args: Args) !void {
     const file = try std.fs.cwd().openFile(file_path, .{});
     defer file.close();
 
@@ -412,6 +420,15 @@ fn monitorFile(file_path: []const u8, pattern: []const u8, batcher: *batcher_mod
         if (line_or_null) |line| {
             // Check if line matches pattern
             if (containsPattern(line, pattern)) {
+                if (exclude_pattern) |ep| {
+                    if (containsPattern(line, ep)) {
+                        if (args.verbose) {
+                            std.debug.print("Excluded line: {s}\n", .{line});
+                        }
+                        continue;
+                    }
+                }
+
                 if (args.verbose) {
                     std.debug.print("Matched line: {s}\n", .{line});
                 }
@@ -431,7 +448,7 @@ fn monitorFile(file_path: []const u8, pattern: []const u8, batcher: *batcher_mod
     }
 }
 
-fn monitorCommand(allocator: std.mem.Allocator, argv: []const []const u8, pattern: []const u8, batcher: *batcher_mod.Batcher, args: Args) !void {
+fn monitorCommand(allocator: std.mem.Allocator, argv: []const []const u8, pattern: []const u8, exclude_pattern: ?[]const u8, batcher: *batcher_mod.Batcher, args: Args) !void {
     while (true) {
         if (args.verbose) {
             std.debug.print("Starting command: {s}\n", .{argv[0]});
@@ -462,6 +479,15 @@ fn monitorCommand(allocator: std.mem.Allocator, argv: []const []const u8, patter
 
                     if (line_or_null) |line| {
                         if (containsPattern(line, pattern)) {
+                            if (exclude_pattern) |ep| {
+                                if (containsPattern(line, ep)) {
+                                    if (args.verbose) {
+                                        std.debug.print("Excluded line: {s}\n", .{line});
+                                    }
+                                    continue;
+                                }
+                            }
+
                             if (args.verbose) {
                                 std.debug.print("Matched line: {s}\n", .{line});
                             }
@@ -694,4 +720,32 @@ test "containsPattern" {
     try std.testing.expect(containsPattern(haystack, "world"));
     try std.testing.expect(containsPattern(haystack, "HELLO"));
     try std.testing.expect(!containsPattern(haystack, "foo"));
+}
+
+test "exclusion logic" {
+    const pattern = "error";
+    const exclude_pattern = "test";
+
+    // Should match pattern but not exclude pattern
+    try std.testing.expect(containsPattern("This is an error", pattern));
+    try std.testing.expect(!containsPattern("This is an error", exclude_pattern));
+
+    // Should match both (excluded case)
+    const line = "This is an error in test";
+    const match = containsPattern(line, pattern);
+    const excluded = containsPattern(line, exclude_pattern);
+
+    try std.testing.expect(match);
+    try std.testing.expect(excluded);
+
+    // Verify exclusion logic result
+    const should_process = match and !excluded;
+    try std.testing.expect(!should_process);
+
+    // Case where it matches pattern but not exclude
+    const line2 = "This is an error in production";
+    const match2 = containsPattern(line2, pattern);
+    const excluded2 = containsPattern(line2, exclude_pattern);
+    const should_process2 = match2 and !excluded2;
+    try std.testing.expect(should_process2);
 }

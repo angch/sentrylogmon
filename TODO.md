@@ -70,5 +70,5 @@ This file tracks potential features and improvements for `sentrylogmon`.
   - Attach system state to Sentry events.
 - [ ] **Implement `JsonDetector`**
   - Basic JSON parsing to match keys against patterns.
-- [ ] **Support Exclusion Patterns**
+- [x] **Support Exclusion Patterns**
   - Implement logic to ignore lines matching an exclude pattern.
