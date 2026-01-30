@@ -161,6 +161,11 @@ The `Monitor` struct in `monitor/monitor.go` handles the core logic:
 
 The `sysstat` package collects system metrics (Load, Memory, Top Processes) to provide context when an error occurs. This helps in diagnosing if the error was caused by resource exhaustion.
 
+## Go
+
+- **Type Aliasing**: Use `any` instead of `interface{}`.
+- **Formatting**: Run `go fmt ./...` *once* after an editing or coding session, especially after search and replace operations.
+
 ## Technology Decisions
 
 ### Core Dependencies
@@ -231,7 +236,11 @@ The following are explicitly **not** goals for this project:
 4. **GUI**: Remain a CLI tool; use Sentry's web interface for visualization
 5. **Plugin System**: Keep the codebase simple; fork if extensive customization needed
 
-## Testing Strategy
+## Testing
+
+- **Non-Destructive Testing**: All tests must be non-destructive. If deletes are to be used for testing, create a copy of test data/databases first.
+- **Cleanup**: A clean up step can be run idempotently to undo all changes in tests.
+- **Go Tests**: Use table-driven tests with subtests (`t.Run(...)`). Run tests with `go test ./...`.
 
 ### Unit Tests
 
