@@ -68,7 +68,7 @@ This file tracks potential features and improvements for `sentrylogmon`.
 - [ ] **Implement System Statistics**
   - Collect CPU, Memory, Load Average, and Top Processes.
   - Attach system state to Sentry events.
-- [ ] **Implement `JsonDetector`**
+- [x] **Implement `JsonDetector`**
   - Basic JSON parsing to match keys against patterns.
 - [x] **Support Exclusion Patterns**
   - Implement logic to ignore lines matching an exclude pattern.
