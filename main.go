@@ -250,36 +250,50 @@ func main() {
 
 	// Start IPC Server
 	socketDir := "/tmp/sentrylogmon"
+	var socketPath string
+	var restartFunc func()
+
 	if err := ipc.EnsureSecureDirectory(socketDir); err != nil {
 		log.Printf("Failed to ensure secure IPC directory: %v", err)
 	} else {
-		socketPath := filepath.Join(socketDir, fmt.Sprintf("sentrylogmon.%d.sock", os.Getpid()))
+		socketPath = filepath.Join(socketDir, fmt.Sprintf("sentrylogmon.%d.sock", os.Getpid()))
+		defer os.Remove(socketPath)
+	}
 
-		restartFunc := func() {
-			log.Println("Restart requested via IPC. Shutting down...")
-			shutdown()
+	restartFunc = func() {
+		log.Println("Restart requested. Shutting down...")
+		shutdown()
 
+		if socketPath != "" {
 			os.Remove(socketPath)
-
-			executable, err := os.Executable()
-			if err != nil {
-				log.Printf("Failed to get executable path: %v", err)
-				return
-			}
-
-			log.Printf("Re-executing %s %v", executable, os.Args[1:])
-			if err := syscall.Exec(executable, os.Args, os.Environ()); err != nil {
-				log.Fatalf("Failed to re-exec: %v", err)
-			}
 		}
 
+		executable, err := os.Executable()
+		if err != nil {
+			log.Printf("Failed to get executable path: %v", err)
+			return
+		}
+
+		log.Printf("Re-executing %s %v", executable, os.Args[1:])
+		if err := syscall.Exec(executable, os.Args, os.Environ()); err != nil {
+			log.Fatalf("Failed to re-exec: %v", err)
+		}
+	}
+
+	if socketPath != "" {
 		go func() {
 			if err := ipc.StartServer(socketPath, cfg, restartFunc); err != nil {
 				log.Printf("IPC Server error: %v", err)
 			}
 		}()
+	}
 
-		defer os.Remove(socketPath)
+	// Start config watcher
+	if f := flag.Lookup("config"); f != nil {
+		configPath := f.Value.String()
+		if configPath != "" {
+			go watchConfig(ctx, configPath, restartFunc)
+		}
 	}
 
 	// Wait for signals
