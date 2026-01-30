@@ -4,6 +4,7 @@ const config_mod = @import("config.zig");
 const queue_mod = @import("queue.zig");
 const batcher_mod = @import("batcher.zig");
 const detectors = @import("detectors.zig");
+const sysstat = @import("sysstat.zig");
 
 const RateLimiter = struct {
     limit: usize,
@@ -85,6 +86,19 @@ pub fn main() !void {
         std.debug.print("Initialized Sentry with DSN (environment={s}, release={s})\n", .{ args.environment, args.release });
     }
 
+    // Initialize System Statistics Collector
+    const collector = try allocator.create(sysstat.Collector);
+    collector.* = sysstat.Collector.init(allocator);
+    defer {
+        collector.deinit();
+        allocator.destroy(collector);
+    }
+
+    // Start collector thread
+    const collector_thread = try std.Thread.spawn(.{}, sysstat.Collector.run, .{collector});
+    // We detach the collector thread as it runs indefinitely (unless we add stop mechanism, which we skip for now)
+    collector_thread.detach();
+
     // Initialize Queue
     const queue_dir = ".sentrylogmon_queue";
     try queue_mod.Queue.init(queue_dir);
@@ -94,11 +108,14 @@ pub fn main() !void {
     const RetryContext = struct {
         allocator: std.mem.Allocator,
         args: Args,
+        collector: *sysstat.Collector,
         fn send(self: @This(), payload: []u8) !void {
             try sendSentryPayload(self.allocator, payload, self.args);
         }
     };
-    const retry_ctx = RetryContext{ .allocator = allocator, .args = args };
+    // Note: Queue retry currently doesn't add system stats to old payloads (they are already built strings).
+    // This is fine.
+    const retry_ctx = RetryContext{ .allocator = allocator, .args = args, .collector = collector };
     queue.retryAll(allocator, retry_ctx, RetryContext.send) catch |err| {
         if (args.verbose) std.debug.print("Failed to retry queued events: {}\n", .{err});
     };
@@ -144,6 +161,7 @@ pub fn main() !void {
                     .count = 0,
                     .window_start = std.time.milliTimestamp(),
                 },
+                .collector = collector,
             };
 
             const batcher = try allocator.create(batcher_mod.Batcher);
@@ -229,6 +247,7 @@ pub fn main() !void {
                 .count = 0,
                 .window_start = 0,
             },
+            .collector = collector,
         };
 
         const batcher = try allocator.create(batcher_mod.Batcher);
@@ -605,6 +624,7 @@ const MonitorContext = struct {
     source_name: []const u8,
     queue: *queue_mod.Queue,
     rate_limiter: RateLimiter,
+    collector: *sysstat.Collector,
 
     fn send(ctx_opaque: *anyopaque, timestamp: []const u8, lines: []const []const u8) !void {
         const self: *@This() = @ptrCast(@alignCast(ctx_opaque));
@@ -617,7 +637,7 @@ const MonitorContext = struct {
         }
 
         // Build payload
-        const payload = try createSentryPayload(self.allocator, timestamp, lines, self.source_name, self.args);
+        const payload = try createSentryPayload(self.allocator, timestamp, lines, self.source_name, self.args, self.collector);
         defer self.allocator.free(payload);
 
         // Try send
@@ -631,7 +651,7 @@ const MonitorContext = struct {
     }
 };
 
-fn createSentryPayload(allocator: std.mem.Allocator, timestamp: []const u8, lines: []const []const u8, source: []const u8, args: Args) ![]u8 {
+fn createSentryPayload(allocator: std.mem.Allocator, timestamp: []const u8, lines: []const []const u8, source: []const u8, args: Args, collector: *sysstat.Collector) ![]u8 {
     var payload = std.ArrayList(u8).empty;
     errdefer payload.deinit(allocator);
 
@@ -671,7 +691,19 @@ fn createSentryPayload(allocator: std.mem.Allocator, timestamp: []const u8, line
         }
     }
 
-    try writer.writeAll("\"}}}");
+    try writer.writeAll("\"}}");
+
+    // Contexts (System State)
+    try writer.writeAll(",\"contexts\":{\"Server State\":");
+
+    // Get stats json
+    const stats_json = try collector.getJson(allocator);
+    defer allocator.free(stats_json);
+
+    // We assume stats_json is valid JSON object
+    try writer.writeAll(stats_json);
+
+    try writer.writeAll("}}");
 
     return payload.toOwnedSlice(allocator);
 }
@@ -761,6 +793,7 @@ test {
     _ = queue_mod;
     _ = batcher_mod;
     _ = detectors;
+    _ = sysstat;
 }
 
 test "containsPattern" {
