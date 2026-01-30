@@ -27,6 +27,32 @@ const (
 	FlushInterval = 5 * time.Second
 )
 
+type RateLimiter struct {
+	limit       int
+	window      time.Duration
+	count       int
+	windowStart time.Time
+	mu          sync.Mutex
+}
+
+func (r *RateLimiter) Allow() bool {
+	if r.limit <= 0 {
+		return true
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	now := time.Now()
+	if now.Sub(r.windowStart) > r.window {
+		r.windowStart = now
+		r.count = 0
+	}
+	if r.count < r.limit {
+		r.count++
+		return true
+	}
+	return false
+}
+
 type Monitor struct {
 	ctx               context.Context
 	Source            sources.LogSource
@@ -35,6 +61,7 @@ type Monitor struct {
 	Collector         *sysstat.Collector
 	Verbose           bool
 	StopOnEOF         bool
+	RateLimiter       *RateLimiter
 
 	// Buffering
 	buffer           strings.Builder
@@ -45,21 +72,47 @@ type Monitor struct {
 	lastActivityTime time.Time
 }
 
-func New(ctx context.Context, source sources.LogSource, detector detectors.Detector, collector *sysstat.Collector, verbose bool, excludePattern string) (*Monitor, error) {
+type Options struct {
+	Verbose         bool
+	ExcludePattern  string
+	RateLimitBurst  int
+	RateLimitWindow string
+}
+
+func New(ctx context.Context, source sources.LogSource, detector detectors.Detector, collector *sysstat.Collector, opts Options) (*Monitor, error) {
 	m := &Monitor{
 		ctx:       ctx,
 		Source:    source,
 		Detector:  detector,
 		Collector: collector,
-		Verbose:   verbose,
+		Verbose:   opts.Verbose,
 	}
-	if excludePattern != "" {
-		ed, err := detectors.NewGenericDetector(excludePattern)
+	if opts.ExcludePattern != "" {
+		ed, err := detectors.NewGenericDetector(opts.ExcludePattern)
 		if err != nil {
 			return nil, err
 		}
 		m.ExclusionDetector = ed
 	}
+
+	// Initialize RateLimiter
+	if opts.RateLimitBurst > 0 {
+		window := 0 * time.Second
+		if opts.RateLimitWindow != "" {
+			d, err := time.ParseDuration(opts.RateLimitWindow)
+			if err == nil {
+				window = d
+			} else {
+				log.Printf("Invalid rate limit window '%s', defaulting to 0: %v", opts.RateLimitWindow, err)
+			}
+		}
+		m.RateLimiter = &RateLimiter{
+			limit:       opts.RateLimitBurst,
+			window:      window,
+			windowStart: time.Now(),
+		}
+	}
+
 	// Initialize timer as stopped
 	m.flushTimer = time.AfterFunc(FlushInterval, func() {
 		m.flushBuffer()
@@ -234,6 +287,13 @@ func (m *Monitor) forceFlush() {
 }
 
 func (m *Monitor) sendToSentry(line string) {
+	if m.RateLimiter != nil && !m.RateLimiter.Allow() {
+		if m.Verbose {
+			log.Printf("[%s] Rate limited, dropping event.", m.Source.Name())
+		}
+		return
+	}
+
 	sentry.WithScope(func(scope *sentry.Scope) {
 		scope.SetTag("source", m.Source.Name())
 

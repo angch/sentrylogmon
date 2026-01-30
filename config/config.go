@@ -20,9 +20,11 @@ type MonitorConfig struct {
 	Type           string `yaml:"type"`            // file, journalctl, dmesg, command
 	Path           string `yaml:"path"`            // for file
 	Args           string `yaml:"args"`            // for journalctl or command
-	Pattern        string `yaml:"pattern"`         // regex pattern for custom format
-	Format         string `yaml:"format"`          // dmesg, nginx, custom (default: custom if pattern set)
-	ExcludePattern string `yaml:"exclude_pattern"` // regex pattern to exclude from reporting
+	Pattern         string `yaml:"pattern"`         // regex pattern for custom format
+	Format          string `yaml:"format"`          // dmesg, nginx, custom (default: custom if pattern set)
+	ExcludePattern  string `yaml:"exclude_pattern"` // regex pattern to exclude from reporting
+	RateLimitBurst  int    `yaml:"rate_limit_burst"`
+	RateLimitWindow string `yaml:"rate_limit_window"`
 }
 
 type Config struct {

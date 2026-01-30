@@ -106,6 +106,8 @@ async fn main() -> Result<()> {
             cfg.verbose,
             cfg.oneshot,
             Some(mon_cfg.exclude_pattern.clone()),
+            mon_cfg.rate_limit_burst,
+            mon_cfg.rate_limit_window.clone(),
         );
 
         let handle = tokio::spawn(async move {
