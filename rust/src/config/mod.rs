@@ -31,6 +31,10 @@ pub struct MonitorConfig {
     pub format: String,
     #[serde(default)]
     pub exclude_pattern: String,
+    #[serde(default)]
+    pub rate_limit_burst: Option<u32>,
+    #[serde(default)]
+    pub rate_limit_window: Option<String>,
 }
 
 fn default_pattern() -> String {
@@ -148,6 +152,8 @@ impl Config {
                     pattern: args.pattern.clone(),
                     format: "dmesg".to_string(),
                     exclude_pattern: args.exclude.clone().unwrap_or_default(),
+                    rate_limit_burst: None,
+                    rate_limit_window: None,
                 });
             } else if let Some(file_path) = &args.file {
                 monitors.push(MonitorConfig {
@@ -158,6 +164,8 @@ impl Config {
                     pattern: args.pattern.clone(),
                     format: String::new(),
                     exclude_pattern: args.exclude.clone().unwrap_or_default(),
+                    rate_limit_burst: None,
+                    rate_limit_window: None,
                 });
             } else if let Some(journalctl_args) = &args.journalctl {
                 monitors.push(MonitorConfig {
@@ -168,6 +176,8 @@ impl Config {
                     pattern: args.pattern.clone(),
                     format: String::new(),
                     exclude_pattern: args.exclude.clone().unwrap_or_default(),
+                    rate_limit_burst: None,
+                    rate_limit_window: None,
                 });
             } else if let Some(cmd) = &args.command {
                 monitors.push(MonitorConfig {
@@ -178,6 +188,8 @@ impl Config {
                     pattern: args.pattern.clone(),
                     format: String::new(),
                     exclude_pattern: args.exclude.clone().unwrap_or_default(),
+                    rate_limit_burst: None,
+                    rate_limit_window: None,
                 });
             }
 

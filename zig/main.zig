@@ -4,6 +4,47 @@ const config_mod = @import("config.zig");
 const queue_mod = @import("queue.zig");
 const batcher_mod = @import("batcher.zig");
 
+const RateLimiter = struct {
+    limit: usize,
+    window: u64, // nanoseconds
+    count: usize,
+    window_start: i64,
+
+    fn allow(self: *RateLimiter) bool {
+        if (self.limit == 0) return true;
+
+        const now = std.time.milliTimestamp();
+        // Convert window from ns to ms
+        const window_ms = @divTrunc(self.window, std.time.ns_per_ms);
+
+        if (now - self.window_start > window_ms) {
+            self.window_start = now;
+            self.count = 0;
+        }
+
+        if (self.count < self.limit) {
+            self.count += 1;
+            return true;
+        }
+        return false;
+    }
+};
+
+fn parseDuration(s: []const u8) u64 {
+    if (s.len < 2) return 0;
+
+    const unit = s[s.len - 1];
+    const val_str = s[0 .. s.len - 1];
+    const val = std.fmt.parseInt(u64, val_str, 10) catch return 0;
+
+    switch (unit) {
+        's' => return val * std.time.ns_per_s,
+        'm' => return val * std.time.ns_per_min,
+        'h' => return val * std.time.ns_per_hour,
+        else => return 0,
+    }
+}
+
 const Args = struct {
     dsn: []const u8,
     file: ?[]const u8 = null,
@@ -81,12 +122,24 @@ pub fn main() !void {
                  continue;
             }
 
+            const limit = monitor.rate_limit_burst;
+            var window: u64 = 0;
+            if (monitor.rate_limit_window) |w| {
+                window = parseDuration(w);
+            }
+
             const ctx = try allocator.create(MonitorContext);
             ctx.* = MonitorContext{
                 .allocator = allocator,
                 .args = monitor_args,
                 .source_name = monitor.name,
                 .queue = &queue,
+                .rate_limiter = RateLimiter{
+                    .limit = limit,
+                    .window = window,
+                    .count = 0,
+                    .window_start = std.time.milliTimestamp(),
+                },
             };
 
             const batcher = try allocator.create(batcher_mod.Batcher);
@@ -166,6 +219,12 @@ pub fn main() !void {
             .args = args,
             .source_name = source_name,
             .queue = &queue,
+            .rate_limiter = RateLimiter{
+                .limit = 0,
+                .window = 0,
+                .count = 0,
+                .window_start = 0,
+            },
         };
 
         const batcher = try allocator.create(batcher_mod.Batcher);
@@ -472,9 +531,17 @@ const MonitorContext = struct {
     args: Args,
     source_name: []const u8,
     queue: *queue_mod.Queue,
+    rate_limiter: RateLimiter,
 
     fn send(ctx_opaque: *anyopaque, timestamp: []const u8, lines: []const []const u8) !void {
         const self: *@This() = @ptrCast(@alignCast(ctx_opaque));
+
+        if (!self.rate_limiter.allow()) {
+            if (self.args.verbose) {
+                std.debug.print("[{s}] Rate limited, dropping event.\n", .{self.source_name});
+            }
+            return;
+        }
 
         // Build payload
         const payload = try createSentryPayload(self.allocator, timestamp, lines, self.source_name, self.args);

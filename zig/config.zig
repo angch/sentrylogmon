@@ -20,6 +20,8 @@ pub const MonitorConfig = struct {
     path: ?[]const u8 = null,
     args: ?[]const u8 = null,
     pattern: []const u8,
+    rate_limit_burst: usize = 0,
+    rate_limit_window: ?[]const u8 = null,
 };
 
 pub const Config = struct {
@@ -36,6 +38,7 @@ pub const Config = struct {
             if (m.path) |p| allocator.free(p);
             if (m.args) |a| allocator.free(a);
             allocator.free(m.pattern);
+            if (m.rate_limit_window) |w| allocator.free(w);
         }
         self.monitors.deinit(allocator);
     }
@@ -141,6 +144,13 @@ fn updateMonitor(allocator: std.mem.Allocator, monitor: *MonitorConfig, key: []c
     if (std.mem.eql(u8, key, "pattern")) {
         allocator.free(monitor.pattern);
         monitor.pattern = try allocator.dupe(u8, val);
+    }
+    if (std.mem.eql(u8, key, "rate_limit_burst")) {
+        monitor.rate_limit_burst = try std.fmt.parseInt(usize, val, 10);
+    }
+    if (std.mem.eql(u8, key, "rate_limit_window")) {
+        if (monitor.rate_limit_window) |w| allocator.free(w);
+        monitor.rate_limit_window = try allocator.dupe(u8, val);
     }
 }
 

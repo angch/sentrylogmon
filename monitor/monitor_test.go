@@ -67,7 +67,7 @@ func TestMonitorGrouping(t *testing.T) {
 	source := &MockSource{content: input}
 	detector := &MockDetector{}
 
-	mon, err := New(context.Background(), source, detector, nil, false, "")
+	mon, err := New(context.Background(), source, detector, nil, Options{})
 	if err != nil {
 		t.Fatalf("Failed to create monitor: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestMonitorExclusion(t *testing.T) {
 	detector := &MockDetector{} // Detects everything
 
 	// Create monitor with exclude pattern
-	mon, err := New(context.Background(), source, detector, nil, false, "ignore me")
+	mon, err := New(context.Background(), source, detector, nil, Options{ExcludePattern: "ignore me"})
 	if err != nil {
 		t.Fatalf("Failed to create monitor: %v", err)
 	}
@@ -177,6 +177,55 @@ func TestMonitorExclusion(t *testing.T) {
 		expected := "[101.0] Line 2 - keep me"
 		if msg != expected {
 			t.Errorf("Event content mismatch.\nExpected:\n%s\nGot:\n%s", expected, msg)
+		}
+	}
+}
+
+func TestRateLimiting(t *testing.T) {
+	// Setup Sentry Mock
+	transport := &MockTransport{}
+	err := sentry.Init(sentry.ClientOptions{
+		Transport: transport,
+	})
+	if err != nil {
+		t.Fatalf("Failed to init sentry: %v", err)
+	}
+
+	// Input lines with large gaps to force flushing separate events
+	// Burst 2, Window 1s.
+	// 3 events generated quickly.
+	input := `[100.0] Line 1
+[110.0] Line 2
+[120.0] Line 3
+`
+	source := &MockSource{content: input}
+	detector := &MockDetector{}
+
+	mon, err := New(context.Background(), source, detector, nil, Options{
+		RateLimitBurst:  2,
+		RateLimitWindow: "1s",
+	})
+	if err != nil {
+		t.Fatalf("Failed to create monitor: %v", err)
+	}
+	mon.StopOnEOF = true
+
+	go mon.Start()
+
+	// Wait for processing
+	time.Sleep(500 * time.Millisecond)
+
+	// Flush sentry
+	sentry.Flush(time.Second)
+
+	transport.mu.Lock()
+	defer transport.mu.Unlock()
+
+	// Expect exactly 2 events (Line 1 and Line 2), Line 3 should be dropped
+	if len(transport.events) != 2 {
+		t.Errorf("Expected 2 events (rate limited), got %d", len(transport.events))
+		for i, e := range transport.events {
+			t.Logf("Event %d: %s", i, e.Message)
 		}
 	}
 }
