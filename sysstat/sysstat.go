@@ -58,6 +58,9 @@ func New() *Collector {
 	}
 }
 
+// ToMap converts the SystemState to a map[string]interface{}.
+// This is optimized to avoid double JSON marshaling (struct -> json -> map -> json)
+// when sending context to Sentry.
 func (s *SystemState) ToMap() map[string]interface{} {
 	if s == nil {
 		return nil
