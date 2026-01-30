@@ -11,9 +11,11 @@ import (
 	"time"
 
 	"github.com/angch/sentrylogmon/detectors"
+	"github.com/angch/sentrylogmon/metrics"
 	"github.com/angch/sentrylogmon/sources"
 	"github.com/angch/sentrylogmon/sysstat"
 	"github.com/getsentry/sentry-go"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 var (
@@ -193,6 +195,7 @@ func (m *Monitor) Start() {
 		scanner.Buffer(buf, MaxScanTokenSize)
 
 		for scanner.Scan() {
+			metrics.ProcessedLinesTotal.With(prometheus.Labels{"source": m.Source.Name()}).Inc()
 			lineBytes := scanner.Bytes()
 			if m.Detector.Detect(lineBytes) {
 				if m.ExclusionDetector != nil && m.ExclusionDetector.Detect(lineBytes) {
@@ -201,6 +204,7 @@ func (m *Monitor) Start() {
 					}
 					continue
 				}
+				metrics.IssuesDetectedTotal.With(prometheus.Labels{"source": m.Source.Name()}).Inc()
 				if m.Verbose {
 					log.Printf("[%s] Matched: %s", m.Source.Name(), string(lineBytes))
 				}
@@ -336,12 +340,14 @@ func (m *Monitor) forceFlush() {
 
 func (m *Monitor) sendToSentry(line string) {
 	if m.RateLimiter != nil && !m.RateLimiter.Allow() {
+		metrics.SentryEventsTotal.With(prometheus.Labels{"source": m.Source.Name(), "status": "dropped"}).Inc()
 		if m.Verbose {
 			log.Printf("[%s] Rate limited, dropping event.", m.Source.Name())
 		}
 		return
 	}
 
+	metrics.SentryEventsTotal.With(prometheus.Labels{"source": m.Source.Name(), "status": "sent"}).Inc()
 	sentry.WithScope(func(scope *sentry.Scope) {
 		scope.SetTag("source", m.Source.Name())
 

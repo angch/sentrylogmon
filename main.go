@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -22,6 +23,7 @@ import (
 	"github.com/angch/sentrylogmon/sources"
 	"github.com/angch/sentrylogmon/sysstat"
 	"github.com/getsentry/sentry-go"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
@@ -104,6 +106,19 @@ func main() {
 
 	if len(cfg.Monitors) == 0 {
 		log.Fatal("No monitors configured. Use --file, --dmesg, --journalctl, --command, or config file.")
+	}
+
+	if cfg.MetricsPort > 0 {
+		go func() {
+			addr := fmt.Sprintf(":%d", cfg.MetricsPort)
+			if cfg.Verbose {
+				log.Printf("Starting Prometheus metrics server on %s/metrics", addr)
+			}
+			http.Handle("/metrics", promhttp.Handler())
+			if err := http.ListenAndServe(addr, nil); err != nil {
+				log.Printf("Failed to start metrics server: %v", err)
+			}
+		}()
 	}
 
 	// Start System Stats Collector
