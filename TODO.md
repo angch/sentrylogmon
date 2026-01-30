@@ -11,7 +11,7 @@ This file tracks potential features and improvements for `sentrylogmon`.
 
 - [ ] **Syslog Support**
   - [x] Add a new `LogSource` for syslog (UDP/TCP listener).
-  - [ ] Parse syslog severity/facility.
+  - [x] Parse syslog severity/facility.
 
 - [x] **Prometheus Metrics**
   - Expose an HTTP endpoint (e.g., `/metrics`) with Prometheus metrics.

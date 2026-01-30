@@ -23,9 +23,23 @@ var (
 	timestampRegexDmesg = regexp.MustCompile(`^\[\s*([0-9.]+)\]`)
 	// 2006-01-02T15:04:05Z07:00 or 2006-01-02 15:04:05
 	timestampRegexISO = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)`)
-	// Oct 27 10:00:00
-	timestampRegexSyslog = regexp.MustCompile(`^([A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})`)
+	// Oct 27 10:00:00 or <34>Oct 27 10:00:00
+	timestampRegexSyslog = regexp.MustCompile(`^(?:<\d{1,3}>)?([A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})`)
+
+	syslogPriRegex = regexp.MustCompile(`^<(\d{1,3})>`)
 )
+
+func extractSyslogPriority(line []byte) (int, int, int, bool) {
+	if matches := syslogPriRegex.FindSubmatch(line); len(matches) == 2 {
+		priStr := string(matches[1])
+		if pri, err := strconv.Atoi(priStr); err == nil {
+			facility := pri / 8
+			severity := pri % 8
+			return pri, facility, severity, true
+		}
+	}
+	return 0, 0, 0, false
+}
 
 func extractTimestamp(line []byte) (float64, string) {
 	// 1. Try dmesg format first (fastest/most common for this tool initially)
@@ -359,6 +373,13 @@ func (m *Monitor) sendToSentry(line string) {
 		_, tsStr := extractTimestamp([]byte(line))
 		if tsStr != "" {
 			scope.SetTag("log_timestamp", tsStr)
+		}
+
+		// Try to extract syslog priority
+		if pri, facility, severity, ok := extractSyslogPriority([]byte(line)); ok {
+			scope.SetTag("syslog_priority", strconv.Itoa(pri))
+			scope.SetTag("syslog_facility", strconv.Itoa(facility))
+			scope.SetTag("syslog_severity", strconv.Itoa(severity))
 		}
 
 		scope.SetExtra("raw_line", line)
