@@ -9,6 +9,8 @@ mod sanitizer;
 pub struct SystemState {
     pub load_avg: LoadAverage,
     pub memory: MemoryInfo,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub disk_pressure: Option<PressureInfo>,
     pub top_processes: Vec<ProcessInfo>,
 }
 
@@ -25,6 +27,14 @@ pub struct MemoryInfo {
     pub used: u64,
     pub available: u64,
     pub percent: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PressureInfo {
+    pub avg10: f64,
+    pub avg60: f64,
+    pub avg300: f64,
+    pub total: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,6 +64,7 @@ impl Collector {
                 available: 0,
                 percent: 0.0,
             },
+            disk_pressure: None,
             top_processes: Vec::new(),
         }));
 
@@ -109,6 +120,7 @@ impl Collector {
                         available: available_mem,
                         percent: (used_mem as f64 / total_mem as f64) * 100.0,
                     },
+                    disk_pressure: get_disk_pressure(),
                     top_processes,
                 };
 
@@ -129,5 +141,69 @@ impl Collector {
     #[allow(dead_code)]
     pub async fn get_state(&self) -> SystemState {
         self.state.read().await.clone()
+    }
+}
+
+fn get_disk_pressure() -> Option<PressureInfo> {
+    let content = std::fs::read_to_string("/proc/pressure/io").ok()?;
+    parse_pressure_info(&content)
+}
+
+fn parse_pressure_info(content: &str) -> Option<PressureInfo> {
+    for line in content.lines() {
+        if line.starts_with("some") {
+            let mut info = PressureInfo {
+                avg10: 0.0,
+                avg60: 0.0,
+                avg300: 0.0,
+                total: 0.0,
+            };
+
+            for part in line.split_whitespace() {
+                if let Some((key, val_str)) = part.split_once('=') {
+                    if let Ok(val) = val_str.parse::<f64>() {
+                        match key {
+                            "avg10" => info.avg10 = val,
+                            "avg60" => info.avg60 = val,
+                            "avg300" => info.avg300 = val,
+                            "total" => info.total = val,
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            return Some(info);
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_pressure_info() {
+        let content = "some avg10=0.00 avg60=0.00 avg300=0.00 total=0";
+        let info = parse_pressure_info(content).unwrap();
+        assert_eq!(info.avg10, 0.0);
+        assert_eq!(info.avg60, 0.0);
+        assert_eq!(info.avg300, 0.0);
+        assert_eq!(info.total, 0.0);
+
+        let content_real = "some avg10=1.23 avg60=4.56 avg300=7.89 total=12345.67\nfull avg10=1.23 avg60=4.56 avg300=7.89 total=12345.67";
+        let info_real = parse_pressure_info(content_real).unwrap();
+        assert_eq!(info_real.avg10, 1.23);
+        assert_eq!(info_real.avg60, 4.56);
+        assert_eq!(info_real.avg300, 7.89);
+        assert_eq!(info_real.total, 12345.67);
+    }
+
+    #[test]
+    fn test_parse_pressure_info_invalid() {
+        // Missing "some" prefix
+        assert!(parse_pressure_info("avg10=0.00").is_none());
+        // Empty
+        assert!(parse_pressure_info("").is_none());
     }
 }
