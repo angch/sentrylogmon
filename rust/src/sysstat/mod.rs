@@ -76,7 +76,9 @@ impl Collector {
 
                 let mut processes: Vec<_> = sys.processes().values().collect();
                 processes.sort_by(|a, b| {
-                    b.cpu_usage().partial_cmp(&a.cpu_usage()).unwrap_or(std::cmp::Ordering::Equal)
+                    b.cpu_usage()
+                        .partial_cmp(&a.cpu_usage())
+                        .unwrap_or(std::cmp::Ordering::Equal)
                 });
 
                 let top_processes: Vec<ProcessInfo> = processes

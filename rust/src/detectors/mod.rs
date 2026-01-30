@@ -1,10 +1,16 @@
 use anyhow::Result;
 use regex::Regex;
+use serde_json::Value;
 use std::sync::Mutex;
 
 pub trait Detector: Send + Sync {
     /// Detect returns true if the line contains an issue
     fn detect(&self, line: &[u8]) -> bool;
+
+    /// Extract context from the line
+    fn get_context(&self, _line: &[u8]) -> Option<Value> {
+        None
+    }
 }
 
 pub struct GenericDetector {
@@ -25,6 +31,54 @@ impl Detector for GenericDetector {
         } else {
             false
         }
+    }
+}
+
+pub struct JsonDetector {
+    field: String,
+    pattern: Regex,
+}
+
+impl JsonDetector {
+    pub fn new(pattern: &str) -> Result<Self> {
+        let parts: Vec<&str> = pattern.splitn(2, ':').collect();
+        if parts.len() != 2 {
+            return Err(anyhow::anyhow!(
+                "invalid json pattern format: expected 'key:regex', got '{}'",
+                pattern
+            ));
+        }
+        let field = parts[0].trim().to_string();
+        let regex_str = parts[1].trim();
+        let regex = Regex::new(regex_str)?;
+
+        Ok(Self {
+            field,
+            pattern: regex,
+        })
+    }
+}
+
+impl Detector for JsonDetector {
+    fn detect(&self, line: &[u8]) -> bool {
+        let v: Value = match serde_json::from_slice(line) {
+            Ok(v) => v,
+            Err(_) => return false,
+        };
+
+        if let Some(val) = v.get(&self.field) {
+            let val_str = match val {
+                Value::String(s) => s.clone(),
+                _ => val.to_string(),
+            };
+            self.pattern.is_match(&val_str)
+        } else {
+            false
+        }
+    }
+
+    fn get_context(&self, line: &[u8]) -> Option<Value> {
+        serde_json::from_slice(line).ok()
     }
 }
 
@@ -97,7 +151,7 @@ impl DmesgDetector {
 
 impl Detector for DmesgDetector {
     fn detect(&self, line: &[u8]) -> bool {
-         let line_str = match std::str::from_utf8(line) {
+        let line_str = match std::str::from_utf8(line) {
             Ok(s) => s,
             Err(_) => return false,
         };
@@ -113,14 +167,14 @@ impl Detector for DmesgDetector {
         let mut header = String::new();
 
         if let Some(caps) = self.dmesg_line_regex.captures(line_str) {
-             if let Some(t_match) = caps.get(1) {
-                 if let Ok(t) = t_match.as_str().parse::<f64>() {
-                     timestamp = t;
-                 }
-             }
-             if let Some(h_match) = caps.get(2) {
-                 header = h_match.as_str().to_string();
-             }
+            if let Some(t_match) = caps.get(1) {
+                if let Ok(t) = t_match.as_str().parse::<f64>() {
+                    timestamp = t;
+                }
+            }
+            if let Some(h_match) = caps.get(2) {
+                header = h_match.as_str().to_string();
+            }
         }
 
         let mut state = self.state.lock().unwrap();
@@ -138,21 +192,21 @@ impl Detector for DmesgDetector {
 
         // 4. If not an explicit error, check if it's related context
         if !state.last_match_header.is_empty() {
-             if is_dmesg_line {
-                 // It's a new log line. Check if it's related.
-                 if !header.is_empty() && timestamp > 0.0 {
-                     if (timestamp - state.last_match_time) <= 5.0 {
-                         if are_headers_related(&state.last_match_header, &header) {
-                             return true;
-                         }
-                     }
-                 }
-                 // Not related
-                 return false;
-             } else {
-                 // Continuation line
-                 return true;
-             }
+            if is_dmesg_line {
+                // It's a new log line. Check if it's related.
+                if !header.is_empty() && timestamp > 0.0 {
+                    if (timestamp - state.last_match_time) <= 5.0 {
+                        if are_headers_related(&state.last_match_header, &header) {
+                            return true;
+                        }
+                    }
+                }
+                // Not related
+                return false;
+            } else {
+                // Continuation line
+                return true;
+            }
         }
 
         false
@@ -175,7 +229,7 @@ fn are_headers_related(h1: &str, h2: &str) -> bool {
 }
 
 pub fn get_detector(format: &str, pattern: &str) -> Result<Box<dyn Detector>> {
-    if !pattern.is_empty() {
+    if !pattern.is_empty() && format != "json" {
         return Ok(Box::new(GenericDetector::new(pattern)?));
     }
 
@@ -183,6 +237,7 @@ pub fn get_detector(format: &str, pattern: &str) -> Result<Box<dyn Detector>> {
         "nginx" => Ok(Box::new(NginxDetector::new()?)),
         "nginx-error" => Ok(Box::new(NginxErrorDetector::new()?)),
         "dmesg" => Ok(Box::new(DmesgDetector::new()?)),
+        "json" => Ok(Box::new(JsonDetector::new(pattern)?)),
         _ => Ok(Box::new(GenericDetector::new("(?i)error")?)),
     }
 }
@@ -191,8 +246,8 @@ pub fn get_detector(format: &str, pattern: &str) -> Result<Box<dyn Detector>> {
 mod tests {
     use super::*;
     use std::fs;
-    use std::path::Path;
     use std::io::BufRead;
+    use std::path::Path;
 
     #[test]
     fn test_detectors_with_test_data() -> Result<()> {
@@ -217,15 +272,25 @@ mod tests {
 
             let detector_name = path.file_name().unwrap().to_string_lossy().to_string();
 
-            // Skip directories that are not detectors we know about (though we should support all in testdata)
-            // But for now we only have nginx and dmesg
-            if detector_name != "nginx" && detector_name != "dmesg" && detector_name != "nginx-error" {
-                 continue;
+            // Skip directories that are not detectors we know about
+            if detector_name != "nginx"
+                && detector_name != "dmesg"
+                && detector_name != "nginx-error"
+                && detector_name != "json"
+            {
+                continue;
             }
 
             let detector_dir = path;
 
-            for file in fs::read_dir(detector_dir)? {
+            // Check for pattern.txt
+            let mut pattern = String::new();
+            let pattern_file = detector_dir.join("pattern.txt");
+            if pattern_file.exists() {
+                pattern = fs::read_to_string(pattern_file)?.trim().to_string();
+            }
+
+            for file in fs::read_dir(&detector_dir)? {
                 let file = file?;
                 let file_path = file.path();
 
@@ -235,6 +300,10 @@ mod tests {
 
                 let file_name = file_path.file_name().unwrap().to_string_lossy();
                 if !file_name.ends_with(".txt") || file_name.ends_with(".expect.txt") {
+                    continue;
+                }
+
+                if file_name == "pattern.txt" {
                     continue;
                 }
 
@@ -249,7 +318,7 @@ mod tests {
                 println!("Testing {}/{}", detector_name, file_name);
 
                 // Create detector
-                let detector = get_detector(&detector_name, "")?;
+                let detector = get_detector(&detector_name, &pattern)?;
 
                 // Read expected lines
                 let expected_lines: Vec<String> = fs::read_to_string(&expect_path)?
@@ -274,11 +343,34 @@ mod tests {
                     detected_lines.len(),
                     expected_lines.len(),
                     "Mismatch in number of lines for {}/{}",
-                    detector_name, file_name
+                    detector_name,
+                    file_name
                 );
 
-                for (i, (got, want)) in detected_lines.iter().zip(expected_lines.iter()).enumerate() {
-                     assert_eq!(got, want, "Mismatch at line {} in {}/{}", i + 1, detector_name, file_name);
+                for (i, (got, want)) in detected_lines.iter().zip(expected_lines.iter()).enumerate()
+                {
+                    assert_eq!(
+                        got,
+                        want,
+                        "Mismatch at line {} in {}/{}",
+                        i + 1,
+                        detector_name,
+                        file_name
+                    );
+
+                    // Verify context extraction for JSON detector
+                    if detector_name == "json" {
+                        let context = detector.get_context(got.as_bytes());
+                        assert!(
+                            context.is_some(),
+                            "Context should be extracted for JSON detector at line {} in {}/{}",
+                            i + 1,
+                            detector_name,
+                            file_name
+                        );
+                        let val = context.unwrap();
+                        assert!(val.is_object(), "Context should be a JSON object");
+                    }
                 }
             }
         }

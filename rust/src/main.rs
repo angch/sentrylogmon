@@ -73,7 +73,10 @@ async fn main() -> Result<()> {
             "command" => {
                 let parts: Vec<&str> = mon_cfg.args.split_whitespace().collect();
                 if parts.is_empty() {
-                    tracing::warn!("Skipping command monitor '{}': command is empty", mon_cfg.name);
+                    tracing::warn!(
+                        "Skipping command monitor '{}': command is empty",
+                        mon_cfg.name
+                    );
                     continue;
                 }
                 let cmd = parts[0].to_string();
@@ -94,7 +97,11 @@ async fn main() -> Result<()> {
         let detector = match detectors::get_detector(&detector_format, &mon_cfg.pattern) {
             Ok(d) => d,
             Err(e) => {
-                tracing::error!("Failed to create detector for monitor '{}': {}", mon_cfg.name, e);
+                tracing::error!(
+                    "Failed to create detector for monitor '{}': {}",
+                    mon_cfg.name,
+                    e
+                );
                 continue;
             }
         };
