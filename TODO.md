@@ -4,10 +4,11 @@ This file tracks potential features and improvements for `sentrylogmon`.
 
 ## Features
 
-- [ ] **Structured Logging Support**
+- [x] **Structured Logging Support**
   - Parse JSON logs (e.g., from Zap, Logrus, Bunyan).
   - Match patterns against specific fields (e.g., `level == "error"`).
   - Extract metadata from log fields to populate Sentry tags/context.
+  - *Implemented using `JsonDetector` with `key:regex` support.*
 
 - [ ] **Syslog Support**
   - [x] Add a new `LogSource` for syslog (UDP/TCP listener).
@@ -63,7 +64,7 @@ This file tracks potential features and improvements for `sentrylogmon`.
 
 ## Feature Parity (Zig)
 
-- [ ] **Implement IPC Mechanism**
+- [x] **Implement IPC Mechanism**
   - Add Unix socket listener for `/status` and `/update`.
 - [x] **Implement System Statistics**
   - Collect CPU, Memory, Load Average, and Top Processes.
