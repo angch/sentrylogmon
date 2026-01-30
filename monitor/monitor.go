@@ -355,6 +355,7 @@ func (m *Monitor) sendToSentry(line string) {
 
 		if m.Collector != nil {
 			state := m.Collector.GetState()
+			// Use ToMap() to directly convert struct to map, avoiding double JSON marshaling
 			scope.SetContext("Server State", state.ToMap())
 		}
 
