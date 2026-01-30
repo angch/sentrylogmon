@@ -36,7 +36,7 @@ This file tracks potential features and improvements for `sentrylogmon`.
   - Support more timestamp formats in `extractTimestamp`.
   - Handle timezone conversions correctly.
 
-- [ ] **Rate Limiting**
+- [x] **Rate Limiting**
   - Implement per-issue rate limiting to avoid flooding Sentry.
   - Configurable burst/rate.
 
@@ -65,7 +65,7 @@ This file tracks potential features and improvements for `sentrylogmon`.
 
 - [ ] **Implement IPC Mechanism**
   - Add Unix socket listener for `/status` and `/update`.
-- [ ] **Implement System Statistics**
+- [x] **Implement System Statistics**
   - Collect CPU, Memory, Load Average, and Top Processes.
   - Attach system state to Sentry events.
 - [x] **Implement `JsonDetector`**
