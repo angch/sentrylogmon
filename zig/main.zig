@@ -5,6 +5,7 @@ const queue_mod = @import("queue.zig");
 const batcher_mod = @import("batcher.zig");
 const detectors = @import("detectors.zig");
 const sysstat = @import("sysstat.zig");
+const ipc = @import("ipc.zig");
 
 const RateLimiter = struct {
     limit: usize,
@@ -61,6 +62,8 @@ const Args = struct {
     verbose: bool = false,
     oneshot: bool = false,
     config: ?[]const u8 = null,
+    status: bool = false,
+    update: bool = false,
 };
 
 pub fn main() !void {
@@ -77,10 +80,65 @@ pub fn main() !void {
     defer if (args.release.len > 0) allocator.free(args.release);
     defer if (args.config) |c| allocator.free(c);
 
+    // IPC Commands
+    const socket_dir = "/tmp/sentrylogmon";
+    if (args.status) {
+        var instances = ipc.listInstances(allocator, socket_dir) catch |err| {
+            std.debug.print("Error listing instances: {}\n", .{err});
+            std.process.exit(1);
+        };
+        defer instances.deinit(allocator);
+
+        std.debug.print("PID\tSTART TIME\tVERSION\n", .{});
+        for (instances.items) |inst| {
+            std.debug.print("{d}\t{s}\t{s}\n", .{inst.pid, inst.start_time, inst.version});
+        }
+        std.process.exit(0);
+    }
+
+    if (args.update) {
+        var instances = ipc.listInstances(allocator, socket_dir) catch |err| {
+            std.debug.print("Error listing instances: {}\n", .{err});
+            std.process.exit(1);
+        };
+        defer instances.deinit(allocator);
+
+        for (instances.items) |inst| {
+            const socket_path = try std.fmt.allocPrint(allocator, "{s}/sentrylogmon.{d}.sock", .{socket_dir, inst.pid});
+            defer allocator.free(socket_path);
+
+            std.debug.print("Requesting update for PID {d}...\n", .{inst.pid});
+            ipc.requestUpdate(allocator, socket_path) catch |err| {
+                std.debug.print("Failed to update PID {d}: {}\n", .{inst.pid, err});
+                continue;
+            };
+            std.debug.print("Update requested for PID {d}\n", .{inst.pid});
+        }
+        std.process.exit(0);
+    }
+
     if (args.dsn.len == 0 and args.config == null) {
         std.debug.print("Sentry DSN is required. Set via --dsn flag or SENTRY_DSN environment variable\n", .{});
         std.process.exit(1);
     }
+
+    // Initialize IPC Server
+    ipc.ensureSecureDirectory(socket_dir) catch |err| {
+        std.debug.print("Failed to ensure secure IPC directory: {}\n", .{err});
+    };
+    const my_pid = std.os.linux.getpid();
+    const socket_path = try std.fmt.allocPrint(allocator, "{s}/sentrylogmon.{d}.sock", .{socket_dir, my_pid});
+    // We leak socket_path (used by thread)
+
+    // Capture raw args for restart
+    var raw_args = std.ArrayList([]const u8).empty;
+    var raw_iter = try std.process.argsWithAllocator(allocator);
+    while (raw_iter.next()) |arg| {
+        try raw_args.append(allocator, try allocator.dupe(u8, arg));
+    }
+    const raw_args_slice = try raw_args.toOwnedSlice(allocator); // leak for thread
+
+    const start_time = std.time.timestamp();
 
     if (args.verbose) {
         std.debug.print("Initialized Sentry with DSN (environment={s}, release={s})\n", .{ args.environment, args.release });
@@ -125,6 +183,10 @@ pub fn main() !void {
         config = try config_mod.parseConfig(allocator, cfg_path);
     }
     defer if (config) |*c| c.deinit(allocator);
+
+    // Start IPC Server
+    const ipc_thread = try std.Thread.spawn(.{}, ipc.startServer, .{allocator, socket_path, config, raw_args_slice, start_time});
+    ipc_thread.detach();
 
     if (config) |cfg| {
         // Multi-monitor mode
@@ -397,6 +459,10 @@ fn parseArgs(allocator: std.mem.Allocator) !Args {
             if (arg_iter.next()) |cfg| {
                 args.config = try allocator.dupe(u8, cfg);
             }
+        } else if (std.mem.eql(u8, arg, "--status")) {
+            args.status = true;
+        } else if (std.mem.eql(u8, arg, "--update")) {
+            args.update = true;
         } else if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) {
             printUsage();
             std.process.exit(0);
