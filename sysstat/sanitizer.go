@@ -21,6 +21,10 @@ var sensitiveSuffixes = []string{
 	"token",
 	"secret",
 	"_key", // Matches api_key, access_key, but not keyboard
+	"-key", // Matches ssh-key, private-key
+	".key", // Matches file.key
+	"signature",
+	"credential",
 }
 
 // SanitizeCommand joins command arguments into a string, redacting sensitive information.

@@ -7,3 +7,10 @@
 1. Always use `os.Lstat` to check for symlinks before trusting a directory in `/tmp`.
 2. Explicitly verify directory ownership matches the current process user.
 3. Use build tags (`//go:build unix`) for OS-specific security checks.
+
+## 2026-01-27 - CLI Argument Redaction Gaps
+**Vulnerability:** The command-line sanitizer used an incomplete list of suffixes to identify sensitive flags. It missed flags ending in `-key` (e.g., `--ssh-key`, `--private-key`), allowing sensitive keys to be logged in plain text to Sentry.
+**Learning:** Security allowlists/blocklists for partial matching (suffixes/prefixes) must account for common naming conventions like kebab-case (`-key`) and dot-notation (`.key`). Relying on a single separator (like `_key`) is insufficient.
+**Prevention:**
+1. Include multiple common separators (`-`, `.`, `_`) in suffix matching lists.
+2. Add explicit test cases for common sensitive flag variations (`--ssh-key`, `--private-key`).

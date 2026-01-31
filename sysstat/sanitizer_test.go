@@ -65,6 +65,31 @@ func TestSanitizeCommand(t *testing.T) {
 			input:    []string{"./prog", "--use-keyboard=us"},
 			expected: "./prog --use-keyboard=us",
 		},
+		{
+			name:     "SSH Key flag",
+			input:    []string{"ssh-agent", "--ssh-key=PRIVATE_KEY"},
+			expected: "ssh-agent --ssh-key=[REDACTED]",
+		},
+		{
+			name:     "Private Key flag",
+			input:    []string{"app", "--private-key=SECRET"},
+			expected: "app --private-key=[REDACTED]",
+		},
+		{
+			name:     "Dot Key flag",
+			input:    []string{"app", "--app.key=SECRET"},
+			expected: "app --app.key=[REDACTED]",
+		},
+		{
+			name:     "Signature flag",
+			input:    []string{"verify", "--signature=SIG123"},
+			expected: "verify --signature=[REDACTED]",
+		},
+		{
+			name:     "Credential flag",
+			input:    []string{"login", "--aws-credential=XYZ"},
+			expected: "login --aws-credential=[REDACTED]",
+		},
 	}
 
 	for _, tt := range tests {
