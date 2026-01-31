@@ -14,6 +14,7 @@ import (
 	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/load"
 	"github.com/shirou/gopsutil/v3/mem"
+	"github.com/tklauser/go-sysconf"
 )
 
 type ProcessInfo struct {
@@ -215,9 +216,10 @@ func getProcessStats(uptime uint64, totalMem uint64) ([]ProcessInfo, string, err
 
 	var results []ProcessInfo
 	pageSize := os.Getpagesize()
-	clkTck := float64(100) // Default to 100Hz on most systems.
-	// To be more accurate we should use sysconf(_SC_CLK_TCK) but that requires CGO or more complex syscalls.
-	// For this estimation, 100Hz is a reasonable default for x86 Linux.
+	clkTck := float64(100) // Default fallback
+	if val, err := sysconf.Sysconf(sysconf.SC_CLK_TCK); err == nil {
+		clkTck = float64(val)
+	}
 
 	for _, p := range procs {
 		stat, err := p.Stat()

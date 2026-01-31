@@ -42,10 +42,15 @@ This file tracks potential features and improvements for `sentrylogmon`.
   - Implement per-issue rate limiting to avoid flooding Sentry.
   - Configurable burst/rate.
 
+- [x] **Dynamic Clock Tick Detection**
+  - Use `sysconf` to determine accurate `CLK_TCK` for CPU usage calculation.
+  - *Implemented in `sysstat/sysstat.go` using `github.com/tklauser/go-sysconf`.*
+
 ## Testing
 
-- [ ] **Fuzz Testing**
+- [x] **Fuzz Testing**
   - Fuzz the detector logic with random inputs to find edge cases.
+  - *Implemented in `detectors/fuzz_test.go`.*
 
 - [ ] **End-to-End Tests**
   - Containerized tests using Docker Compose (Sentry mock + log generator + sentrylogmon).
