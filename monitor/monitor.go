@@ -19,8 +19,6 @@ import (
 )
 
 var (
-	// [1234.5678]
-	timestampRegexDmesg = regexp.MustCompile(`^\[\s*([0-9.]+)\]`)
 	// 2006-01-02T15:04:05Z07:00 or 2006-01-02 15:04:05
 	timestampRegexISO = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)`)
 	// Oct 27 10:00:00 or <34>Oct 27 10:00:00
@@ -41,46 +39,100 @@ func extractSyslogPriority(line []byte) (int, int, int, bool) {
 	return 0, 0, 0, false
 }
 
+func parseDmesgTimestamp(line []byte) (float64, string, bool) {
+	if len(line) < 3 || line[0] != '[' {
+		return 0, "", false
+	}
+
+	limit := 32
+	if len(line) < limit {
+		limit = len(line)
+	}
+
+	closeBracket := -1
+	for i := 1; i < limit; i++ {
+		if line[i] == ']' {
+			closeBracket = i
+			break
+		}
+	}
+	if closeBracket == -1 {
+		return 0, "", false
+	}
+
+	start := 1
+	for start < closeBracket && line[start] == ' ' {
+		start++
+	}
+
+	if start == closeBracket {
+		return 0, "", false
+	}
+
+	numBytes := line[start:closeBracket]
+	for _, b := range numBytes {
+		if (b < '0' || b > '9') && b != '.' {
+			return 0, "", false
+		}
+	}
+
+	tsStr := string(numBytes)
+	ts, err := strconv.ParseFloat(tsStr, 64)
+	if err != nil {
+		return 0, "", false
+	}
+	return ts, tsStr, true
+}
+
 func extractTimestamp(line []byte) (float64, string) {
+	if len(line) == 0 {
+		return 0, ""
+	}
+
 	// 1. Try dmesg format first (fastest/most common for this tool initially)
-	if indices := timestampRegexDmesg.FindSubmatchIndex(line); len(indices) >= 4 {
-		tsStr := string(line[indices[2]:indices[3]])
-		// ParseFloat requires string, but the timestamp part is short
-		if ts, err := strconv.ParseFloat(tsStr, 64); err == nil {
+	// Check if it starts with '['
+	if line[0] == '[' {
+		if ts, tsStr, ok := parseDmesgTimestamp(line); ok {
 			return ts, tsStr
 		}
 	}
 
 	// 2. Try ISO8601/RFC3339
-	if indices := timestampRegexISO.FindSubmatchIndex(line); len(indices) >= 4 {
-		tsStr := string(line[indices[2]:indices[3]])
-		// Try parsing with common layouts
-		layouts := []string{
-			time.RFC3339,
-			time.RFC3339Nano,
-			"2006-01-02 15:04:05",
-			"2006-01-02T15:04:05",
-		}
-		for _, layout := range layouts {
-			if t, err := time.Parse(layout, tsStr); err == nil {
-				return float64(t.Unix()) + float64(t.Nanosecond())/1e9, tsStr
+	// Starts with digit
+	if line[0] >= '0' && line[0] <= '9' {
+		if indices := timestampRegexISO.FindSubmatchIndex(line); len(indices) >= 4 {
+			tsStr := string(line[indices[2]:indices[3]])
+			// Try parsing with common layouts
+			layouts := []string{
+				time.RFC3339,
+				time.RFC3339Nano,
+				"2006-01-02 15:04:05",
+				"2006-01-02T15:04:05",
+			}
+			for _, layout := range layouts {
+				if t, err := time.Parse(layout, tsStr); err == nil {
+					return float64(t.Unix()) + float64(t.Nanosecond())/1e9, tsStr
+				}
 			}
 		}
 	}
 
 	// 3. Try Syslog (Oct 27 10:00:00)
-	if indices := timestampRegexSyslog.FindSubmatchIndex(line); len(indices) >= 4 {
-		tsStr := string(line[indices[2]:indices[3]])
-		// Syslog usually doesn't have year. We assume current year.
-		if t, err := time.Parse(time.Stamp, tsStr); err == nil {
-			// time.Parse(time.Stamp) returns year 0. Add current year.
-			now := time.Now()
-			t = t.AddDate(now.Year(), 0, 0)
-			// Simple heuristic for year boundary: if result is more than 30 days in future, assume previous year
-			if t.Sub(now) > 30*24*time.Hour {
-				t = t.AddDate(-1, 0, 0)
+	// Starts with '<' or uppercase letter
+	if line[0] == '<' || (line[0] >= 'A' && line[0] <= 'Z') {
+		if indices := timestampRegexSyslog.FindSubmatchIndex(line); len(indices) >= 4 {
+			tsStr := string(line[indices[2]:indices[3]])
+			// Syslog usually doesn't have year. We assume current year.
+			if t, err := time.Parse(time.Stamp, tsStr); err == nil {
+				// time.Parse(time.Stamp) returns year 0. Add current year.
+				now := time.Now()
+				t = t.AddDate(now.Year(), 0, 0)
+				// Simple heuristic for year boundary: if result is more than 30 days in future, assume previous year
+				if t.Sub(now) > 30*24*time.Hour {
+					t = t.AddDate(-1, 0, 0)
+				}
+				return float64(t.Unix()) + float64(t.Nanosecond())/1e9, tsStr
 			}
-			return float64(t.Unix()) + float64(t.Nanosecond())/1e9, tsStr
 		}
 	}
 
