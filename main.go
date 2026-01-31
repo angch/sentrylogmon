@@ -352,18 +352,33 @@ func determineDetectorFormat(monCfg config.MonitorConfig) string {
 
 func printInstanceTable(instances []ipc.StatusResponse) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	fmt.Fprintln(w, "PID\tSTART TIME\tUPTIME\tVERSION\tMONITORS")
+	fmt.Fprintln(w, "PID\tSTARTED\tUPTIME\tVERSION\tDETAILS")
 	for _, inst := range instances {
 		uptime := time.Since(inst.StartTime).Round(time.Second)
-		monitors := 0
+
+		var detailsParts []string
 		if inst.Config != nil {
-			monitors = len(inst.Config.Monitors)
+			for _, m := range inst.Config.Monitors {
+				detailsParts = append(detailsParts, fmt.Sprintf("%s(%s)", m.Name, m.Type))
+			}
 		}
+		details := strings.Join(detailsParts, ", ")
+		if len(details) > 60 {
+			// Use rune slicing to handle potential multi-byte characters safely
+			runes := []rune(details)
+			if len(runes) > 60 {
+				details = string(runes[:57]) + "..."
+			}
+		}
+		if details == "" {
+			details = "-"
+		}
+
 		version := inst.Version
 		if version == "" {
-			version = "?"
+			version = "-"
 		}
-		fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%d\n", inst.PID, inst.StartTime.Format(time.RFC3339), uptime, version, monitors)
+		fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\n", inst.PID, inst.StartTime.Format("2006-01-02 15:04:05"), uptime, version, details)
 	}
 	w.Flush()
 }
