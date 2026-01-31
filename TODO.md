@@ -19,9 +19,10 @@ This file tracks potential features and improvements for `sentrylogmon`.
   - Track lines processed, issues detected, Sentry errors, etc.
   - *Implemented using `github.com/prometheus/client_golang`.*
 
-- [ ] **Configuration Hot-Reload**
+- [x] **Configuration Hot-Reload**
   - Watch the configuration file for changes.
   - Reload monitors without restarting the process (or graceful restart).
+  - *Implemented using `fsnotify` and self-exec.*
 
 - [ ] **Multi-tenancy**
   - Support routing different log sources to different Sentry DSNs/Projects.
