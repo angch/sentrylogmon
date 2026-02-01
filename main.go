@@ -351,10 +351,16 @@ func determineDetectorFormat(monCfg config.MonitorConfig) string {
 }
 
 func printInstanceTable(instances []ipc.StatusResponse) {
+	if len(instances) == 0 {
+		fmt.Println("No running instances found.")
+		return
+	}
+
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 	fmt.Fprintln(w, "PID\tSTARTED\tUPTIME\tVERSION\tDETAILS")
 	for _, inst := range instances {
 		uptime := time.Since(inst.StartTime).Round(time.Second)
+		uptimeStr := formatDuration(uptime)
 
 		var detailsParts []string
 		if inst.Config != nil {
@@ -378,7 +384,23 @@ func printInstanceTable(instances []ipc.StatusResponse) {
 		if version == "" {
 			version = "-"
 		}
-		fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\n", inst.PID, inst.StartTime.Format("2006-01-02 15:04:05"), uptime, version, details)
+		fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\n", inst.PID, inst.StartTime.Format("2006-01-02 15:04:05"), uptimeStr, version, details)
 	}
 	w.Flush()
+}
+
+func formatDuration(d time.Duration) string {
+	d = d.Round(time.Second)
+	h := d / time.Hour
+	d -= h * time.Hour
+	m := d / time.Minute
+	d -= m * time.Minute
+	s := d / time.Second
+	if h > 0 {
+		return fmt.Sprintf("%dh %dm %ds", h, m, s)
+	}
+	if m > 0 {
+		return fmt.Sprintf("%dm %ds", m, s)
+	}
+	return fmt.Sprintf("%ds", s)
 }
