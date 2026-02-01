@@ -174,6 +174,18 @@ func (r *RateLimiter) Allow() bool {
 	return false
 }
 
+type SyslogPriority struct {
+	Pri      int
+	Facility int
+	Severity int
+}
+
+type BatchMetadata struct {
+	TimestampStr string
+	SyslogPri    *SyslogPriority
+	Context      map[string]interface{}
+}
+
 type Monitor struct {
 	ctx               context.Context
 	Source            sources.LogSource
@@ -189,6 +201,7 @@ type Monitor struct {
 	bufferCount      int
 	bufferMutex      sync.Mutex
 	bufferStartTime  float64
+	currentBatchMeta BatchMetadata
 	flushTimer       *time.Timer
 	lastActivityTime time.Time
 }
@@ -306,32 +319,59 @@ func (m *Monitor) Start() {
 	}
 }
 
+func (m *Monitor) extractMetadata(line []byte, tsStr string) BatchMetadata {
+	meta := BatchMetadata{
+		TimestampStr: tsStr,
+	}
+
+	if pri, facility, severity, ok := extractSyslogPriority(line); ok {
+		meta.SyslogPri = &SyslogPriority{
+			Pri:      pri,
+			Facility: facility,
+			Severity: severity,
+		}
+	}
+
+	if extractor, ok := m.Detector.(detectors.ContextExtractor); ok {
+		if ctx := extractor.GetContext(line); ctx != nil {
+			meta.Context = ctx
+		}
+	}
+
+	return meta
+}
+
 func (m *Monitor) processMatch(line []byte) {
 	m.bufferMutex.Lock()
 	m.lastActivityTime = time.Now()
 
-	timestamp, _ := extractTimestamp(line)
+	timestamp, tsStr := extractTimestamp(line)
 
 	if transformer, ok := m.Detector.(detectors.MessageTransformer); ok {
 		line = transformer.TransformMessage(line)
 	}
 
 	var msgToSend string
+	var metaToSend BatchMetadata
 
 	if m.bufferCount == 0 {
 		m.buffer.Write(line)
 		m.bufferCount = 1
 		m.bufferStartTime = timestamp
+		m.currentBatchMeta = m.extractMetadata(line, tsStr)
 		m.resetTimerLocked()
 	} else {
 		// Check max buffer size to prevent memory leaks
 		if m.bufferCount >= MaxBufferSize {
 			// Force flush current buffer and start new
 			msgToSend = m.buffer.String()
+			metaToSend = m.currentBatchMeta
+
 			m.buffer.Reset()
 			m.buffer.Write(line)
 			m.bufferCount = 1
 			m.bufferStartTime = timestamp
+			m.currentBatchMeta = m.extractMetadata(line, tsStr)
 			m.resetTimerLocked()
 		} else {
 			// Group by 5 seconds window
@@ -343,10 +383,13 @@ func (m *Monitor) processMatch(line []byte) {
 			} else {
 				// Flush current
 				msgToSend = m.buffer.String()
+				metaToSend = m.currentBatchMeta
+
 				m.buffer.Reset()
 				m.buffer.Write(line)
 				m.bufferCount = 1
 				m.bufferStartTime = timestamp
+				m.currentBatchMeta = m.extractMetadata(line, tsStr)
 				m.resetTimerLocked()
 			}
 		}
@@ -354,7 +397,7 @@ func (m *Monitor) processMatch(line []byte) {
 	m.bufferMutex.Unlock()
 
 	if msgToSend != "" {
-		m.sendToSentry(msgToSend)
+		m.sendToSentry(msgToSend, metaToSend)
 	}
 }
 
@@ -382,11 +425,13 @@ func (m *Monitor) flushBuffer() {
 	}
 
 	msg := m.buffer.String()
+	meta := m.currentBatchMeta
 	m.buffer.Reset()
 	m.bufferCount = 0
+	m.currentBatchMeta = BatchMetadata{}
 	m.bufferMutex.Unlock()
 
-	m.sendToSentry(msg)
+	m.sendToSentry(msg, meta)
 }
 
 func (m *Monitor) forceFlush() {
@@ -401,14 +446,16 @@ func (m *Monitor) forceFlush() {
 	}
 
 	msg := m.buffer.String()
+	meta := m.currentBatchMeta
 	m.buffer.Reset()
 	m.bufferCount = 0
+	m.currentBatchMeta = BatchMetadata{}
 	m.bufferMutex.Unlock()
 
-	m.sendToSentry(msg)
+	m.sendToSentry(msg, meta)
 }
 
-func (m *Monitor) sendToSentry(line string) {
+func (m *Monitor) sendToSentry(line string, meta BatchMetadata) {
 	if m.RateLimiter != nil && !m.RateLimiter.Allow() {
 		metrics.SentryEventsTotal.With(prometheus.Labels{"source": m.Source.Name(), "status": "dropped"}).Inc()
 		if m.Verbose {
@@ -421,17 +468,14 @@ func (m *Monitor) sendToSentry(line string) {
 	sentry.WithScope(func(scope *sentry.Scope) {
 		scope.SetTag("source", m.Source.Name())
 
-		// Try to extract timestamp for metadata from the first line
-		_, tsStr := extractTimestamp([]byte(line))
-		if tsStr != "" {
-			scope.SetTag("log_timestamp", tsStr)
+		if meta.TimestampStr != "" {
+			scope.SetTag("log_timestamp", meta.TimestampStr)
 		}
 
-		// Try to extract syslog priority
-		if pri, facility, severity, ok := extractSyslogPriority([]byte(line)); ok {
-			scope.SetTag("syslog_priority", strconv.Itoa(pri))
-			scope.SetTag("syslog_facility", strconv.Itoa(facility))
-			scope.SetTag("syslog_severity", strconv.Itoa(severity))
+		if meta.SyslogPri != nil {
+			scope.SetTag("syslog_priority", strconv.Itoa(meta.SyslogPri.Pri))
+			scope.SetTag("syslog_facility", strconv.Itoa(meta.SyslogPri.Facility))
+			scope.SetTag("syslog_severity", strconv.Itoa(meta.SyslogPri.Severity))
 		}
 
 		scope.SetExtra("raw_line", line)
@@ -442,15 +486,8 @@ func (m *Monitor) sendToSentry(line string) {
 			scope.SetContext("Server State", state.ToMap())
 		}
 
-		if extractor, ok := m.Detector.(detectors.ContextExtractor); ok {
-			// Extract context from the first line
-			firstLine := line
-			if idx := strings.IndexByte(line, '\n'); idx != -1 {
-				firstLine = line[:idx]
-			}
-			if ctx := extractor.GetContext([]byte(firstLine)); ctx != nil {
-				scope.SetContext("Log Data", ctx)
-			}
+		if meta.Context != nil {
+			scope.SetContext("Log Data", meta.Context)
 		}
 
 		// We send the line as the message.
