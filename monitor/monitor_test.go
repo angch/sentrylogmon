@@ -343,3 +343,53 @@ func TestMessageTransformation(t *testing.T) {
 		}
 	}
 }
+
+func TestMonitorMultiTenancy(t *testing.T) {
+	// Setup global Sentry to verify separation
+	err := sentry.Init(sentry.ClientOptions{
+		Dsn: "https://global@sentry.io/1",
+	})
+	if err != nil {
+		t.Fatalf("Failed to init global sentry: %v", err)
+	}
+
+	// 1. Monitor with global config
+	source1 := &MockSource{content: "line1"}
+	det1 := &MockDetector{}
+	mon1, err := New(context.Background(), source1, det1, nil, Options{})
+	if err != nil {
+		t.Fatalf("Failed to create mon1: %v", err)
+	}
+
+	// Verify mon1 uses global hub
+	if mon1.Hub != sentry.CurrentHub() {
+		t.Error("mon1.Hub should be global hub")
+	}
+	if mon1.Hub.Client().Options().Dsn != "https://global@sentry.io/1" {
+		t.Errorf("mon1 DSN mismatch. Got %s", mon1.Hub.Client().Options().Dsn)
+	}
+
+	// 2. Monitor with custom DSN
+	customDSN := "https://custom@sentry.io/2"
+	source2 := &MockSource{content: "line2"}
+	det2 := &MockDetector{}
+	mon2, err := New(context.Background(), source2, det2, nil, Options{
+		SentryDSN: customDSN,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create mon2: %v", err)
+	}
+
+	// Verify mon2 uses distinct hub
+	if mon2.Hub == sentry.CurrentHub() {
+		t.Error("mon2.Hub should NOT be global hub")
+	}
+	if mon2.Hub == mon1.Hub {
+		t.Error("mon2.Hub should NOT be same as mon1.Hub")
+	}
+
+	// Verify mon2 DSN
+	if mon2.Hub.Client().Options().Dsn != customDSN {
+		t.Errorf("mon2 DSN mismatch. Expected %s, got %s", customDSN, mon2.Hub.Client().Options().Dsn)
+	}
+}
