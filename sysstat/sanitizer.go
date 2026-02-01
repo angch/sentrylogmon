@@ -69,9 +69,24 @@ func SanitizeCommand(args []string) string {
 		}
 
 		// Check for sensitive flags that take the next argument
-		if val, ok := sensitiveFlags[arg]; ok && val {
+		// 1. Check strict list (case-insensitive)
+		lowerArg := strings.ToLower(arg)
+		if val, ok := sensitiveFlags[lowerArg]; ok && val {
 			sanitized = append(sanitized, arg)
 			if i+1 < len(args) {
+				skipNext = true
+			}
+			continue
+		}
+
+		// 2. Check heuristics (suffix matching)
+		// Clean the arg (remove leading dashes)
+		cleanArg := strings.TrimLeft(arg, "-")
+		if isSensitiveKey(cleanArg) {
+			sanitized = append(sanitized, arg)
+			// Only redact next if it doesn't look like another flag
+			// This prevents false positives for boolean flags (e.g., --enable-password-auth --verbose)
+			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
 				skipNext = true
 			}
 			continue

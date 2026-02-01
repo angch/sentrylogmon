@@ -14,3 +14,11 @@
 **Prevention:**
 1. Include multiple common separators (`-`, `.`, `_`) in suffix matching lists.
 2. Add explicit test cases for common sensitive flag variations (`--ssh-key`, `--private-key`).
+
+## 2026-02-14 - Case-Sensitive CLI Redaction Failure
+**Vulnerability:** The CLI sanitizer relied on a case-sensitive map lookup for space-separated flags (e.g., `--password`), causing uppercase variants (e.g., `--PASSWORD`) to leak secrets. Additionally, heuristic suffix matching was only applied to `key=value` arguments, missing space-separated flags like `--db-password`.
+**Learning:** Security controls based on string matching must always be case-insensitive unless there is a specific reason not to be. Furthermore, heuristic logic (like suffix matching) should be applied consistently across different input formats (space-separated vs. equals-separated) to avoid coverage gaps.
+**Prevention:**
+1. Normalize inputs (lowercase) before checking against allow/blocklists.
+2. Unify validation logic for different input formats to ensure consistent security coverage.
+3. When using heuristics on space-separated flags, verify the next argument is not a flag (starts with `-`) to reduce false positives.

@@ -90,6 +90,31 @@ func TestSanitizeCommand(t *testing.T) {
 			input:    []string{"login", "--aws-credential=XYZ"},
 			expected: "login --aws-credential=[REDACTED]",
 		},
+		{
+			name:     "Case Sensitive Flag Leak",
+			input:    []string{"app", "--PASSWORD", "supersecret"},
+			expected: "app --PASSWORD [REDACTED]",
+		},
+		{
+			name:     "Case Sensitive Flag Leak 2",
+			input:    []string{"app", "--API-KEY", "12345"},
+			expected: "app --API-KEY [REDACTED]",
+		},
+		{
+			name:     "Heuristic Leak (Suffix)",
+			input:    []string{"app", "--db-password", "supersecret"},
+			expected: "app --db-password [REDACTED]",
+		},
+		{
+			name:     "Boolean Flag Safety",
+			input:    []string{"app", "--use-password", "--verbose"},
+			expected: "app --use-password --verbose",
+		},
+		{
+			name:     "Flag starting with dash but is value (Strict Map)",
+			input:    []string{"app", "--password", "-secret-"},
+			expected: "app --password [REDACTED]",
+		},
 	}
 
 	for _, tt := range tests {
