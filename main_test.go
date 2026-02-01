@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/angch/sentrylogmon/config"
 )
@@ -228,6 +229,33 @@ func TestDetermineDetectorFormat(t *testing.T) {
 			got := determineDetectorFormat(tt.monCfg)
 			if got != tt.expected {
 				t.Errorf("determineDetectorFormat() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestFormatDuration(t *testing.T) {
+	tests := []struct {
+		d        time.Duration
+		expected string
+	}{
+		{5 * time.Second, "5s"},
+		{65 * time.Second, "1m 5s"},
+		{125 * time.Second, "2m 5s"},
+		{3600 * time.Second, "1h 0m 0s"},
+		{3665 * time.Second, "1h 1m 5s"},
+		{7320 * time.Second, "2h 2m 0s"},
+		{59 * time.Second, "59s"},
+		{59 * time.Minute, "59m 0s"},
+		{23 * time.Hour, "23h 0m 0s"},
+		{25 * time.Hour, "25h 0m 0s"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.expected, func(t *testing.T) {
+			got := formatDuration(tt.d)
+			if got != tt.expected {
+				t.Errorf("formatDuration(%v) = %v, want %v", tt.d, got, tt.expected)
 			}
 		})
 	}
