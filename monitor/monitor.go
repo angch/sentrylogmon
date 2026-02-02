@@ -197,6 +197,12 @@ type Monitor struct {
 	RateLimiter       *RateLimiter
 	Hub               *sentry.Hub
 
+	// Cached metrics
+	metricProcessedLines prometheus.Counter
+	metricIssuesDetected prometheus.Counter
+	metricSentrySent     prometheus.Counter
+	metricSentryDropped  prometheus.Counter
+
 	// Buffering
 	buffer           strings.Builder
 	bufferCount      int
@@ -225,6 +231,12 @@ func New(ctx context.Context, source sources.LogSource, detector detectors.Detec
 		Collector: collector,
 		Verbose:   opts.Verbose,
 	}
+
+	// Initialize cached metrics
+	m.metricProcessedLines = metrics.ProcessedLinesTotal.With(prometheus.Labels{"source": source.Name()})
+	m.metricIssuesDetected = metrics.IssuesDetectedTotal.With(prometheus.Labels{"source": source.Name()})
+	m.metricSentrySent = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "sent"})
+	m.metricSentryDropped = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "dropped"})
 
 	// Initialize Sentry Hub
 	if opts.SentryDSN != "" {
@@ -294,7 +306,7 @@ func (m *Monitor) Start() {
 		scanner.Buffer(buf, MaxScanTokenSize)
 
 		for scanner.Scan() {
-			metrics.ProcessedLinesTotal.With(prometheus.Labels{"source": m.Source.Name()}).Inc()
+			m.metricProcessedLines.Inc()
 			lineBytes := scanner.Bytes()
 			if m.Detector.Detect(lineBytes) {
 				if m.ExclusionDetector != nil && m.ExclusionDetector.Detect(lineBytes) {
@@ -303,7 +315,7 @@ func (m *Monitor) Start() {
 					}
 					continue
 				}
-				metrics.IssuesDetectedTotal.With(prometheus.Labels{"source": m.Source.Name()}).Inc()
+				m.metricIssuesDetected.Inc()
 				if m.Verbose {
 					log.Printf("[%s] Matched: %s", m.Source.Name(), string(lineBytes))
 				}
@@ -477,14 +489,14 @@ func (m *Monitor) forceFlush() {
 
 func (m *Monitor) sendToSentry(line string, meta BatchMetadata) {
 	if m.RateLimiter != nil && !m.RateLimiter.Allow() {
-		metrics.SentryEventsTotal.With(prometheus.Labels{"source": m.Source.Name(), "status": "dropped"}).Inc()
+		m.metricSentryDropped.Inc()
 		if m.Verbose {
 			log.Printf("[%s] Rate limited, dropping event.", m.Source.Name())
 		}
 		return
 	}
 
-	metrics.SentryEventsTotal.With(prometheus.Labels{"source": m.Source.Name(), "status": "sent"}).Inc()
+	m.metricSentrySent.Inc()
 
 	m.Hub.WithScope(func(scope *sentry.Scope) {
 		scope.SetTag("source", m.Source.Name())
