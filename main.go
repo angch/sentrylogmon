@@ -380,19 +380,57 @@ func printInstanceTable(instances []ipc.StatusResponse) {
 		uptime := time.Since(inst.StartTime).Round(time.Second)
 		uptimeStr := formatDuration(uptime)
 
-		var detailsParts []string
-		if inst.Config != nil {
-			for _, m := range inst.Config.Monitors {
-				detailsParts = append(detailsParts, fmt.Sprintf("%s(%s)", m.Name, m.Type))
+		var details string
+		if inst.Config != nil && len(inst.Config.Monitors) > 0 {
+			const limit = 60
+			var buffer strings.Builder
+			monitors := inst.Config.Monitors
+
+			for i, m := range monitors {
+				part := fmt.Sprintf("%s(%s)", m.Name, m.Type)
+				sep := ""
+				if i > 0 {
+					sep = ", "
+				}
+
+				// Handle first item special case to ensure it's always visible
+				if i == 0 {
+					remaining := len(monitors) - 1
+					suffixLen := 0
+					if remaining > 0 {
+						suffixLen = 12 // Space for " (+NN more)"
+					}
+
+					if len(part)+suffixLen > limit {
+						// Truncate first item if it's too long
+						avail := limit - suffixLen - 3 // -3 for "..."
+						if avail < 10 {
+							avail = 10
+						}
+						if len(part) > avail {
+							part = part[:avail] + "..."
+						}
+					}
+					buffer.WriteString(part)
+					continue
+				}
+
+				// Check subsequent items
+				reserved := 12 // Space for " (+NN more)"
+				if i == len(monitors)-1 {
+					reserved = 0
+				}
+
+				if buffer.Len()+len(sep)+len(part)+reserved <= limit {
+					buffer.WriteString(sep)
+					buffer.WriteString(part)
+				} else {
+					remaining := len(monitors) - i
+					fmt.Fprintf(&buffer, " (+%d more)", remaining)
+					break
+				}
 			}
-		}
-		details := strings.Join(detailsParts, ", ")
-		if len(details) > 60 {
-			// Use rune slicing to handle potential multi-byte characters safely
-			runes := []rune(details)
-			if len(runes) > 60 {
-				details = string(runes[:57]) + "..."
-			}
+			details = buffer.String()
 		}
 		if details == "" {
 			details = "-"

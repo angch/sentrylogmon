@@ -1,11 +1,3 @@
-## 2026-01-30 - CLI Output Humanization
-**Learning:** CLI tools often default to JSON for machine readability, alienating human users. TTY detection (`os.ModeCharDevice`) allows serving both audiences perfectly: tables for humans, JSON for pipes/scripts.
-**Action:** Always check `isTerminal` before outputting status or list data in CLI tools; default to pretty tables for humans.
-
-## 2026-01-31 - Truncation with Detail
-**Learning:** When summarizing complex lists (like active monitors) in a limited space (table cells), context is king. A format like `name(type)` is far more valuable to a user than a raw count (e.g., "3 monitors"), even if it requires truncation. Users can infer the rest, but a count gives them nothing.
-**Action:** Prioritize dense, identifying information in status tables over aggregate counts. Use safe rune-based truncation to prevent text corruption.
-
-## 2026-02-01 - ANSI Codes in Tabwriter
-**Learning:** The Go `text/tabwriter` library calculates column widths based on byte count, not visual width. Embedding ANSI escape codes (e.g., for bold headers) causes excessive padding in data columns, breaking alignment.
-**Action:** Avoid using ANSI escape codes within strings passed to `text/tabwriter`. If styling is needed, use a color-aware table library or apply styling to the entire line only if it doesn't affect column width calculation (which is tricky with tabwriter).
+## 2026-02-02 - [Smart List Truncation]
+**Learning:** When truncating a list of items for a compact table view, blind character counting can hide all data if the first item is long or if the suffix " (+N more)" pushes the first item over the limit. A better UX guarantees at least the first item is shown (truncated if necessary) before summarizing the rest.
+**Action:** Use an item-aware truncation loop that prioritizes the first item's visibility and reserves space for the summary suffix only for subsequent items.
