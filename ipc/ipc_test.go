@@ -1,11 +1,31 @@
 package ipc
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 )
+
+func TestGetSocketDir(t *testing.T) {
+	dir := GetSocketDir()
+	if dir == "" {
+		t.Error("GetSocketDir() returned empty string")
+	}
+
+	isWindows := runtime.GOOS == "windows"
+	if !isWindows {
+		expectedSuffix := fmt.Sprintf("sentrylogmon-%d", os.Getuid())
+		if filepath.Base(dir) != expectedSuffix {
+			t.Errorf("GetSocketDir() = %s, expected base %s", dir, expectedSuffix)
+		}
+	} else {
+		if filepath.Base(dir) != "sentrylogmon" {
+			t.Errorf("GetSocketDir() = %s, expected base sentrylogmon", dir)
+		}
+	}
+}
 
 func TestEnsureSecureDirectory(t *testing.T) {
 	tmpDir := t.TempDir()

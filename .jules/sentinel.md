@@ -22,3 +22,11 @@
 1. Normalize inputs (lowercase) before checking against allow/blocklists.
 2. Unify validation logic for different input formats to ensure consistent security coverage.
 3. When using heuristics on space-separated flags, verify the next argument is not a flag (starts with `-`) to reduce false positives.
+
+## 2026-02-02 - Local DoS via Hardcoded IPC Path
+**Vulnerability:** The application used a hardcoded path (`/tmp/sentrylogmon`) for its IPC socket directory. While the directory was secured (0700 permissions), this allowed a local user to pre-create the directory and block other users from starting their own instances (Local Denial of Service) because the application would fail to secure/own the directory.
+**Learning:** Hardcoded paths in shared temporary directories (`/tmp`) create resource collision vulnerabilities in multi-user environments. Even if file permissions are secure, the *existence* of the directory owned by another user causes a conflict.
+**Prevention:**
+1. Avoid hardcoded paths in shared directories.
+2. Namespace temporary directories using the user's UID (e.g., `/tmp/app-<uid>`) or use `os.MkdirTemp`.
+3. On Windows, rely on `os.TempDir()` which is typically per-user.

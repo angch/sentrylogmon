@@ -5,6 +5,7 @@ package ipc
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"syscall"
 )
 
@@ -56,4 +57,9 @@ func EnsureSecureDirectory(path string) error {
 	}
 
 	return nil
+}
+
+// GetSocketDir returns the secure socket directory for the current user.
+func GetSocketDir() string {
+	return filepath.Join(os.TempDir(), fmt.Sprintf("sentrylogmon-%d", os.Getuid()))
 }
