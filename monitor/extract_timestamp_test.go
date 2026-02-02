@@ -35,6 +35,24 @@ func TestExtractTimestamp(t *testing.T) {
 			wantTS:   false,
 			wantText: "",
 		},
+		{
+			name:     "Nginx Error",
+			line:     "2023/10/27 10:00:00 [error] 123#123: *1 open()",
+			wantTS:   true,
+			wantText: "2023/10/27 10:00:00",
+		},
+		{
+			name:     "Nginx Access",
+			line:     "127.0.0.1 - - [27/Oct/2023:10:00:00 +0000] \"GET / HTTP/1.1\"",
+			wantTS:   true,
+			wantText: "27/Oct/2023:10:00:00 +0000",
+		},
+		{
+			name:     "Nginx Access IPv6",
+			line:     "::1 - - [27/Oct/2023:10:00:00 +0000] \"GET / HTTP/1.1\"",
+			wantTS:   true,
+			wantText: "27/Oct/2023:10:00:00 +0000",
+		},
 	}
 
 	for _, tt := range tests {

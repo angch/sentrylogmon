@@ -24,6 +24,11 @@ var (
 	// Oct 27 10:00:00 or <34>Oct 27 10:00:00
 	timestampRegexSyslog = regexp.MustCompile(`^(?:<\d{1,3}>)?([A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})`)
 
+	// 2023/10/27 10:00:00
+	timestampRegexNginxError = regexp.MustCompile(`^(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})`)
+	// [27/Oct/2023:10:00:00 +0000]
+	timestampRegexNginxAccess = regexp.MustCompile(`\[(\d{2}/[A-Z][a-z]{2}/\d{4}:\d{2}:\d{2}:\d{2}\s+[+-]\d{4})\]`)
+
 	syslogPriRegex = regexp.MustCompile(`^<(\d{1,3})>`)
 )
 
@@ -97,7 +102,7 @@ func extractTimestamp(line []byte) (float64, string) {
 		}
 	}
 
-	// 2. Try ISO8601/RFC3339
+	// 2. Try ISO8601/RFC3339 or Nginx
 	// Starts with digit
 	if line[0] >= '0' && line[0] <= '9' {
 		if indices := timestampRegexISO.FindSubmatchIndex(line); len(indices) >= 4 {
@@ -113,6 +118,14 @@ func extractTimestamp(line []byte) (float64, string) {
 				if t, err := time.Parse(layout, tsStr); err == nil {
 					return float64(t.Unix()) + float64(t.Nanosecond())/1e9, tsStr
 				}
+			}
+		}
+
+		// Try Nginx Error (2023/10/27 10:00:00)
+		if indices := timestampRegexNginxError.FindSubmatchIndex(line); len(indices) >= 4 {
+			tsStr := string(line[indices[2]:indices[3]])
+			if t, err := time.Parse("2006/01/02 15:04:05", tsStr); err == nil {
+				return float64(t.Unix()) + float64(t.Nanosecond())/1e9, tsStr
 			}
 		}
 	}
@@ -133,6 +146,16 @@ func extractTimestamp(line []byte) (float64, string) {
 				}
 				return float64(t.Unix()) + float64(t.Nanosecond())/1e9, tsStr
 			}
+		}
+	}
+
+	// 4. Try Nginx Access ([27/Oct/2023:10:00:00 +0000])
+	// This regex is unanchored, so it can find the timestamp anywhere in the line.
+	// This handles IPv6 access logs starting with '[' or other custom formats.
+	if indices := timestampRegexNginxAccess.FindSubmatchIndex(line); len(indices) >= 4 {
+		tsStr := string(line[indices[2]:indices[3]])
+		if t, err := time.Parse("02/Jan/2006:15:04:05 -0700", tsStr); err == nil {
+			return float64(t.Unix()) + float64(t.Nanosecond())/1e9, tsStr
 		}
 	}
 
