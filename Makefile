@@ -67,6 +67,16 @@ check-prereqs:
 	which zig > /dev/null 2>&1 && echo "✓ Found: $$(zig version)" || echo "✗ Not found"
 	@echo -n "Checking for Rust/Cargo... "
 	@which cargo > /dev/null 2>&1 && echo "✓ Found: $$(cargo --version)" || echo "✗ Not found"
+	@echo -n "Checking for Rust musl target... "
+	@if which rustup > /dev/null 2>&1; then \
+		if rustup target list --installed | grep -q "x86_64-unknown-linux-musl"; then \
+			echo "✓ Found"; \
+		else \
+			echo "✗ Not found"; \
+		fi \
+	else \
+		echo "✗ rustup not found"; \
+	fi
 	@echo -n "Checking for curl... "
 	@which curl > /dev/null 2>&1 && echo "✓ Found" || echo "✗ Not found"
 	@echo -n "Checking for tar... "
@@ -77,6 +87,9 @@ check-prereqs:
 	@export PATH=$(PWD)/.tools/zig:$$PATH; \
 	which zig > /dev/null 2>&1 || (echo "  - Zig is not installed. Run 'make install-prereqs' or install manually."; exit 0)
 	@which cargo > /dev/null 2>&1 || (echo "  - Rust is not installed. Run 'make install-prereqs' or install manually."; exit 0)
+	@if which rustup > /dev/null 2>&1; then \
+		rustup target list --installed | grep -q "x86_64-unknown-linux-musl" || (echo "  - Rust musl target is not installed. Run 'make install-prereqs' or 'rustup target add x86_64-unknown-linux-musl'."; exit 0); \
+	fi
 	@echo "Prerequisites check complete."
 
 # Install prerequisites (Go, Zig, and Rust)
