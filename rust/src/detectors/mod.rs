@@ -8,6 +8,7 @@ pub trait Detector: Send + Sync {
     fn detect(&self, line: &[u8]) -> bool;
 
     /// Extract context from the line
+    #[allow(unused)]
     fn get_context(&self, _line: &[u8]) -> Option<Value> {
         None
     }
