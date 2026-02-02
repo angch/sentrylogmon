@@ -37,7 +37,7 @@ func main() {
 	config.ParseFlags()
 
 	if *statusFlag {
-		instances, err := ipc.ListInstances("/tmp/sentrylogmon")
+		instances, err := ipc.ListInstances(ipc.GetSocketDir())
 		if err != nil {
 			log.Fatalf("Error listing instances: %v", err)
 		}
@@ -58,12 +58,12 @@ func main() {
 	}
 
 	if *updateFlag {
-		instances, err := ipc.ListInstances("/tmp/sentrylogmon")
+		instances, err := ipc.ListInstances(ipc.GetSocketDir())
 		if err != nil {
 			log.Fatalf("Error listing instances: %v", err)
 		}
 		for _, inst := range instances {
-			socketPath := fmt.Sprintf("/tmp/sentrylogmon/sentrylogmon.%d.sock", inst.PID)
+			socketPath := filepath.Join(ipc.GetSocketDir(), fmt.Sprintf("sentrylogmon.%d.sock", inst.PID))
 			fmt.Printf("Requesting update for PID %d...\n", inst.PID)
 			if err := ipc.RequestUpdate(socketPath); err != nil {
 				fmt.Printf("Failed to update PID %d: %v\n", inst.PID, err)
@@ -267,7 +267,7 @@ func main() {
 	}
 
 	// Start IPC Server
-	socketDir := "/tmp/sentrylogmon"
+	socketDir := ipc.GetSocketDir()
 	var socketPath string
 	var restartFunc func()
 
