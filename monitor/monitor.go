@@ -195,6 +195,7 @@ type Monitor struct {
 	Verbose           bool
 	StopOnEOF         bool
 	RateLimiter       *RateLimiter
+	Hub               *sentry.Hub
 
 	// Buffering
 	buffer           strings.Builder
@@ -207,10 +208,13 @@ type Monitor struct {
 }
 
 type Options struct {
-	Verbose         bool
-	ExcludePattern  string
-	RateLimitBurst  int
-	RateLimitWindow string
+	Verbose           bool
+	ExcludePattern    string
+	RateLimitBurst    int
+	RateLimitWindow   string
+	SentryDSN         string
+	SentryEnvironment string
+	SentryRelease     string
 }
 
 func New(ctx context.Context, source sources.LogSource, detector detectors.Detector, collector *sysstat.Collector, opts Options) (*Monitor, error) {
@@ -221,6 +225,22 @@ func New(ctx context.Context, source sources.LogSource, detector detectors.Detec
 		Collector: collector,
 		Verbose:   opts.Verbose,
 	}
+
+	// Initialize Sentry Hub
+	if opts.SentryDSN != "" {
+		client, err := sentry.NewClient(sentry.ClientOptions{
+			Dsn:         opts.SentryDSN,
+			Environment: opts.SentryEnvironment,
+			Release:     opts.SentryRelease,
+		})
+		if err != nil {
+			return nil, err
+		}
+		m.Hub = sentry.NewHub(client, sentry.NewScope())
+	} else {
+		m.Hub = sentry.CurrentHub()
+	}
+
 	if opts.ExcludePattern != "" {
 		ed, err := detectors.NewGenericDetector(opts.ExcludePattern)
 		if err != nil {
@@ -465,7 +485,8 @@ func (m *Monitor) sendToSentry(line string, meta BatchMetadata) {
 	}
 
 	metrics.SentryEventsTotal.With(prometheus.Labels{"source": m.Source.Name(), "status": "sent"}).Inc()
-	sentry.WithScope(func(scope *sentry.Scope) {
+
+	m.Hub.WithScope(func(scope *sentry.Scope) {
 		scope.SetTag("source", m.Source.Name())
 
 		if meta.TimestampStr != "" {
@@ -492,6 +513,6 @@ func (m *Monitor) sendToSentry(line string, meta BatchMetadata) {
 
 		// We send the line as the message.
 		// Sentry will group these based on the message content.
-		sentry.CaptureMessage(line)
+		m.Hub.CaptureMessage(line)
 	})
 }

@@ -148,11 +148,29 @@ func main() {
 			return
 		}
 
+		// Prepare Sentry Options
+		sentryDSN := monCfg.Sentry.DSN
+		sentryEnv := monCfg.Sentry.Environment
+		sentryRelease := monCfg.Sentry.Release
+
+		// Inherit global config if DSN is overridden but other fields are missing
+		if sentryDSN != "" {
+			if sentryEnv == "" {
+				sentryEnv = cfg.Sentry.Environment
+			}
+			if sentryRelease == "" {
+				sentryRelease = cfg.Sentry.Release
+			}
+		}
+
 		m, err := monitor.New(ctx, src, det, sysstatCollector, monitor.Options{
-			Verbose:         cfg.Verbose,
-			ExcludePattern:  monCfg.ExcludePattern,
-			RateLimitBurst:  monCfg.RateLimitBurst,
-			RateLimitWindow: monCfg.RateLimitWindow,
+			Verbose:           cfg.Verbose,
+			ExcludePattern:    monCfg.ExcludePattern,
+			RateLimitBurst:    monCfg.RateLimitBurst,
+			RateLimitWindow:   monCfg.RateLimitWindow,
+			SentryDSN:         sentryDSN,
+			SentryEnvironment: sentryEnv,
+			SentryRelease:     sentryRelease,
 		})
 		if err != nil {
 			log.Printf("Failed to create monitor '%s': %v", monCfg.Name, err)
