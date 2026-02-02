@@ -10,7 +10,7 @@ This file tracks potential features and improvements for `sentrylogmon`.
   - Extract metadata from log fields to populate Sentry tags/context.
   - *Implemented using `JsonDetector` with `key:regex` support.*
 
-- [ ] **Syslog Support**
+- [x] **Syslog Support**
   - [x] Add a new `LogSource` for syslog (UDP/TCP listener).
   - [x] Parse syslog severity/facility.
 
@@ -24,8 +24,9 @@ This file tracks potential features and improvements for `sentrylogmon`.
   - Reload monitors without restarting the process (or graceful restart).
   - *Implemented using `fsnotify` and self-exec.*
 
-- [ ] **Multi-tenancy**
+- [x] **Multi-tenancy**
   - Support routing different log sources to different Sentry DSNs/Projects.
+  - *Implemented in `monitor/monitor.go` allowing per-monitor Sentry config.*
 
 ## Improvements
 
@@ -36,6 +37,7 @@ This file tracks potential features and improvements for `sentrylogmon`.
 
 - [x] **Better Date Parsing**
   - Support more timestamp formats in `extractTimestamp`.
+  - [x] Added Nginx Error and Access log timestamp support.
   - Handle timezone conversions correctly.
 
 - [x] **Rate Limiting**
@@ -62,7 +64,7 @@ This file tracks potential features and improvements for `sentrylogmon`.
 - [x] **Implement IPC Mechanism**
   - Add Unix socket listener for `/status` and `/update`.
   - Implement self-restart logic.
-- [ ] **Enhance `sysstat`**
+- [x] **Enhance `sysstat`**
   - [x] Add Disk Pressure collection (/proc/pressure/io).
   - [x] Retrieve full command line arguments for top processes (currently only process name).
 - [x] **Implement Context Extraction**
