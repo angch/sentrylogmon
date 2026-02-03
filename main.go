@@ -447,11 +447,16 @@ func printInstanceTable(instances []ipc.StatusResponse) {
 
 func formatDuration(d time.Duration) string {
 	d = d.Round(time.Second)
+	day := d / (24 * time.Hour)
+	d -= day * 24 * time.Hour
 	h := d / time.Hour
 	d -= h * time.Hour
 	m := d / time.Minute
 	d -= m * time.Minute
 	s := d / time.Second
+	if day > 0 {
+		return fmt.Sprintf("%dd %dh %dm", day, h, m)
+	}
 	if h > 0 {
 		return fmt.Sprintf("%dh %dm %ds", h, m, s)
 	}
