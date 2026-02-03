@@ -1,4 +1,4 @@
-.PHONY: all build build-go build-zig build-rust build-all clean clean-go clean-zig clean-rust clean-all check-prereqs install-prereqs help test test-go test-zig test-rust test-all validate-zig compare-size build-bench benchmark
+.PHONY: all build build-go build-zig build-rust build-all clean clean-go clean-zig clean-rust clean-all check-prereqs install-prereqs help test test-go test-zig test-rust test-all validate-zig compare-size build-bench benchmark test-e2e build-e2e
 
 # Default target builds all implementations
 all: build-all
@@ -249,6 +249,17 @@ benchmark: build-bench
 	@echo "Running benchmark..."
 	@echo "This will test the log monitoring performance"
 
+# Run end-to-end tests
+test-e2e:
+	@echo "Running end-to-end tests..."
+	@chmod +x e2e/test.sh
+	@./e2e/test.sh
+
+# Build binaries for E2E tests (local use)
+build-e2e: build-go
+	go build -o sentry-mock ./cmd/sentry-mock
+	go build -o loggen ./cmd/loggen
+
 # Help target
 help:
 	@echo "sentrylogmon Makefile"
@@ -274,6 +285,7 @@ help:
 	@echo "  make test-zig           - Run Zig tests (or validation if Zig not installed)"
 	@echo "  make test-rust          - Run Rust tests"
 	@echo "  make test               - Alias for test-go"
+	@echo "  make test-e2e           - Run end-to-end tests using Docker Compose"
 	@echo "  make validate-zig       - Validate Zig code structure without building"
 	@echo "  make compare-size       - Compare binary sizes of all implementations"
 	@echo "  make build-bench        - Build benchmark tool"

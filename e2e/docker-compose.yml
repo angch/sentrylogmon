@@ -1,0 +1,49 @@
+services:
+  sentry-mock:
+    build:
+      context: ..
+      dockerfile: e2e/Dockerfile
+    entrypoint: ["/bin/sentry-mock"]
+    ports:
+      - "8080:8080"
+    networks:
+      - e2enet
+
+  loggen:
+    build:
+      context: ..
+      dockerfile: e2e/Dockerfile
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          /bin/loggen --size 1MB --format nginx >> /logs/access.log
+          sleep 10
+        done
+    volumes:
+      - shared-logs:/logs
+    networks:
+      - e2enet
+
+  sentrylogmon:
+    build:
+      context: ..
+      dockerfile: e2e/Dockerfile
+    entrypoint: ["/bin/sentrylogmon"]
+    command: ["--file", "/logs/access.log", "--format", "nginx", "--verbose"]
+    environment:
+      - SENTRY_DSN=http://testkey@sentry-mock:8080/1
+      - SENTRY_ENVIRONMENT=e2e-test
+    volumes:
+      - shared-logs:/logs
+    depends_on:
+      - sentry-mock
+      - loggen
+    networks:
+      - e2enet
+
+volumes:
+  shared-logs:
+
+networks:
+  e2enet:

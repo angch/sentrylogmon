@@ -54,8 +54,9 @@ This file tracks potential features and improvements for `sentrylogmon`.
   - Fuzz the detector logic with random inputs to find edge cases.
   - *Implemented in `detectors/fuzz_test.go`.*
 
-- [ ] **End-to-End Tests**
+- [x] **End-to-End Tests**
   - Containerized tests using Docker Compose (Sentry mock + log generator + sentrylogmon).
+  - *Implemented in `e2e/` with `sentry-mock` and `docker-compose.yml`.*
 
 ## Feature Parity (Rust)
 
