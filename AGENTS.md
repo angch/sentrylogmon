@@ -355,8 +355,9 @@ When enhancing this project:
 | 2026-01-27 | Ignore non-txt files in testdata | Prevent editor backups and artifacts from breaking data-driven tests |
 | 2026-01-27 | Added Configuration File Support | Support for complex multi-monitor setups via YAML config |
 | 2026-02-02 | User-isolated IPC directory | Security: Prevent local DoS/collision by using `/tmp/sentrylogmon-<uid>` (Unix) or per-user temp (Windows) |
+| 2026-02-05 | Observability Enhancements | Added `/healthz` endpoint and `last_activity` metric with time-based throttling (1s) to improve liveness monitoring and silent failure detection without high CPU overhead. |
 
 ---
 
-**Last Updated**: 2026-02-02
+**Last Updated**: 2026-02-05
 **Maintained By**: Project contributors and LLM agents
