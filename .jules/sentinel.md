@@ -30,3 +30,10 @@
 1. Avoid hardcoded paths in shared directories.
 2. Namespace temporary directories using the user's UID (e.g., `/tmp/app-<uid>`) or use `os.MkdirTemp`.
 3. On Windows, rely on `os.TempDir()` which is typically per-user.
+
+## 2026-02-20 - Heuristic Redaction False Positives
+**Vulnerability:** The command line sanitizer used suffix matching without checking for word boundaries, causing arguments like `-pSecret` (where `pSecret` ends in `Secret`) to be incorrectly identified as a sensitive flag name. This resulted in the redaction of the *next* argument (often legitimate data like database names) while leaving the sensitive value itself exposed.
+**Learning:** Heuristic suffix matching for security redaction must enforce boundaries. Simply ending with "secret" or "password" is insufficient for short flags or attached values. Requiring a separator (e.g., `-`, `_`, `.`) or an exact match ensures that only likely flag names are targeted.
+**Prevention:**
+1. When using suffix matching for flag detection, enforce that the suffix is preceded by a separator or constitutes the entire string.
+2. Avoid applying generic flag heuristics to arguments that don't look like standard flags (e.g. short flags with attached values).
