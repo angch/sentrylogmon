@@ -28,10 +28,19 @@ var (
 		},
 		[]string{"source", "status"},
 	)
+
+	LastActivityTimestamp = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "sentrylogmon_last_activity_timestamp_seconds",
+			Help: "Unix timestamp of the last activity (read line) for the source.",
+		},
+		[]string{"source"},
+	)
 )
 
 func init() {
 	prometheus.MustRegister(ProcessedLinesTotal)
 	prometheus.MustRegister(IssuesDetectedTotal)
 	prometheus.MustRegister(SentryEventsTotal)
+	prometheus.MustRegister(LastActivityTimestamp)
 }
