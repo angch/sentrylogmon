@@ -14,6 +14,7 @@ var sensitiveFlags = map[string]bool{
 	"--client-secret": true,
 	"--access-token":  true,
 	"--auth-token":    true,
+	"--session-id":    true,
 }
 
 var sensitiveSuffixes = []string{
@@ -25,6 +26,8 @@ var sensitiveSuffixes = []string{
 	".key", // Matches file.key
 	"signature",
 	"credential",
+	"cookie",
+	"session",
 }
 
 // SanitizeCommand joins command arguments into a string, redacting sensitive information.
@@ -109,7 +112,24 @@ func isSensitiveKey(key string) bool {
 	// Suffix matches
 	for _, suffix := range sensitiveSuffixes {
 		if strings.HasSuffix(lowerKey, suffix) {
-			return true
+			// If the match is the entire string, it's a match
+			if len(lowerKey) == len(suffix) {
+				return true
+			}
+
+			// If the suffix itself starts with a separator, it implies a boundary
+			if suffix[0] == '-' || suffix[0] == '_' || suffix[0] == '.' {
+				return true
+			}
+
+			// Otherwise, check if the suffix is preceded by a separator
+			matchIndex := len(lowerKey) - len(suffix)
+			if matchIndex > 0 {
+				charBefore := lowerKey[matchIndex-1]
+				if charBefore == '-' || charBefore == '_' || charBefore == '.' {
+					return true
+				}
+			}
 		}
 	}
 	return false

@@ -115,6 +115,21 @@ func TestSanitizeCommand(t *testing.T) {
 			input:    []string{"app", "--password", "-secret-"},
 			expected: "app --password [REDACTED]",
 		},
+		{
+			name:     "Attached sensitive flag value (false positive fix)",
+			input:    []string{"mysql", "-pSecret", "production_db"},
+			expected: "mysql -pSecret production_db",
+		},
+		{
+			name:     "Session ID flag",
+			input:    []string{"app", "--session-id", "sess_123"},
+			expected: "app --session-id [REDACTED]",
+		},
+		{
+			name:     "Cookie flag",
+			input:    []string{"curl", "--cookie", "session=123"},
+			expected: "curl --cookie [REDACTED]",
+		},
 	}
 
 	for _, tt := range tests {
