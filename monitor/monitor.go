@@ -563,6 +563,24 @@ func (m *Monitor) sendToSentry(line string, meta BatchMetadata) {
 			scope.SetTag("syslog_priority", strconv.Itoa(meta.SyslogPri.Pri))
 			scope.SetTag("syslog_facility", strconv.Itoa(meta.SyslogPri.Facility))
 			scope.SetTag("syslog_severity", strconv.Itoa(meta.SyslogPri.Severity))
+
+			// Map severity to Sentry Level
+			var level sentry.Level
+			switch meta.SyslogPri.Severity {
+			case 0, 1, 2: // Emergency, Alert, Critical
+				level = sentry.LevelFatal
+			case 3: // Error
+				level = sentry.LevelError
+			case 4: // Warning
+				level = sentry.LevelWarning
+			case 5, 6: // Notice, Informational
+				level = sentry.LevelInfo
+			case 7: // Debug
+				level = sentry.LevelDebug
+			default:
+				level = sentry.LevelInfo
+			}
+			scope.SetLevel(level)
 		}
 
 		scope.SetExtra("raw_line", line)
