@@ -131,3 +131,12 @@ strip target/release/sentrylogmon
 ## License
 
 MIT License - same as the main project
+
+## Agent Development Guidelines
+
+1.  **Feature Parity**: The Rust version must follow the Go version's feature sets. Any new feature added to Go should be ported to Rust.
+2.  **Static Linking**: The release binary must be built as a statically linked binary for `amd64` (using `musl` target).
+3.  **Testing**:
+    *   Unit tests should cover individual components.
+    *   Integration tests must use the shared `testdata/` directory to ensure consistent behavior between Go and Rust versions.
+    *   Run tests via `make test-rust` or `cargo test` in the `rust` directory.
