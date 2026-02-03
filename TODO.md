@@ -28,6 +28,11 @@ This file tracks potential features and improvements for `sentrylogmon`.
   - Support routing different log sources to different Sentry DSNs/Projects.
   - *Implemented in `monitor/monitor.go` allowing per-monitor Sentry config.*
 
+- [x] **Observability Enhancements**
+  - Add `/healthz` endpoint for liveness probes.
+  - Add `last_activity_timestamp` metric to detect silent log sources.
+  - *Implemented in `main.go` and `monitor/monitor.go`.*
+
 ## Improvements
 
 - [x] **Zig Pattern Matching Optimization**

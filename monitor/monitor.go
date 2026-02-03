@@ -256,6 +256,7 @@ type Monitor struct {
 	metricIssuesDetected prometheus.Counter
 	metricSentrySent     prometheus.Counter
 	metricSentryDropped  prometheus.Counter
+	metricLastActivity   prometheus.Gauge
 
 	// Buffering
 	buffer           strings.Builder
@@ -291,6 +292,7 @@ func New(ctx context.Context, source sources.LogSource, detector detectors.Detec
 	m.metricIssuesDetected = metrics.IssuesDetectedTotal.With(prometheus.Labels{"source": source.Name()})
 	m.metricSentrySent = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "sent"})
 	m.metricSentryDropped = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "dropped"})
+	m.metricLastActivity = metrics.LastActivityTimestamp.With(prometheus.Labels{"source": source.Name()})
 
 	// Initialize Sentry Hub
 	if opts.SentryDSN != "" {
@@ -359,8 +361,16 @@ func (m *Monitor) Start() {
 		buf := make([]byte, 0, MaxScanTokenSize)
 		scanner.Buffer(buf, MaxScanTokenSize)
 
+		var lastMetricUpdateTime time.Time
 		for scanner.Scan() {
 			m.metricProcessedLines.Inc()
+
+			now := time.Now()
+			if now.Sub(lastMetricUpdateTime) > 1*time.Second {
+				m.metricLastActivity.Set(float64(now.Unix()))
+				lastMetricUpdateTime = now
+			}
+
 			lineBytes := scanner.Bytes()
 			if m.Detector.Detect(lineBytes) {
 				if m.ExclusionDetector != nil && m.ExclusionDetector.Detect(lineBytes) {
@@ -379,6 +389,7 @@ func (m *Monitor) Start() {
 
 		// Flush any remaining buffer
 		m.forceFlush()
+		m.metricLastActivity.Set(float64(time.Now().Unix()))
 
 		if err := scanner.Err(); err != nil {
 			// Suppress specific errors when stopping on EOF is enabled
