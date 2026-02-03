@@ -29,19 +29,50 @@ var (
 	// [27/Oct/2023:10:00:00 +0000]
 	timestampRegexNginxAccess = regexp.MustCompile(`\[(\d{2}/[A-Z][a-z]{2}/\d{4}:\d{2}:\d{2}:\d{2}\s+[+-]\d{4})\]`)
 
-	syslogPriRegex = regexp.MustCompile(`^<(\d{1,3})>`)
 )
 
 func extractSyslogPriority(line []byte) (int, int, int, bool) {
-	if matches := syslogPriRegex.FindSubmatch(line); len(matches) == 2 {
-		priStr := string(matches[1])
-		if pri, err := strconv.Atoi(priStr); err == nil {
-			facility := pri / 8
-			severity := pri % 8
-			return pri, facility, severity, true
+	// Fast path: must start with '<'
+	if len(line) < 3 || line[0] != '<' {
+		return 0, 0, 0, false
+	}
+
+	// Find closing '>'
+	// PRI is 1-3 digits. So '>' can be at index 2, 3, or 4.
+	// line[0] is '<'
+	// line[1] is digit
+
+	end := -1
+	// Optimization: check up to index 4 (length 5: <123>)
+	limit := 5
+	if len(line) < limit {
+		limit = len(line)
+	}
+
+	for i := 1; i < limit; i++ {
+		if line[i] == '>' {
+			end = i
+			break
 		}
 	}
-	return 0, 0, 0, false
+
+	if end == -1 || end == 1 { // Empty or not found
+		return 0, 0, 0, false
+	}
+
+	// Parse number between 1 and end
+	pri := 0
+	for i := 1; i < end; i++ {
+		b := line[i]
+		if b < '0' || b > '9' {
+			return 0, 0, 0, false
+		}
+		pri = pri*10 + int(b-'0')
+	}
+
+	facility := pri / 8
+	severity := pri % 8
+	return pri, facility, severity, true
 }
 
 func parseDmesgTimestamp(line []byte) (float64, string, bool) {
