@@ -43,3 +43,6 @@ A heap profile was captured under load (100,000 log lines) using `net/http/pprof
 ## Agent Notes
 
 - 2026-02-04: Rust `--status` table output now uses dynamic column widths and a deterministic formatter (`format_instance_table`). The helper relies on fixed-width start timestamps (`%Y-%m-%d %H:%M:%S`) and aligns the DETAILS column based on max widths. Tests validate alignment by matching DETAILS column offsets rather than exact timestamps.
+- 2026-02-04: Zig `--status` output updated to use `TabWriter` for dynamic column alignment, matching Go behavior. Implementation notes:
+  - Zig 0.15.2 `std.fs.File.stdout().writer()` requires a buffer argument and returns a struct where the `Writer` interface is accessed via `.interface` field.
+  - `std.ArrayList` behaves like `std.ArrayListUnmanaged` in this version (requires explicit allocator for methods).

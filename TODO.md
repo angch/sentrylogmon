@@ -62,7 +62,7 @@ This file tracks active work items to bring documentation and implementations (R
   - Add `--metrics-port` argument and config support.
   - Implement an HTTP server (using `std.http.Server` or similar) to expose `/metrics` and `/healthz`.
 
-- [ ] **Improve Status Output Alignment**
+- [x] **Improve Status Output Alignment**
   - Implement tab-writer style alignment for the status table instead of relying on simple tabs `\t`, to ensure consistent column spacing.
 
 - [ ] **Implement pprof Support**
