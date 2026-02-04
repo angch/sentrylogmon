@@ -61,5 +61,8 @@ This file contains completed features and improvements for `sentrylogmon`, migra
 - **Improve Status Output Alignment**: Implemented tab-writer style alignment.
 - **Implement pprof Support**: Investigated and implemented pprof-compatible endpoints.
 
+### Performance Optimization
+- **Refactor Timestamp Extraction for Performance**: Centralized timestamp parsing logic in `detectors/timestamps.go`, implemented `TimestampExtractor` interface in `DmesgDetector` and `NginxDetector`, and updated `Monitor` to use the interface to reduce memory allocations and CPU usage.
+
 ### General
 - **Profile Memory Usage**: Profiled memory usage to identify bottlenecks.
