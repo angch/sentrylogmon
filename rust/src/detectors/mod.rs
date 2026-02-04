@@ -230,15 +230,18 @@ fn are_headers_related(h1: &str, h2: &str) -> bool {
 }
 
 pub fn get_detector(format: &str, pattern: &str) -> Result<Box<dyn Detector>> {
-    if !pattern.is_empty() && format != "json" {
-        return Ok(Box::new(GenericDetector::new(pattern)?));
-    }
-
     match format {
         "nginx" => Ok(Box::new(NginxDetector::new()?)),
         "nginx-error" => Ok(Box::new(NginxErrorDetector::new()?)),
         "dmesg" => Ok(Box::new(DmesgDetector::new()?)),
         "json" => Ok(Box::new(JsonDetector::new(pattern)?)),
+        "custom" | "" => {
+            if !pattern.is_empty() {
+                Ok(Box::new(GenericDetector::new(pattern)?))
+            } else {
+                Ok(Box::new(GenericDetector::new("(?i)error")?))
+            }
+        }
         _ => Ok(Box::new(GenericDetector::new("(?i)error")?)),
     }
 }
@@ -249,6 +252,27 @@ mod tests {
     use std::fs;
     use std::io::BufRead;
     use std::path::Path;
+
+    #[test]
+    fn test_get_detector_priority() -> Result<()> {
+        // Case 1: Format overrides pattern
+        // "nginx" format uses a regex that includes "emerg".
+        // "Error" pattern (default) does NOT include "emerg" (GenericDetector is case sensitive unless (?i) used).
+
+        let d = get_detector("nginx", "Error")?;
+        assert!(d.detect(b"2023/01/01 12:00:00 [emerg] 12345#0: something bad"));
+
+        // Case 2: Custom pattern
+        let d = get_detector("custom", "(?i)custom")?;
+        assert!(d.detect(b"This is a CUSTOM error"));
+        assert!(!d.detect(b"This is a regular error")); // "regular error" doesn't match "custom"
+
+        // Case 3: Fallback to pattern if format is empty
+        let d = get_detector("", "(?i)fallback")?;
+        assert!(d.detect(b"fallback error"));
+
+        Ok(())
+    }
 
     #[test]
     fn test_detectors_with_test_data() -> Result<()> {

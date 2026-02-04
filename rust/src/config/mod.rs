@@ -81,6 +81,10 @@ pub struct Args {
     #[arg(long)]
     pub syslog: Option<String>,
 
+    /// Detector format (dmesg, nginx, custom)
+    #[arg(long)]
+    pub format: Option<String>,
+
     /// Pattern to match
     #[arg(long, default_value = "Error")]
     pub pattern: String,
@@ -129,7 +133,10 @@ pub struct Config {
 impl Config {
     pub fn load() -> Result<Self> {
         let args = Args::parse();
+        Self::from_args(args)
+    }
 
+    fn from_args(args: Args) -> Result<Self> {
         let config = if let Some(config_path) = &args.config {
             let content = std::fs::read_to_string(config_path)
                 .with_context(|| format!("Failed to read config file: {:?}", config_path))?;
@@ -160,6 +167,7 @@ impl Config {
         } else {
             // CLI mode
             let mut monitors = Vec::new();
+            let format_arg = args.format.clone().unwrap_or_default();
 
             if args.dmesg {
                 monitors.push(MonitorConfig {
@@ -168,7 +176,11 @@ impl Config {
                     path: String::new(),
                     args: String::new(),
                     pattern: args.pattern.clone(),
-                    format: "dmesg".to_string(),
+                    format: if format_arg.is_empty() {
+                        "dmesg".to_string()
+                    } else {
+                        format_arg.clone()
+                    },
                     exclude_pattern: args.exclude.clone().unwrap_or_default(),
                     rate_limit_burst: None,
                     rate_limit_window: None,
@@ -180,7 +192,7 @@ impl Config {
                     path: file_path.to_string_lossy().to_string(),
                     args: String::new(),
                     pattern: args.pattern.clone(),
-                    format: String::new(),
+                    format: format_arg.clone(),
                     exclude_pattern: args.exclude.clone().unwrap_or_default(),
                     rate_limit_burst: None,
                     rate_limit_window: None,
@@ -192,7 +204,7 @@ impl Config {
                     path: String::new(),
                     args: journalctl_args.clone(),
                     pattern: args.pattern.clone(),
-                    format: String::new(),
+                    format: format_arg.clone(),
                     exclude_pattern: args.exclude.clone().unwrap_or_default(),
                     rate_limit_burst: None,
                     rate_limit_window: None,
@@ -204,7 +216,7 @@ impl Config {
                     path: String::new(),
                     args: cmd.clone(),
                     pattern: args.pattern.clone(),
-                    format: String::new(),
+                    format: format_arg.clone(),
                     exclude_pattern: args.exclude.clone().unwrap_or_default(),
                     rate_limit_burst: None,
                     rate_limit_window: None,
@@ -216,7 +228,7 @@ impl Config {
                     path: syslog_addr.clone(),
                     args: String::new(),
                     pattern: args.pattern.clone(),
-                    format: String::new(),
+                    format: format_arg.clone(),
                     exclude_pattern: args.exclude.clone().unwrap_or_default(),
                     rate_limit_burst: None,
                     rate_limit_window: None,
@@ -250,5 +262,64 @@ impl Config {
         }
 
         Ok(config)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_config_from_args_with_format() {
+        let args = Args::parse_from(&[
+            "sentrylogmon",
+            "--file", "/tmp/test.log",
+            "--format", "nginx",
+            "--dsn", "https://example.com"
+        ]);
+
+        let config = Config::from_args(args).unwrap();
+        assert_eq!(config.monitors.len(), 1);
+        assert_eq!(config.monitors[0].format, "nginx");
+    }
+
+    #[test]
+    fn test_config_from_args_without_format() {
+        let args = Args::parse_from(&[
+            "sentrylogmon",
+            "--file", "/tmp/test.log",
+            "--dsn", "https://example.com"
+        ]);
+
+        let config = Config::from_args(args).unwrap();
+        assert_eq!(config.monitors.len(), 1);
+        assert_eq!(config.monitors[0].format, "");
+    }
+
+    #[test]
+    fn test_config_from_args_dmesg_default_format() {
+         let args = Args::parse_from(&[
+            "sentrylogmon",
+            "--dmesg",
+            "--dsn", "https://example.com"
+        ]);
+
+        let config = Config::from_args(args).unwrap();
+        assert_eq!(config.monitors.len(), 1);
+        assert_eq!(config.monitors[0].format, "dmesg");
+    }
+
+    #[test]
+    fn test_config_from_args_dmesg_override_format() {
+         let args = Args::parse_from(&[
+            "sentrylogmon",
+            "--dmesg",
+            "--format", "custom",
+            "--dsn", "https://example.com"
+        ]);
+
+        let config = Config::from_args(args).unwrap();
+        assert_eq!(config.monitors.len(), 1);
+        assert_eq!(config.monitors[0].format, "custom");
     }
 }

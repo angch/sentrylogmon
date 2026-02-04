@@ -27,7 +27,7 @@ This file tracks active work items to bring documentation and implementations (R
   - Should include monitor names and types in the `DETAILS` column.
   - Detect TTY to decide whether to print table or JSON (if JSON output is desired for scripting, though Go defaults to table for TTY).
 
-- [ ] **Implement --format CLI Argument**
+- [x] **Implement --format CLI Argument**
   - Add `--format` argument to `Args` struct in `config/mod.rs`.
   - Pass this format to the detector logic to override defaults (parity with Go).
 
