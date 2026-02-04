@@ -1,0 +1,9 @@
+goos: linux
+goarch: amd64
+pkg: github.com/angch/sentrylogmon/monitor
+cpu: Intel(R) Xeon(R) Processor @ 2.30GHz
+BenchmarkMonitorLoop-4        	    1290	   1313145 ns/op	 1096635 B/op	    1002 allocs/op
+BenchmarkProcessMatch-4       	 1584444	      1441 ns/op	     523 B/op	       1 allocs/op
+BenchmarkExtractTimestamp-4   	  364808	      3253 ns/op	     176 B/op	       7 allocs/op
+PASS
+ok  	github.com/angch/sentrylogmon/monitor	7.014s
