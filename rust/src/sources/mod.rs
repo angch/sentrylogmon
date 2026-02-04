@@ -5,6 +5,7 @@ pub mod command;
 pub mod dmesg;
 pub mod file;
 pub mod journalctl;
+pub mod syslog;
 
 #[async_trait]
 pub trait LogSource: Send + Sync {

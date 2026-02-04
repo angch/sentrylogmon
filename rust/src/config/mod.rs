@@ -77,6 +77,10 @@ pub struct Args {
     #[arg(long)]
     pub command: Option<String>,
 
+    /// Monitor syslog (e.g. udp:127.0.0.1:5514)
+    #[arg(long)]
+    pub syslog: Option<String>,
+
     /// Pattern to match
     #[arg(long, default_value = "Error")]
     pub pattern: String,
@@ -199,6 +203,18 @@ impl Config {
                     monitor_type: "command".to_string(),
                     path: String::new(),
                     args: cmd.clone(),
+                    pattern: args.pattern.clone(),
+                    format: String::new(),
+                    exclude_pattern: args.exclude.clone().unwrap_or_default(),
+                    rate_limit_burst: None,
+                    rate_limit_window: None,
+                });
+            } else if let Some(syslog_addr) = &args.syslog {
+                monitors.push(MonitorConfig {
+                    name: "syslog".to_string(),
+                    monitor_type: "syslog".to_string(),
+                    path: syslog_addr.clone(),
+                    args: String::new(),
                     pattern: args.pattern.clone(),
                     format: String::new(),
                     exclude_pattern: args.exclude.clone().unwrap_or_default(),

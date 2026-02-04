@@ -16,7 +16,7 @@ This file tracks active work items to bring documentation and implementations (R
 
 ## Rust Parity
 
-- [ ] **Implement Syslog Source**
+- [x] **Implement Syslog Source**
   - Implement a `SyslogSource` struct (likely in `sources/syslog.rs`) that supports both UDP and TCP listeners.
   - Ensure it implements the `LogSource` trait.
   - Update `main.rs` to handle `--syslog` flag and corresponding config field.
