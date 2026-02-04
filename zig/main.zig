@@ -9,6 +9,7 @@ const ipc = @import("ipc.zig");
 const syslog = @import("syslog.zig");
 const utils = @import("utils.zig");
 const metrics = @import("metrics.zig");
+const tabwriter = @import("tabwriter.zig");
 
 const RateLimiter = struct {
     limit: usize,
@@ -47,11 +48,11 @@ fn formatDuration(allocator: std.mem.Allocator, seconds: i64) ![]u8 {
     const sec = @rem(rem_hours, 60);
 
     if (days > 0) {
-        return std.fmt.allocPrint(allocator, "{d}d {d}h {d}m", .{days, hours, minutes});
+        return std.fmt.allocPrint(allocator, "{d}d {d}h {d}m", .{ days, hours, minutes });
     } else if (hours > 0) {
-        return std.fmt.allocPrint(allocator, "{d}h {d}m {d}s", .{hours, minutes, sec});
+        return std.fmt.allocPrint(allocator, "{d}h {d}m {d}s", .{ hours, minutes, sec });
     } else if (minutes > 0) {
-        return std.fmt.allocPrint(allocator, "{d}m {d}s", .{minutes, sec});
+        return std.fmt.allocPrint(allocator, "{d}m {d}s", .{ minutes, sec });
     } else {
         return std.fmt.allocPrint(allocator, "{d}s", .{sec});
     }
@@ -69,10 +70,7 @@ fn formatDate(allocator: std.mem.Allocator, timestamp: i64) ![]u8 {
     const minutes = day_seconds.getMinutesIntoHour();
     const seconds = day_seconds.getSecondsIntoMinute();
 
-    return std.fmt.allocPrint(allocator, "{d:0>4}-{d:0>2}-{d:0>2} {d:0>2}:{d:0>2}:{d:0>2}", .{
-        year.year, month_day.month.numeric(), month_day.day_index + 1,
-        hours, minutes, seconds
-    });
+    return std.fmt.allocPrint(allocator, "{d:0>4}-{d:0>2}-{d:0>2} {d:0>2}:{d:0>2}:{d:0>2}", .{ year.year, month_day.month.numeric(), month_day.day_index + 1, hours, minutes, seconds });
 }
 
 fn getDetails(allocator: std.mem.Allocator, inst: ipc.StatusResponse) ![]u8 {
@@ -98,47 +96,47 @@ fn getDetails(allocator: std.mem.Allocator, inst: ipc.StatusResponse) ![]u8 {
             try details.writer(allocator).print("({s})", .{type_str});
 
             if (details.items.len > 100) {
-                 try details.writer(allocator).writeAll("...");
-                 break;
+                try details.writer(allocator).writeAll("...");
+                break;
             }
         }
         return details.toOwnedSlice(allocator);
     } else {
         if (inst.command_line.len > 0) {
-             var details = std.ArrayList(u8).empty;
-             defer details.deinit(allocator);
+            var details = std.ArrayList(u8).empty;
+            defer details.deinit(allocator);
 
-             var iter = std.mem.tokenizeScalar(u8, inst.command_line, ' ');
-             _ = iter.next();
+            var iter = std.mem.tokenizeScalar(u8, inst.command_line, ' ');
+            _ = iter.next();
 
-             while (iter.next()) |arg| {
-                 if (std.mem.eql(u8, arg, "--dmesg")) {
-                     if (details.items.len > 0) try details.writer(allocator).writeAll(", ");
-                     try details.writer(allocator).writeAll("dmesg");
-                 } else if (std.mem.eql(u8, arg, "--file")) {
-                     if (iter.next()) |val| {
-                         if (details.items.len > 0) try details.writer(allocator).writeAll(", ");
-                         try details.writer(allocator).print("file: {s}", .{val});
-                     }
-                 } else if (std.mem.eql(u8, arg, "--journalctl")) {
-                     if (details.items.len > 0) try details.writer(allocator).writeAll(", ");
-                     if (iter.next()) |val| {
-                         try details.writer(allocator).print("journalctl: {s}", .{val});
-                     } else {
-                         try details.writer(allocator).writeAll("journalctl");
-                     }
-                 } else if (std.mem.eql(u8, arg, "--syslog")) {
-                      if (iter.next()) |val| {
-                         if (details.items.len > 0) try details.writer(allocator).writeAll(", ");
-                         try details.writer(allocator).print("syslog: {s}", .{val});
-                     }
-                 }
-             }
+            while (iter.next()) |arg| {
+                if (std.mem.eql(u8, arg, "--dmesg")) {
+                    if (details.items.len > 0) try details.writer(allocator).writeAll(", ");
+                    try details.writer(allocator).writeAll("dmesg");
+                } else if (std.mem.eql(u8, arg, "--file")) {
+                    if (iter.next()) |val| {
+                        if (details.items.len > 0) try details.writer(allocator).writeAll(", ");
+                        try details.writer(allocator).print("file: {s}", .{val});
+                    }
+                } else if (std.mem.eql(u8, arg, "--journalctl")) {
+                    if (details.items.len > 0) try details.writer(allocator).writeAll(", ");
+                    if (iter.next()) |val| {
+                        try details.writer(allocator).print("journalctl: {s}", .{val});
+                    } else {
+                        try details.writer(allocator).writeAll("journalctl");
+                    }
+                } else if (std.mem.eql(u8, arg, "--syslog")) {
+                    if (iter.next()) |val| {
+                        if (details.items.len > 0) try details.writer(allocator).writeAll(", ");
+                        try details.writer(allocator).print("syslog: {s}", .{val});
+                    }
+                }
+            }
 
-             if (details.items.len == 0) {
-                 return allocator.dupe(u8, "legacy mode");
-             }
-             return details.toOwnedSlice(allocator);
+            if (details.items.len == 0) {
+                return allocator.dupe(u8, "legacy mode");
+            }
+            return details.toOwnedSlice(allocator);
         }
         return allocator.dupe(u8, "unknown mode");
     }
@@ -209,7 +207,12 @@ pub fn main() !void {
 
         const stdout = std.fs.File.stdout();
         if (stdout.isTty()) {
-            std.debug.print("PID\tSTARTED\tUPTIME\tVERSION\tDETAILS\n", .{});
+            var buf: [4096]u8 = undefined;
+            const w = stdout.writer(&buf);
+            var tw = tabwriter.TabWriter(@TypeOf(w.interface)).init(allocator, w.interface);
+            defer tw.deinit();
+
+            try tw.print("PID\tSTARTED\tUPTIME\tVERSION\tDETAILS\n", .{});
             for (instances.items) |inst| {
                 const start_ts = std.fmt.parseInt(i64, inst.start_time, 10) catch 0;
                 const now = std.time.timestamp();
@@ -224,8 +227,9 @@ pub fn main() !void {
                 const details = getDetails(allocator, inst) catch "error";
                 defer if (!std.mem.eql(u8, details, "error")) allocator.free(details);
 
-                std.debug.print("{d}\t{s}\t{s}\t{s}\t{s}\n", .{inst.pid, started_str, uptime_str, inst.version, details});
+                try tw.print("{d}\t{s}\t{s}\t{s}\t{s}\n", .{ inst.pid, started_str, uptime_str, inst.version, details });
             }
+            try tw.flush();
         } else {
             var buf: [4096]u8 = undefined;
             var w = stdout.writer(&buf);
@@ -278,12 +282,12 @@ pub fn main() !void {
         defer instances.deinit(allocator);
 
         for (instances.items) |inst| {
-            const socket_path = try std.fmt.allocPrint(allocator, "{s}/sentrylogmon.{d}.sock", .{socket_dir, inst.pid});
+            const socket_path = try std.fmt.allocPrint(allocator, "{s}/sentrylogmon.{d}.sock", .{ socket_dir, inst.pid });
             defer allocator.free(socket_path);
 
             std.debug.print("Requesting update for PID {d}...\n", .{inst.pid});
             ipc.requestUpdate(allocator, socket_path) catch |err| {
-                std.debug.print("Failed to update PID {d}: {}\n", .{inst.pid, err});
+                std.debug.print("Failed to update PID {d}: {}\n", .{ inst.pid, err });
                 continue;
             };
             std.debug.print("Update requested for PID {d}\n", .{inst.pid});
@@ -301,7 +305,7 @@ pub fn main() !void {
         std.debug.print("Failed to ensure secure IPC directory: {}\n", .{err});
     };
     const my_pid = std.os.linux.getpid();
-    const socket_path = try std.fmt.allocPrint(allocator, "{s}/sentrylogmon.{d}.sock", .{socket_dir, my_pid});
+    const socket_path = try std.fmt.allocPrint(allocator, "{s}/sentrylogmon.{d}.sock", .{ socket_dir, my_pid });
     // We leak socket_path (used by thread)
 
     // Capture raw args for restart
@@ -362,18 +366,18 @@ pub fn main() !void {
     var final_metrics_port: ?u16 = args.metrics_port;
     if (final_metrics_port == null) {
         if (config) |cfg| {
-             final_metrics_port = cfg.metrics_port;
+            final_metrics_port = cfg.metrics_port;
         }
     }
 
     if (final_metrics_port) |port| {
-         // Spawn metrics server thread
-         const t = try std.Thread.spawn(.{}, metrics.startServer, .{allocator, port, collector});
-         t.detach();
+        // Spawn metrics server thread
+        const t = try std.Thread.spawn(.{}, metrics.startServer, .{ allocator, port, collector });
+        t.detach();
     }
 
     // Start IPC Server
-    const ipc_thread = try std.Thread.spawn(.{}, ipc.startServer, .{allocator, socket_path, config, raw_args_slice, start_time});
+    const ipc_thread = try std.Thread.spawn(.{}, ipc.startServer, .{ allocator, socket_path, config, raw_args_slice, start_time });
     ipc_thread.detach();
 
     if (config) |cfg| {
@@ -389,8 +393,8 @@ pub fn main() !void {
             if (monitor.format) |fmt| monitor_args.format = fmt;
 
             if (monitor_args.dsn.len == 0) {
-                 std.debug.print("Skipping monitor {s}: No DSN configured\n", .{monitor.name});
-                 continue;
+                std.debug.print("Skipping monitor {s}: No DSN configured\n", .{monitor.name});
+                continue;
             }
 
             const limit = monitor.rate_limit_burst;
@@ -423,42 +427,42 @@ pub fn main() !void {
             }
 
             if (monitor.type == .file) {
-                 if (monitor.path) |p| {
-                     const t = try std.Thread.spawn(.{}, monitorFile, .{allocator, p, monitor.pattern, monitor.exclude_pattern, batcher, monitor_args});
-                     try threads.append(allocator, t);
-                 }
+                if (monitor.path) |p| {
+                    const t = try std.Thread.spawn(.{}, monitorFile, .{ allocator, p, monitor.pattern, monitor.exclude_pattern, batcher, monitor_args });
+                    try threads.append(allocator, t);
+                }
             } else if (monitor.type == .journalctl) {
-                 var argv = std.ArrayList([]const u8).empty;
-                 try argv.append(allocator, "journalctl");
-                 if (monitor.args) |a| {
-                     var iter = std.mem.tokenizeScalar(u8, a, ' ');
-                     while (iter.next()) |part| {
-                         try argv.append(allocator, part);
-                     }
-                 }
-                 const t = try std.Thread.spawn(.{}, monitorCommand, .{allocator, argv.items, monitor.pattern, monitor.exclude_pattern, batcher, monitor_args});
-                 try threads.append(allocator, t);
+                var argv = std.ArrayList([]const u8).empty;
+                try argv.append(allocator, "journalctl");
+                if (monitor.args) |a| {
+                    var iter = std.mem.tokenizeScalar(u8, a, ' ');
+                    while (iter.next()) |part| {
+                        try argv.append(allocator, part);
+                    }
+                }
+                const t = try std.Thread.spawn(.{}, monitorCommand, .{ allocator, argv.items, monitor.pattern, monitor.exclude_pattern, batcher, monitor_args });
+                try threads.append(allocator, t);
             } else if (monitor.type == .dmesg) {
-                 var argv = std.ArrayList([]const u8).empty;
-                 try argv.append(allocator, "dmesg");
-                 if (!args.oneshot) try argv.append(allocator, "-w");
-                 const t = try std.Thread.spawn(.{}, monitorCommand, .{allocator, argv.items, monitor.pattern, monitor.exclude_pattern, batcher, monitor_args});
-                 try threads.append(allocator, t);
+                var argv = std.ArrayList([]const u8).empty;
+                try argv.append(allocator, "dmesg");
+                if (!args.oneshot) try argv.append(allocator, "-w");
+                const t = try std.Thread.spawn(.{}, monitorCommand, .{ allocator, argv.items, monitor.pattern, monitor.exclude_pattern, batcher, monitor_args });
+                try threads.append(allocator, t);
             } else if (monitor.type == .command) {
-                 if (monitor.args) |cmd_str| {
-                     var argv = std.ArrayList([]const u8).empty;
-                     var iter = std.mem.tokenizeScalar(u8, cmd_str, ' ');
-                     while (iter.next()) |part| {
-                         try argv.append(allocator, part);
-                     }
-                     const t = try std.Thread.spawn(.{}, monitorCommand, .{allocator, argv.items, monitor.pattern, monitor.exclude_pattern, batcher, monitor_args});
-                     try threads.append(allocator, t);
-                 }
+                if (monitor.args) |cmd_str| {
+                    var argv = std.ArrayList([]const u8).empty;
+                    var iter = std.mem.tokenizeScalar(u8, cmd_str, ' ');
+                    while (iter.next()) |part| {
+                        try argv.append(allocator, part);
+                    }
+                    const t = try std.Thread.spawn(.{}, monitorCommand, .{ allocator, argv.items, monitor.pattern, monitor.exclude_pattern, batcher, monitor_args });
+                    try threads.append(allocator, t);
+                }
             } else if (monitor.type == .syslog) {
-                 if (monitor.path) |addr| {
-                     const t = try std.Thread.spawn(.{}, syslog.monitorSyslog, .{allocator, addr, monitor.pattern, monitor.exclude_pattern, batcher, monitor_args.verbose, monitor.format});
-                     try threads.append(allocator, t);
-                 }
+                if (monitor.path) |addr| {
+                    const t = try std.Thread.spawn(.{}, syslog.monitorSyslog, .{ allocator, addr, monitor.pattern, monitor.exclude_pattern, batcher, monitor_args.verbose, monitor.format });
+                    try threads.append(allocator, t);
+                }
             }
         }
 
@@ -862,7 +866,6 @@ fn monitorCommand(allocator: std.mem.Allocator, argv: []const []const u8, patter
     }
 }
 
-
 const MonitorContext = struct {
     allocator: std.mem.Allocator,
     args: Args,
@@ -1010,7 +1013,7 @@ fn parseDsn(allocator: std.mem.Allocator, dsn: []const u8) !ParsedDsn {
     const uri = try std.Uri.parse(dsn);
 
     const host = try allocator.dupe(u8, uri.host.?.percent_encoded);
-    
+
     // Extract public key from userinfo
     const public_key = if (uri.user) |user|
         try allocator.dupe(u8, user.percent_encoded)
@@ -1041,5 +1044,5 @@ test {
     _ = sysstat;
     _ = syslog;
     _ = utils;
+    _ = tabwriter;
 }
-
