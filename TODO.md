@@ -58,7 +58,7 @@ This file tracks active work items to bring documentation and implementations (R
   - Update `status` command to check if `stdout` is a terminal (isatty).
   - If not a terminal, output JSON instead of the table (parity with Go).
 
-- [ ] **Implement Metrics Server**
+- [x] **Implement Metrics Server**
   - Add `--metrics-port` argument and config support.
   - Implement an HTTP server (using `std.http.Server` or similar) to expose `/metrics` and `/healthz`.
 
