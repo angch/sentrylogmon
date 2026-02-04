@@ -54,7 +54,7 @@ This file tracks active work items to bring documentation and implementations (R
   - Calculate uptime from start time.
   - Format details to show monitor summary.
 
-- [ ] **Implement TTY Detection**
+- [x] **Implement TTY Detection**
   - Update `status` command to check if `stdout` is a terminal (isatty).
   - If not a terminal, output JSON instead of the table (parity with Go).
 
