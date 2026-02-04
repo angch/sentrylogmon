@@ -37,3 +37,29 @@ This file contains completed features and improvements for `sentrylogmon`, migra
 - **System Statistics**: Implemented collection of CPU, Memory, Load Average, and Top Processes.
 - **JsonDetector**: Implemented basic JSON pattern matching.
 - **Exclusion Patterns**: Added support for ignoring lines matching specific patterns.
+
+## 2026-02 Cleanup
+
+### Documentation Sync
+- **Update Go Documentation**: Updated `README.md` to explicitly list Syslog (UDP/TCP) as a supported log source.
+- **Update Rust Documentation**: Updated `rust/README.md` to note Syslog source status.
+- **Update Zig Documentation**: Updated `zig/README.md` to note Syslog status and reflect implemented features (Journalctl, Config File, Batching).
+
+### Rust Parity
+- **Implement Syslog Source**: Implemented `SyslogSource` (UDP/TCP) in `sources/syslog.rs` and updated `main.rs`.
+- **Update Status Output**: Improved `status` command to match Go's table format with TTY detection for JSON output.
+- **Implement --format CLI Argument**: Added `--format` support to override detector defaults.
+- **Implement Metrics Server**: Added `--metrics-port` and `/metrics`, `/healthz` endpoints.
+- **Improve Status Output Alignment**: Implemented dynamic table formatting.
+- **Implement pprof Support**: Investigated and implemented pprof-compatible endpoints.
+
+### Zig Parity
+- **Implement Syslog Source**: Implemented syslog receiver in `sources/syslog.zig`.
+- **Update Status Output**: Updated `status` logic to match Go's table format.
+- **Implement TTY Detection**: Added `isatty` check for JSON vs Table output.
+- **Implement Metrics Server**: Added metrics server with `/metrics` and `/healthz`.
+- **Improve Status Output Alignment**: Implemented tab-writer style alignment.
+- **Implement pprof Support**: Investigated and implemented pprof-compatible endpoints.
+
+### General
+- **Profile Memory Usage**: Profiled memory usage to identify bottlenecks.

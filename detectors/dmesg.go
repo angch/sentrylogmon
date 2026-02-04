@@ -103,6 +103,11 @@ func (d *DmesgDetector) TransformMessage(line []byte) []byte {
 	return line
 }
 
+// ExtractTimestamp extracts timestamp from dmesg line.
+func (d *DmesgDetector) ExtractTimestamp(line []byte) (float64, string, bool) {
+	return ParseDmesgTimestamp(line)
+}
+
 func areHeadersRelated(h1, h2 string) bool {
 	h1 = strings.TrimSpace(h1)
 	h2 = strings.TrimSpace(h2)

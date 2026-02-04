@@ -17,3 +17,9 @@ type MessageTransformer interface {
 	// TransformMessage returns the transformed message.
 	TransformMessage(line []byte) []byte
 }
+
+// TimestampExtractor is an interface for extracting timestamp from log lines.
+type TimestampExtractor interface {
+	// ExtractTimestamp returns the timestamp (unix float), string representation, and success boolean.
+	ExtractTimestamp(line []byte) (float64, string, bool)
+}

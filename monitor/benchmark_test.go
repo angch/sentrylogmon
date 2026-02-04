@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"bufio"
+	"context"
 	"strings"
 	"testing"
 
@@ -51,17 +52,72 @@ func BenchmarkMonitorLoop(b *testing.B) {
 func BenchmarkProcessMatch(b *testing.B) {
 	// Setup Sentry Mock
 	transport := &MockTransport{}
-	_ = sentry.Init(sentry.ClientOptions{
+	client, _ := sentry.NewClient(sentry.ClientOptions{
 		Transport: transport,
 	})
+	hub := sentry.NewHub(client, sentry.NewScope())
 
-	mon := &Monitor{
-		Source: &MockSource{content: ""},
+	det, _ := detectors.NewGenericDetector("error")
+	mon, err := New(context.Background(), &MockSource{content: ""}, det, nil, Options{})
+	if err != nil {
+		b.Fatalf("Failed to create monitor: %v", err)
 	}
-	// Pre-allocate buffer to avoid nil check issues if any (though slice defaults to nil is fine)
+	mon.Hub = hub
 
 	// Use a long line
 	line := "[100.0] " + strings.Repeat("a", 100)
+	lineBytes := []byte(line)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		mon.processMatch(lineBytes)
+	}
+}
+
+func BenchmarkProcessMatchDmesg(b *testing.B) {
+	// Setup Sentry Mock
+	transport := &MockTransport{}
+	client, _ := sentry.NewClient(sentry.ClientOptions{
+		Transport: transport,
+	})
+	hub := sentry.NewHub(client, sentry.NewScope())
+
+	det := detectors.NewDmesgDetector()
+	mon, err := New(context.Background(), &MockSource{content: ""}, det, nil, Options{})
+	if err != nil {
+		b.Fatalf("Failed to create monitor: %v", err)
+	}
+	mon.Hub = hub
+
+	// Dmesg line
+	line := "[ 123.456] " + strings.Repeat("a", 100)
+	lineBytes := []byte(line)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		mon.processMatch(lineBytes)
+	}
+}
+
+func BenchmarkProcessMatchNginx(b *testing.B) {
+	// Setup Sentry Mock
+	transport := &MockTransport{}
+	client, _ := sentry.NewClient(sentry.ClientOptions{
+		Transport: transport,
+	})
+	hub := sentry.NewHub(client, sentry.NewScope())
+
+	det := detectors.NewNginxDetector()
+	mon, err := New(context.Background(), &MockSource{content: ""}, det, nil, Options{})
+	if err != nil {
+		b.Fatalf("Failed to create monitor: %v", err)
+	}
+	mon.Hub = hub
+
+	// Nginx Error line
+	line := "2023/10/27 10:00:00 [error] " + strings.Repeat("a", 100)
 	lineBytes := []byte(line)
 
 	b.ResetTimer()
