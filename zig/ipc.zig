@@ -6,6 +6,16 @@ pub const StatusResponse = struct {
     start_time: []const u8,
     version: []const u8,
     config: ?config_mod.Config,
+    command_line: []const u8 = "",
+
+    pub fn deinit(self: *StatusResponse, allocator: std.mem.Allocator) void {
+        allocator.free(self.start_time);
+        allocator.free(self.version);
+        if (self.command_line.len > 0) allocator.free(self.command_line);
+        if (self.config) |*c| {
+            c.deinit(allocator);
+        }
+    }
 };
 
 pub fn ensureSecureDirectory(path: []const u8) !void {
@@ -66,6 +76,9 @@ fn handleConnection(allocator: std.mem.Allocator, stream: std.net.Stream, config
         const time_str = try std.fmt.allocPrint(allocator, "{d}", .{start_time});
         defer allocator.free(time_str);
 
+        const command_line = try std.mem.join(allocator, " ", args_list);
+        defer allocator.free(command_line);
+
         const pid: i32 = if (@import("builtin").os.tag == .linux) @intCast(std.os.linux.getpid()) else 0;
 
         const status = StatusResponse{
@@ -73,6 +86,7 @@ fn handleConnection(allocator: std.mem.Allocator, stream: std.net.Stream, config
             .start_time = time_str,
             .version = if (config) |c| c.sentry.release else "unknown",
             .config = config,
+            .command_line = command_line,
         };
 
         var json_buf = std.ArrayList(u8).empty; // Unmanaged
@@ -158,6 +172,7 @@ fn deepCopyStatus(allocator: std.mem.Allocator, src: StatusResponse) !StatusResp
     var dst = src;
     dst.start_time = try allocator.dupe(u8, src.start_time);
     dst.version = try allocator.dupe(u8, src.version);
+    dst.command_line = try allocator.dupe(u8, src.command_line);
     if (src.config) |c| {
         dst.config = try deepCopyConfig(allocator, c);
     }
@@ -209,9 +224,8 @@ test "IPC server and client" {
 
     std.Thread.sleep(100 * std.time.ns_per_ms);
 
-    const status = try getStatus(allocator, socket_path);
-    defer allocator.free(status.start_time);
-    defer allocator.free(status.version);
+    var status = try getStatus(allocator, socket_path);
+    defer status.deinit(allocator);
 
     const expected_pid = if (@import("builtin").os.tag == .linux) @as(i32, @intCast(std.os.linux.getpid())) else 0;
     try std.testing.expectEqual(expected_pid, status.pid);
