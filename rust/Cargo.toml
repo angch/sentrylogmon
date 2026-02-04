@@ -25,6 +25,7 @@ libc = "0.2"
 chrono = "0.4"
 axum = "0.7"
 prometheus = "0.13"
+pprof = { version = "0.13", features = ["protobuf-codec"] }
 
 [profile.release]
 opt-level = "z"     # Optimize for size

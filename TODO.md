@@ -39,7 +39,7 @@ This file tracks active work items to bring documentation and implementations (R
 - [x] **Improve Status Output Alignment**
   - Use a dynamic table formatter (like `tabwriter` crate or manual padding calculation) to match Go's alignment behavior, ensuring columns don't break with long values.
 
-- [ ] **Implement pprof Support**
+- [x] **Implement pprof Support**
   - Investigate and implement pprof-compatible endpoints (optional, for parity).
 
 ## Zig Parity
