@@ -25,7 +25,7 @@ See [rust/README.md](rust/README.md) for Rust-specific documentation and [zig/RE
 
 ## Features
 
-- **Multiple Log Sources**: Support for files, journalctl, dmesg, and custom command outputs
+- **Multiple Log Sources**: Support for files, journalctl, dmesg, syslog (UDP/TCP), and custom command outputs
 - **Pattern-based Detection**: Configurable regex patterns to identify issues
 - **Sentry Integration**: Direct integration with Sentry for error tracking and alerting
 - **System Status Context**: Automatically captures and attaches system state (CPU load, memory usage, top processes) to Sentry events
@@ -153,6 +153,15 @@ sentrylogmon --dsn="..." --dmesg
 **Monitor custom command output:**
 ```bash
 sentrylogmon --dsn="..." --command="tail -f /var/log/custom.log"
+```
+
+**Monitor syslog (UDP/TCP):**
+```bash
+# Listen on default port 514 (UDP)
+sentrylogmon --dsn="..." --syslog=":514"
+
+# Listen on TCP
+sentrylogmon --dsn="..." --syslog="tcp://0.0.0.0:6514"
 ```
 
 #### Detection Patterns

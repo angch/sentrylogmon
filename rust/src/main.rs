@@ -6,6 +6,7 @@ mod sources;
 mod sysstat;
 
 use anyhow::Result;
+use chrono::prelude::*;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -22,17 +23,10 @@ async fn main() -> Result<()> {
         let socket_dir = PathBuf::from("/tmp/sentrylogmon");
         let instances = ipc::list_instances(&socket_dir)?;
 
-        println!("PID\tSTART TIME (Unix)\tVERSION\tMONITORS");
-        for inst in instances {
-            let monitors = inst.config.map(|c| c.monitors.len()).unwrap_or(0);
-            let start_time = match inst.start_time.duration_since(SystemTime::UNIX_EPOCH) {
-                Ok(d) => d.as_secs(),
-                Err(_) => 0,
-            };
-            println!(
-                "{}\t{}\t{}\t{}",
-                inst.pid, start_time, inst.version, monitors
-            );
+        if is_terminal() {
+            print_instance_table(instances);
+        } else {
+            println!("{}", serde_json::to_string_pretty(&instances)?);
         }
         return Ok(());
     }
@@ -203,4 +197,109 @@ fn determine_detector_format(mon_cfg: &config::MonitorConfig) -> String {
         return "dmesg".to_string();
     }
     "custom".to_string()
+}
+
+fn is_terminal() -> bool {
+    unsafe { libc::isatty(libc::STDOUT_FILENO) == 1 }
+}
+
+fn format_duration(seconds: u64) -> String {
+    let days = seconds / 86400;
+    let hours = (seconds % 86400) / 3600;
+    let minutes = (seconds % 3600) / 60;
+    let secs = seconds % 60;
+
+    if days > 0 {
+        format!("{}d {}h {}m", days, hours, minutes)
+    } else if hours > 0 {
+        format!("{}h {}m {}s", hours, minutes, secs)
+    } else if minutes > 0 {
+        format!("{}m {}s", minutes, secs)
+    } else {
+        format!("{}s", secs)
+    }
+}
+
+fn print_instance_table(instances: Vec<ipc::StatusResponse>) {
+    if instances.is_empty() {
+        println!("No running instances found.");
+        return;
+    }
+
+    // PID STARTED UPTIME VERSION DETAILS
+    println!(
+        "{:<6} {:<20} {:<10} {:<8} DETAILS",
+        "PID", "STARTED", "UPTIME", "VERSION"
+    );
+
+    for inst in instances {
+        let start_dt: DateTime<Local> = inst.start_time.into();
+        let start_str = start_dt.format("%Y-%m-%d %H:%M:%S").to_string();
+
+        let uptime_secs = match SystemTime::now().duration_since(inst.start_time) {
+            Ok(d) => d.as_secs(),
+            Err(_) => 0,
+        };
+        let uptime_str = format_duration(uptime_secs);
+
+        let mut details = String::new();
+        if let Some(cfg) = &inst.config {
+            let limit = 60;
+            let monitors = &cfg.monitors;
+            let mut parts = Vec::new();
+
+            for m in monitors {
+                parts.push(format!("{}({})", m.name, m.monitor_type));
+            }
+
+            let mut buffer = String::new();
+            for (i, part) in parts.iter().enumerate() {
+                let sep = if i > 0 { ", " } else { "" };
+
+                if i == 0 {
+                    let remaining = parts.len() - 1;
+                    let suffix_len = if remaining > 0 { 12 } else { 0 };
+
+                    let mut part_display = part.clone();
+                    if part.len() + suffix_len > limit {
+                        let avail = limit - suffix_len - 3; // -3 for ...
+                        let avail = if avail < 10 { 10 } else { avail };
+                        if part.len() > avail {
+                            let safe_part: String = part.chars().take(avail).collect();
+                            part_display = format!("{}...", safe_part);
+                        }
+                    }
+                    buffer.push_str(&part_display);
+                    continue;
+                }
+
+                let reserved = if i == parts.len() - 1 { 0 } else { 12 };
+
+                if buffer.len() + sep.len() + part.len() + reserved <= limit {
+                    buffer.push_str(sep);
+                    buffer.push_str(part);
+                } else {
+                    let remaining = parts.len() - i;
+                    buffer.push_str(&format!(" (+{} more)", remaining));
+                    break;
+                }
+            }
+            details = buffer;
+        }
+
+        if details.is_empty() {
+            details = "-".to_string();
+        }
+
+        let version = if inst.version.is_empty() {
+            "-"
+        } else {
+            &inst.version
+        };
+
+        println!(
+            "{:<6} {:<20} {:<10} {:<8} {}",
+            inst.pid, start_str, uptime_str, version, details
+        );
+    }
 }
