@@ -7,10 +7,11 @@ import (
 )
 
 type StatusResponse struct {
-	PID       int            `json:"pid"`
-	StartTime time.Time      `json:"start_time"`
-	Version   string         `json:"version"` // from config
-	Config    *config.Config `json:"config"`
+	PID         int            `json:"pid"`
+	StartTime   time.Time      `json:"start_time"`
+	Version     string         `json:"version"` // from config
+	MemoryAlloc uint64         `json:"memory_alloc,omitempty"`
+	Config      *config.Config `json:"config"`
 }
 
 type UpdateRequest struct {

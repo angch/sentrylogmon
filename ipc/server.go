@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"runtime"
 	"time"
 
 	"github.com/angch/sentrylogmon/config"
@@ -36,11 +37,15 @@ func StartServer(socketPath string, cfg *config.Config, restartFunc func()) erro
 			return
 		}
 
+		var m runtime.MemStats
+		runtime.ReadMemStats(&m)
+
 		status := StatusResponse{
-			PID:       os.Getpid(),
-			StartTime: startTime,
-			Version:   cfg.Sentry.Release, // Assuming Release is version
-			Config:    cfg,
+			PID:         os.Getpid(),
+			StartTime:   startTime,
+			Version:     cfg.Sentry.Release, // Assuming Release is version
+			MemoryAlloc: m.Alloc,
+			Config:      cfg,
 		}
 
 		w.Header().Set("Content-Type", "application/json")
