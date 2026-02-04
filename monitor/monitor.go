@@ -74,6 +74,86 @@ func extractSyslogPriority(line []byte) (int, int, int, bool) {
 	return pri, facility, severity, true
 }
 
+func fastParseISO8601(line []byte) (float64, string, bool) {
+	if len(line) < 19 {
+		return 0, "", false
+	}
+	// Check YYYY-MM-DD
+	if line[4] != '-' || line[7] != '-' {
+		return 0, "", false
+	}
+	// Check [T ]
+	if line[10] != 'T' && line[10] != ' ' {
+		return 0, "", false
+	}
+	// Check HH:MM:SS
+	if line[13] != ':' || line[16] != ':' {
+		return 0, "", false
+	}
+
+	// Determine end of timestamp
+	end := 19
+	// Scan fractional seconds
+	if end < len(line) && line[end] == '.' {
+		end++
+		for end < len(line) && line[end] >= '0' && line[end] <= '9' {
+			end++
+		}
+	}
+	// Scan timezone
+	if end < len(line) {
+		if line[end] == 'Z' {
+			end++
+		} else if line[end] == '+' || line[end] == '-' {
+			end++
+			// Expect digits and colon
+			for end < len(line) && ((line[end] >= '0' && line[end] <= '9') || line[end] == ':') {
+				end++
+			}
+		}
+	}
+
+	tsStr := string(line[:end])
+
+	// Parse
+	var t time.Time
+	var err error
+
+	if line[10] == 'T' {
+		t, err = time.Parse(time.RFC3339Nano, tsStr)
+	} else {
+		// Space separator
+		// Try full layout if timezone present
+		if len(tsStr) > 19 {
+			t, err = time.Parse("2006-01-02 15:04:05.999999999Z07:00", tsStr)
+		} else {
+			t, err = time.Parse("2006-01-02 15:04:05", tsStr)
+		}
+	}
+
+	if err == nil {
+		return float64(t.Unix()) + float64(t.Nanosecond())/1e9, tsStr, true
+	}
+	return 0, "", false
+}
+
+func fastParseNginxError(line []byte) (float64, string, bool) {
+	// 2023/10/27 10:00:00
+	if len(line) < 19 {
+		return 0, "", false
+	}
+	if line[4] != '/' || line[7] != '/' || line[10] != ' ' || line[13] != ':' || line[16] != ':' {
+		return 0, "", false
+	}
+
+	tsStr := string(line[:19])
+	t, err := time.Parse("2006/01/02 15:04:05", tsStr)
+	if err == nil {
+		return float64(t.Unix()) + float64(t.Nanosecond())/1e9, tsStr, true
+	}
+	return 0, "", false
+}
+
 func parseDmesgTimestamp(line []byte) (float64, string, bool) {
 	if len(line) < 3 || line[0] != '[' {
 		return 0, "", false
@@ -135,6 +215,14 @@ func extractTimestamp(line []byte) (float64, string) {
 	// 2. Try ISO8601/RFC3339 or Nginx
 	// Starts with digit
 	if line[0] >= '0' && line[0] <= '9' {
+		if ts, tsStr, ok := fastParseISO8601(line); ok {
+			return ts, tsStr
+		}
+
+		if ts, tsStr, ok := fastParseNginxError(line); ok {
+			return ts, tsStr
+		}
+
 		if indices := timestampRegexISO.FindSubmatchIndex(line); len(indices) >= 4 {
 			tsStr := string(line[indices[2]:indices[3]])
 			// Try parsing with common layouts
