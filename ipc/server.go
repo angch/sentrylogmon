@@ -45,7 +45,7 @@ func StartServer(socketPath string, cfg *config.Config, restartFunc func()) erro
 			StartTime:   startTime,
 			Version:     cfg.Sentry.Release, // Assuming Release is version
 			MemoryAlloc: m.Alloc,
-			Config:      cfg,
+			Config:      cfg.Redacted(),
 		}
 
 		w.Header().Set("Content-Type", "application/json")

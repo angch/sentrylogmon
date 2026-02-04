@@ -276,6 +276,12 @@ func New(ctx context.Context, source sources.LogSource, detector detectors.Detec
 			} else {
 				log.Printf("Invalid rate limit window '%s', defaulting to 0: %v", opts.RateLimitWindow, err)
 			}
+		} else {
+			// Default to 1s if unspecified
+			window = 1 * time.Second
+			if opts.Verbose {
+				log.Printf("Rate limit window not specified, defaulting to 1s")
+			}
 		}
 		m.RateLimiter = &RateLimiter{
 			limit:       opts.RateLimitBurst,
