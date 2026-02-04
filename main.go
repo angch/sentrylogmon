@@ -380,10 +380,11 @@ func printInstanceTable(instances []ipc.StatusResponse) {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	fmt.Fprintln(w, "PID\tSTARTED\tUPTIME\tVERSION\tDETAILS")
+	fmt.Fprintln(w, "PID\tSTARTED\tUPTIME\tMEM\tVERSION\tMONITORS")
 	for _, inst := range instances {
 		uptime := time.Since(inst.StartTime).Round(time.Second)
 		uptimeStr := formatDuration(uptime)
+		memStr := formatBytes(inst.MemoryAlloc)
 
 		var details string
 		if inst.Config != nil && len(inst.Config.Monitors) > 0 {
@@ -445,9 +446,22 @@ func printInstanceTable(instances []ipc.StatusResponse) {
 		if version == "" {
 			version = "-"
 		}
-		fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\n", inst.PID, inst.StartTime.Format("2006-01-02 15:04:05"), uptimeStr, version, details)
+		fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\t%s\n", inst.PID, inst.StartTime.Format("2006-01-02 15:04:05"), uptimeStr, memStr, version, details)
 	}
 	w.Flush()
+}
+
+func formatBytes(b uint64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := uint64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %ciB", float64(b)/float64(div), "KMGTPE"[exp])
 }
 
 func formatDuration(d time.Duration) string {
