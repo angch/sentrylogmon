@@ -164,3 +164,28 @@ func Load() (*Config, error) {
 
 	return cfg, nil
 }
+
+// Redacted returns a deep copy of the configuration with sensitive fields redacted.
+func (c *Config) Redacted() *Config {
+	newC := *c
+
+	// Deep copy monitors slice
+	if c.Monitors != nil {
+		newC.Monitors = make([]MonitorConfig, len(c.Monitors))
+		copy(newC.Monitors, c.Monitors)
+	}
+
+	// Redact Global DSN
+	if newC.Sentry.DSN != "" {
+		newC.Sentry.DSN = "***"
+	}
+
+	// Redact Monitor DSNs
+	for i := range newC.Monitors {
+		if newC.Monitors[i].Sentry.DSN != "" {
+			newC.Monitors[i].Sentry.DSN = "***"
+		}
+	}
+
+	return &newC
+}
