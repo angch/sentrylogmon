@@ -1,40 +1,45 @@
-# TODO - Wish List
+# TODO - Work Items
 
-This file tracks potential features and improvements for `sentrylogmon`.
+This file tracks active work items to bring documentation and implementations (Rust, Zig) to parity with the Go reference implementation.
 
-## Features
+## Documentation Sync
 
-*(No active items)*
+- [ ] **Update Go Documentation**
+  - Update `README.md` to explicitly list **Syslog** (UDP/TCP) as a supported log source in the "Log Sources" section.
 
-## Performance
+- [ ] **Update Rust Documentation**
+  - Update `rust/README.md` to note that **Syslog** source is currently missing/planned.
 
-### Go Implementation
+- [ ] **Update Zig Documentation**
+  - Update `zig/README.md` to note that **Syslog** source is currently missing.
+  - Update `zig/README.md` to correctly reflect implemented features: **Journalctl**, **Configuration File**, and **Batching**.
 
-- [x] **Lazy Load Process Command Lines in `sysstat`**
-  - **Current Behavior:** The `getProcessStats` function iterates over all processes and calls `p.CmdLine()` (which reads `/proc/<pid>/cmdline`) for *every* process before sorting.
-  - **Proposed Change:** Collect only lightweight stats (PID, CPU, Memory) first, sort to find the top K processes, and *then* fetch the command line only for those top K processes.
-  - **Expected Impact:** Significant reduction in I/O operations (from N reads to ~10 reads per collection cycle).
+## Rust Parity
 
-- [x] **Optimize Buffering in `Monitor`**
-  - **Current Behavior:** Uses `[]string` to buffer log lines and `strings.Join` to concatenate them before sending to Sentry. This causes extra allocations.
-  - **Proposed Change:** Use `strings.Builder` or `bytes.Buffer` to accumulate log lines directly.
-  - **Expected Impact:** Reduced memory allocations and GC pressure.
+- [ ] **Implement Syslog Source**
+  - Implement a `SyslogSource` struct (likely in `sources/syslog.rs`) that supports both UDP and TCP listeners.
+  - Ensure it implements the `LogSource` trait.
+  - Update `main.rs` to handle `--syslog` flag and corresponding config field.
 
-- [x] **Optimize `DmesgDetector` Allocations**
-  - **Current Behavior:** Uses `FindSubmatch` which allocates slices of byte slices, and frequently converts `[]byte` to `string`.
-  - **Proposed Change:** Use `FindSubmatchIndex` to work with indices and avoid slice allocation. Minimize string conversions by checking bytes directly where possible.
-  - **Expected Impact:** Reduced allocations in the detection hot path.
-  - **Result:** 65% reduction in bytes allocated (891→313 B/op), 40% fewer allocations (15→9 allocs/op).
+- [ ] **Update Status Output**
+  - Improve the output of the `--status` command to match the detailed table format of the Go version.
+  - Columns: `PID`, `STARTED`, `UPTIME`, `VERSION`, `DETAILS`.
+  - Should include monitor names and types in the `DETAILS` column.
+  - Detect TTY to decide whether to print table or JSON (if JSON output is desired for scripting, though Go defaults to table for TTY).
 
-### Rust Implementation
+## Zig Parity
 
-- [x] **Optimize `sysstat` System Refresh**
-  - **Current Behavior:** Calls `sys.refresh_all()` which updates all system information including all processes and their details.
-  - **Proposed Change:** Use `sysinfo`'s more granular refresh methods (e.g., `refresh_cpu`, `refresh_memory`, `refresh_processes_specifics`) to only update what is necessary.
-  - **Expected Impact:** Lower CPU usage during system stats collection.
-  - **Result:** Replaced `refresh_all()` with `refresh_memory()` and `refresh_processes()` to skip disk, network, and sensor refreshes.
+- [ ] **Implement Syslog Source**
+  - Implement a syslog receiver (UDP/TCP) in `sources/syslog.zig` (or within `main.zig` if keeping single file structure, though a separate file is preferred).
+  - Update `parseArgs` and configuration loading to support syslog.
 
-### General
+- [ ] **Update Status Output**
+  - Update `main.zig`'s status printing logic to match Go's table format.
+  - Columns: `PID`, `STARTED`, `UPTIME`, `VERSION`, `DETAILS`.
+  - Calculate uptime from start time.
+  - Format details to show monitor summary.
+
+## General
 
 - [ ] **Profile Memory Usage**
-  - Run the application with `pprof` enabled under load to identify any other memory bottlenecks.
+  - Run the application with `pprof` (Go) or Valgrind/Massif (Rust/Zig) under load to identify memory bottlenecks.
