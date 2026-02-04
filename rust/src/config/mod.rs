@@ -47,6 +47,8 @@ pub struct FileConfig {
     pub sentry: SentryConfig,
     #[serde(default)]
     pub monitors: Vec<MonitorConfig>,
+    #[serde(default)]
+    pub metrics_port: u16,
 }
 
 #[derive(Parser, Debug)]
@@ -116,6 +118,10 @@ pub struct Args {
     /// Update/Restart all running instances
     #[arg(long)]
     pub update: bool,
+
+    /// Port to expose Prometheus metrics (0 to disable)
+    #[arg(long)]
+    pub metrics_port: Option<u16>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -128,6 +134,8 @@ pub struct Config {
     pub status: bool,
     #[serde(skip)]
     pub update: bool,
+    #[serde(default)]
+    pub metrics_port: u16,
 }
 
 impl Config {
@@ -150,6 +158,7 @@ impl Config {
                 oneshot: args.oneshot,
                 status: args.status,
                 update: args.update,
+                metrics_port: file_config.metrics_port,
             };
 
             // Override with CLI args if provided
@@ -161,6 +170,9 @@ impl Config {
             }
             if let Some(release) = &args.release {
                 cfg.sentry.release = release.clone();
+            }
+            if let Some(port) = args.metrics_port {
+                cfg.metrics_port = port;
             }
 
             cfg
@@ -246,6 +258,7 @@ impl Config {
                 oneshot: args.oneshot,
                 status: args.status,
                 update: args.update,
+                metrics_port: args.metrics_port.unwrap_or(0),
             }
         };
 
@@ -321,5 +334,18 @@ mod tests {
         let config = Config::from_args(args).unwrap();
         assert_eq!(config.monitors.len(), 1);
         assert_eq!(config.monitors[0].format, "custom");
+    }
+
+    #[test]
+    fn test_config_metrics_port() {
+        let args = Args::parse_from(&[
+            "sentrylogmon",
+            "--file", "/tmp/test.log",
+            "--dsn", "https://example.com",
+            "--metrics-port", "9090"
+        ]);
+
+        let config = Config::from_args(args).unwrap();
+        assert_eq!(config.metrics_port, 9090);
     }
 }

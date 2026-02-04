@@ -1,6 +1,7 @@
 mod config;
 mod detectors;
 mod ipc;
+mod metrics;
 mod monitor;
 mod sources;
 mod sysstat;
@@ -91,6 +92,16 @@ async fn main() -> Result<()> {
         tokio::spawn(async move {
             if let Err(e) = ipc::start_server(socket_path, cfg_clone, SystemTime::now()).await {
                 tracing::error!("IPC Server error: {}", e);
+            }
+        });
+    }
+
+    // Start Metrics Server
+    if cfg.metrics_port > 0 {
+        let port = cfg.metrics_port;
+        tokio::spawn(async move {
+            if let Err(e) = metrics::start_metrics_server(port).await {
+                tracing::error!("Metrics Server error: {}", e);
             }
         });
     }
