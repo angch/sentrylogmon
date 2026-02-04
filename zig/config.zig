@@ -30,6 +30,7 @@ pub const MonitorConfig = struct {
 pub const Config = struct {
     sentry: SentryConfig,
     monitors: std.ArrayList(MonitorConfig),
+    metrics_port: ?u16 = null,
 
     pub fn deinit(self: *Config, allocator: std.mem.Allocator) void {
         if (self.sentry.dsn.len > 0) allocator.free(self.sentry.dsn);
@@ -79,12 +80,13 @@ fn parseConfigString(allocator: std.mem.Allocator, content: []const u8) !Config 
         if (indent == 0) {
             if (std.mem.eql(u8, trimmed, "sentry:")) {
                 state = .Sentry;
+                continue;
             } else if (std.mem.eql(u8, trimmed, "monitors:")) {
                 state = .Monitors;
+                continue;
             } else {
                 state = .Global;
             }
-            continue;
         }
 
         switch (state) {
@@ -116,7 +118,13 @@ fn parseConfigString(allocator: std.mem.Allocator, content: []const u8) !Config 
                     }
                 }
             },
-            .Global => {},
+            .Global => {
+                if (parseKeyVal(trimmed)) |kv| {
+                    if (std.mem.eql(u8, kv.key, "metrics_port")) {
+                        config.metrics_port = std.fmt.parseInt(u16, kv.val, 10) catch null;
+                    }
+                }
+            },
         }
     }
 
@@ -241,4 +249,19 @@ test "parse syslog config" {
     try std.testing.expectEqualStrings("udp-syslog", m1.name);
     try std.testing.expect(m1.type == .syslog);
     try std.testing.expectEqualStrings("udp:127.0.0.1:514", m1.path.?);
+}
+
+test "parse metrics port" {
+    const content =
+        \\metrics_port: 9090
+        \\sentry:
+        \\  dsn: "https://example.com"
+    ;
+
+    const allocator = std.testing.allocator;
+    var config = try parseConfigString(allocator, content);
+    defer config.deinit(allocator);
+
+    try std.testing.expectEqual(@as(?u16, 9090), config.metrics_port);
+    try std.testing.expectEqualStrings("https://example.com", config.sentry.dsn);
 }

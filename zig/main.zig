@@ -8,6 +8,7 @@ const sysstat = @import("sysstat.zig");
 const ipc = @import("ipc.zig");
 const syslog = @import("syslog.zig");
 const utils = @import("utils.zig");
+const metrics = @import("metrics.zig");
 
 const RateLimiter = struct {
     limit: usize,
@@ -175,6 +176,7 @@ const Args = struct {
     config: ?[]const u8 = null,
     status: bool = false,
     update: bool = false,
+    metrics_port: ?u16 = null,
 };
 
 pub fn main() !void {
@@ -355,6 +357,20 @@ pub fn main() !void {
         config = try config_mod.parseConfig(allocator, cfg_path);
     }
     defer if (config) |*c| c.deinit(allocator);
+
+    // Metrics Server
+    var final_metrics_port: ?u16 = args.metrics_port;
+    if (final_metrics_port == null) {
+        if (config) |cfg| {
+             final_metrics_port = cfg.metrics_port;
+        }
+    }
+
+    if (final_metrics_port) |port| {
+         // Spawn metrics server thread
+         const t = try std.Thread.spawn(.{}, metrics.startServer, .{allocator, port, collector});
+         t.detach();
+    }
 
     // Start IPC Server
     const ipc_thread = try std.Thread.spawn(.{}, ipc.startServer, .{allocator, socket_path, config, raw_args_slice, start_time});
@@ -575,6 +591,8 @@ fn printUsage() void {
         \\        Enable verbose logging
         \\  --oneshot
         \\        Process existing logs and exit (do not follow)
+        \\  --metrics-port int
+        \\        Port to expose Prometheus metrics
         \\  --help
         \\        Show help message
         \\
@@ -653,6 +671,10 @@ fn parseArgs(allocator: std.mem.Allocator) !Args {
             args.status = true;
         } else if (std.mem.eql(u8, arg, "--update")) {
             args.update = true;
+        } else if (std.mem.eql(u8, arg, "--metrics-port")) {
+            if (arg_iter.next()) |port_str| {
+                args.metrics_port = try std.fmt.parseInt(u16, port_str, 10);
+            }
         } else if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) {
             printUsage();
             std.process.exit(0);
