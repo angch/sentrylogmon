@@ -94,7 +94,7 @@ The Rust version is optimized for:
 The Rust port focuses on core functionality:
 - Generic pattern matching (specialized detectors can be added)
 - Essential system stats collection
-- Core log source types
+- Core log source types (Syslog source is currently missing/planned)
 
 ## Development
 

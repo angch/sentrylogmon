@@ -161,10 +161,7 @@ The Zig binary is statically linked by default, making deployment simple:
 Potential improvements for the Zig version:
 
 - [ ] Add proper regex support via external library
-- [ ] Journalctl support
-- [ ] Configuration file support
-- [ ] Batching of similar events
-- [ ] Persistent queue for offline operation
+- [ ] Syslog support
 
 ## Contributing
 

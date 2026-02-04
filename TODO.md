@@ -4,13 +4,13 @@ This file tracks active work items to bring documentation and implementations (R
 
 ## Documentation Sync
 
-- [ ] **Update Go Documentation**
+- [x] **Update Go Documentation**
   - Update `README.md` to explicitly list **Syslog** (UDP/TCP) as a supported log source in the "Log Sources" section.
 
-- [ ] **Update Rust Documentation**
+- [x] **Update Rust Documentation**
   - Update `rust/README.md` to note that **Syslog** source is currently missing/planned.
 
-- [ ] **Update Zig Documentation**
+- [x] **Update Zig Documentation**
   - Update `zig/README.md` to note that **Syslog** source is currently missing.
   - Update `zig/README.md` to correctly reflect implemented features: **Journalctl**, **Configuration File**, and **Batching**.
 
@@ -21,7 +21,7 @@ This file tracks active work items to bring documentation and implementations (R
   - Ensure it implements the `LogSource` trait.
   - Update `main.rs` to handle `--syslog` flag and corresponding config field.
 
-- [ ] **Update Status Output**
+- [x] **Update Status Output**
   - Improve the output of the `--status` command to match the detailed table format of the Go version.
   - Columns: `PID`, `STARTED`, `UPTIME`, `VERSION`, `DETAILS`.
   - Should include monitor names and types in the `DETAILS` column.
