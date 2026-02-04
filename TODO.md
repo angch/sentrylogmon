@@ -31,7 +31,7 @@ This file tracks active work items to bring documentation and implementations (R
   - Add `--format` argument to `Args` struct in `config/mod.rs`.
   - Pass this format to the detector logic to override defaults (parity with Go).
 
-- [ ] **Implement Metrics Server**
+- [x] **Implement Metrics Server**
   - Add `--metrics-port` CLI argument and `MetricsPort` field to `Config`.
   - Implement a simple HTTP server to expose Prometheus metrics at `/metrics`.
   - Implement `/healthz` endpoint returning 200 OK.

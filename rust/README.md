@@ -50,6 +50,9 @@ The Rust version supports the same command-line interface as the Go version:
 
 # Use a configuration file
 ./target/release/sentrylogmon --config=sentrylogmon.yaml
+
+# Enable Prometheus metrics
+./target/release/sentrylogmon --dsn="..." --file=/var/log/app.log --metrics-port=9090
 ```
 
 ## Configuration
