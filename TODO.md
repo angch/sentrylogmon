@@ -41,5 +41,5 @@ This file tracks active work items to bring documentation and implementations (R
 
 ## General
 
-- [ ] **Profile Memory Usage**
+- [x] **Profile Memory Usage**
   - Run the application with `pprof` (Go) or Valgrind/Massif (Rust/Zig) under load to identify memory bottlenecks.

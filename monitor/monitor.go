@@ -28,7 +28,6 @@ var (
 	timestampRegexNginxError = regexp.MustCompile(`^(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})`)
 	// [27/Oct/2023:10:00:00 +0000]
 	timestampRegexNginxAccess = regexp.MustCompile(`\[(\d{2}/[A-Z][a-z]{2}/\d{4}:\d{2}:\d{2}:\d{2}\s+[+-]\d{4})\]`)
-
 )
 
 func extractSyslogPriority(line []byte) (int, int, int, bool) {
