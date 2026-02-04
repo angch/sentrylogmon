@@ -40,7 +40,7 @@ func StartServer(socketPath string, cfg *config.Config, restartFunc func()) erro
 			PID:       os.Getpid(),
 			StartTime: startTime,
 			Version:   cfg.Sentry.Release, // Assuming Release is version
-			Config:    cfg,
+			Config:    cfg.Redacted(),
 		}
 
 		w.Header().Set("Content-Type", "application/json")
