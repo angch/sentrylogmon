@@ -29,7 +29,7 @@ This file tracks active work items to bring documentation and implementations (R
 
 ## Zig Parity
 
-- [ ] **Implement Syslog Source**
+- [x] **Implement Syslog Source**
   - Implement a syslog receiver (UDP/TCP) in `sources/syslog.zig` (or within `main.zig` if keeping single file structure, though a separate file is preferred).
   - Update `parseArgs` and configuration loading to support syslog.
 

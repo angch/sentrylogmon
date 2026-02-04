@@ -11,6 +11,7 @@ pub const MonitorType = enum {
     journalctl,
     dmesg,
     command,
+    syslog,
     unknown,
 };
 
@@ -136,6 +137,7 @@ fn updateMonitor(allocator: std.mem.Allocator, monitor: *MonitorConfig, key: []c
         if (std.mem.eql(u8, val, "journalctl")) monitor.type = .journalctl;
         if (std.mem.eql(u8, val, "dmesg")) monitor.type = .dmesg;
         if (std.mem.eql(u8, val, "command")) monitor.type = .command;
+        if (std.mem.eql(u8, val, "syslog")) monitor.type = .syslog;
     }
     if (std.mem.eql(u8, key, "path")) {
         if (monitor.path) |p| allocator.free(p);
@@ -220,4 +222,23 @@ test "parse config" {
     try std.testing.expectEqualStrings("journal", m2.name);
     try std.testing.expect(m2.type == .journalctl);
     try std.testing.expectEqualStrings("-f", m2.args.?);
+}
+
+test "parse syslog config" {
+    const content =
+        \\monitors:
+        \\  - name: "udp-syslog"
+        \\    type: "syslog"
+        \\    path: "udp:127.0.0.1:514"
+    ;
+
+    const allocator = std.testing.allocator;
+    var config = try parseConfigString(allocator, content);
+    defer config.deinit(allocator);
+
+    try std.testing.expect(config.monitors.items.len == 1);
+    const m1 = config.monitors.items[0];
+    try std.testing.expectEqualStrings("udp-syslog", m1.name);
+    try std.testing.expect(m1.type == .syslog);
+    try std.testing.expectEqualStrings("udp:127.0.0.1:514", m1.path.?);
 }
