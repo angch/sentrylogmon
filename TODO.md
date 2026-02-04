@@ -27,6 +27,21 @@ This file tracks active work items to bring documentation and implementations (R
   - Should include monitor names and types in the `DETAILS` column.
   - Detect TTY to decide whether to print table or JSON (if JSON output is desired for scripting, though Go defaults to table for TTY).
 
+- [ ] **Implement --format CLI Argument**
+  - Add `--format` argument to `Args` struct in `config/mod.rs`.
+  - Pass this format to the detector logic to override defaults (parity with Go).
+
+- [ ] **Implement Metrics Server**
+  - Add `--metrics-port` CLI argument and `MetricsPort` field to `Config`.
+  - Implement a simple HTTP server to expose Prometheus metrics at `/metrics`.
+  - Implement `/healthz` endpoint returning 200 OK.
+
+- [ ] **Improve Status Output Alignment**
+  - Use a dynamic table formatter (like `tabwriter` crate or manual padding calculation) to match Go's alignment behavior, ensuring columns don't break with long values.
+
+- [ ] **Implement pprof Support**
+  - Investigate and implement pprof-compatible endpoints (optional, for parity).
+
 ## Zig Parity
 
 - [x] **Implement Syslog Source**
@@ -38,6 +53,20 @@ This file tracks active work items to bring documentation and implementations (R
   - Columns: `PID`, `STARTED`, `UPTIME`, `VERSION`, `DETAILS`.
   - Calculate uptime from start time.
   - Format details to show monitor summary.
+
+- [ ] **Implement TTY Detection**
+  - Update `status` command to check if `stdout` is a terminal (isatty).
+  - If not a terminal, output JSON instead of the table (parity with Go).
+
+- [ ] **Implement Metrics Server**
+  - Add `--metrics-port` argument and config support.
+  - Implement an HTTP server (using `std.http.Server` or similar) to expose `/metrics` and `/healthz`.
+
+- [ ] **Improve Status Output Alignment**
+  - Implement tab-writer style alignment for the status table instead of relying on simple tabs `\t`, to ensure consistent column spacing.
+
+- [ ] **Implement pprof Support**
+  - Investigate and implement pprof-compatible endpoints (optional, for parity).
 
 ## General
 
