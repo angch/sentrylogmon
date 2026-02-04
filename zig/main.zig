@@ -35,6 +35,114 @@ const RateLimiter = struct {
     }
 };
 
+fn formatDuration(allocator: std.mem.Allocator, seconds: i64) ![]u8 {
+    if (seconds < 0) return allocator.dupe(u8, "0s");
+
+    const days = @divTrunc(seconds, 86400);
+    const rem_days = @rem(seconds, 86400);
+    const hours = @divTrunc(rem_days, 3600);
+    const rem_hours = @rem(rem_days, 3600);
+    const minutes = @divTrunc(rem_hours, 60);
+    const sec = @rem(rem_hours, 60);
+
+    if (days > 0) {
+        return std.fmt.allocPrint(allocator, "{d}d {d}h {d}m", .{days, hours, minutes});
+    } else if (hours > 0) {
+        return std.fmt.allocPrint(allocator, "{d}h {d}m {d}s", .{hours, minutes, sec});
+    } else if (minutes > 0) {
+        return std.fmt.allocPrint(allocator, "{d}m {d}s", .{minutes, sec});
+    } else {
+        return std.fmt.allocPrint(allocator, "{d}s", .{sec});
+    }
+}
+
+fn formatDate(allocator: std.mem.Allocator, timestamp: i64) ![]u8 {
+    const epoch_seconds = std.time.epoch.EpochSeconds{ .secs = @intCast(timestamp) };
+    const year_day = epoch_seconds.getEpochDay();
+    const day_seconds = epoch_seconds.getDaySeconds();
+
+    const year = year_day.calculateYearDay();
+    const month_day = year.calculateMonthDay();
+
+    const hours = day_seconds.getHoursIntoDay();
+    const minutes = day_seconds.getMinutesIntoHour();
+    const seconds = day_seconds.getSecondsIntoMinute();
+
+    return std.fmt.allocPrint(allocator, "{d:0>4}-{d:0>2}-{d:0>2} {d:0>2}:{d:0>2}:{d:0>2}", .{
+        year.year, month_day.month.numeric(), month_day.day_index + 1,
+        hours, minutes, seconds
+    });
+}
+
+fn getDetails(allocator: std.mem.Allocator, inst: ipc.StatusResponse) ![]u8 {
+    if (inst.config) |cfg| {
+        var details = std.ArrayList(u8).empty;
+        defer details.deinit(allocator);
+
+        const count = cfg.monitors.items.len;
+        try details.writer(allocator).print("{d} monitors: ", .{count});
+
+        for (cfg.monitors.items, 0..) |m, i| {
+            if (i > 0) try details.writer(allocator).writeAll(", ");
+            try details.writer(allocator).print("{s}", .{m.name});
+
+            const type_str = switch (m.type) {
+                .file => "file",
+                .journalctl => "journalctl",
+                .dmesg => "dmesg",
+                .command => "command",
+                .syslog => "syslog",
+                .unknown => "unknown",
+            };
+            try details.writer(allocator).print("({s})", .{type_str});
+
+            if (details.items.len > 100) {
+                 try details.writer(allocator).writeAll("...");
+                 break;
+            }
+        }
+        return details.toOwnedSlice(allocator);
+    } else {
+        if (inst.command_line.len > 0) {
+             var details = std.ArrayList(u8).empty;
+             defer details.deinit(allocator);
+
+             var iter = std.mem.tokenizeScalar(u8, inst.command_line, ' ');
+             _ = iter.next();
+
+             while (iter.next()) |arg| {
+                 if (std.mem.eql(u8, arg, "--dmesg")) {
+                     if (details.items.len > 0) try details.writer(allocator).writeAll(", ");
+                     try details.writer(allocator).writeAll("dmesg");
+                 } else if (std.mem.eql(u8, arg, "--file")) {
+                     if (iter.next()) |val| {
+                         if (details.items.len > 0) try details.writer(allocator).writeAll(", ");
+                         try details.writer(allocator).print("file: {s}", .{val});
+                     }
+                 } else if (std.mem.eql(u8, arg, "--journalctl")) {
+                     if (details.items.len > 0) try details.writer(allocator).writeAll(", ");
+                     if (iter.next()) |val| {
+                         try details.writer(allocator).print("journalctl: {s}", .{val});
+                     } else {
+                         try details.writer(allocator).writeAll("journalctl");
+                     }
+                 } else if (std.mem.eql(u8, arg, "--syslog")) {
+                      if (iter.next()) |val| {
+                         if (details.items.len > 0) try details.writer(allocator).writeAll(", ");
+                         try details.writer(allocator).print("syslog: {s}", .{val});
+                     }
+                 }
+             }
+
+             if (details.items.len == 0) {
+                 return allocator.dupe(u8, "legacy mode");
+             }
+             return details.toOwnedSlice(allocator);
+        }
+        return allocator.dupe(u8, "unknown mode");
+    }
+}
+
 fn parseDuration(s: []const u8) u64 {
     if (s.len < 2) return 0;
 
@@ -90,11 +198,29 @@ pub fn main() !void {
             std.debug.print("Error listing instances: {}\n", .{err});
             std.process.exit(1);
         };
-        defer instances.deinit(allocator);
+        defer {
+            for (instances.items) |*inst| {
+                inst.deinit(allocator);
+            }
+            instances.deinit(allocator);
+        }
 
-        std.debug.print("PID\tSTART TIME\tVERSION\n", .{});
+        std.debug.print("PID\tSTARTED\tUPTIME\tVERSION\tDETAILS\n", .{});
         for (instances.items) |inst| {
-            std.debug.print("{d}\t{s}\t{s}\n", .{inst.pid, inst.start_time, inst.version});
+            const start_ts = std.fmt.parseInt(i64, inst.start_time, 10) catch 0;
+            const now = std.time.timestamp();
+            const uptime_sec = if (now > start_ts) now - start_ts else 0;
+
+            const started_str = formatDate(allocator, start_ts) catch "unknown";
+            defer if (!std.mem.eql(u8, started_str, "unknown")) allocator.free(started_str);
+
+            const uptime_str = formatDuration(allocator, uptime_sec) catch "unknown";
+            defer if (!std.mem.eql(u8, uptime_str, "unknown")) allocator.free(uptime_str);
+
+            const details = getDetails(allocator, inst) catch "error";
+            defer if (!std.mem.eql(u8, details, "error")) allocator.free(details);
+
+            std.debug.print("{d}\t{s}\t{s}\t{s}\t{s}\n", .{inst.pid, started_str, uptime_str, inst.version, details});
         }
         std.process.exit(0);
     }
