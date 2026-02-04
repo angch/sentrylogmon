@@ -6,6 +6,8 @@ const batcher_mod = @import("batcher.zig");
 const detectors = @import("detectors.zig");
 const sysstat = @import("sysstat.zig");
 const ipc = @import("ipc.zig");
+const syslog = @import("syslog.zig");
+const utils = @import("utils.zig");
 
 const RateLimiter = struct {
     limit: usize,
@@ -54,6 +56,7 @@ const Args = struct {
     use_dmesg: bool = false,
     command: ?[]const u8 = null,
     journalctl: ?[]const u8 = null,
+    syslog: ?[]const u8 = null,
     pattern: []const u8 = "Error",
     exclude_pattern: ?[]const u8 = null,
     format: ?[]const u8 = null,
@@ -266,6 +269,11 @@ pub fn main() !void {
                      const t = try std.Thread.spawn(.{}, monitorCommand, .{allocator, argv.items, monitor.pattern, monitor.exclude_pattern, batcher, monitor_args});
                      try threads.append(allocator, t);
                  }
+            } else if (monitor.type == .syslog) {
+                 if (monitor.path) |addr| {
+                     const t = try std.Thread.spawn(.{}, syslog.monitorSyslog, .{allocator, addr, monitor.pattern, monitor.exclude_pattern, batcher, monitor_args.verbose, monitor.format});
+                     try threads.append(allocator, t);
+                 }
             }
         }
 
@@ -289,11 +297,13 @@ pub fn main() !void {
             source_name = "command";
         } else if (args.journalctl) |_| {
             source_name = "journalctl";
+        } else if (args.syslog) |_| {
+            source_name = "syslog";
         }
 
         // If no source specified, exit
         if (std.mem.eql(u8, source_name, "unknown") and args.config == null) {
-            std.debug.print("Please specify a log source: --dmesg, --file, --command, --journalctl, or --config\n", .{});
+            std.debug.print("Please specify a log source: --dmesg, --file, --command, --journalctl, --syslog, or --config\n", .{});
             std.process.exit(1);
         }
 
@@ -356,6 +366,11 @@ pub fn main() !void {
             }
 
             try monitorCommand(allocator, argv.items, args.pattern, args.exclude_pattern, batcher, args);
+        } else if (args.syslog) |saddr| {
+            if (args.verbose) {
+                std.debug.print("Monitoring syslog: {s}\n", .{saddr});
+            }
+            try syslog.monitorSyslog(allocator, saddr, args.pattern, args.exclude_pattern, batcher, args.verbose, args.format);
         }
     }
 }
@@ -375,6 +390,8 @@ fn printUsage() void {
         \\        Monitor output of a custom command
         \\  --journalctl string
         \\        Monitor journalctl output (args passed to journalctl)
+        \\  --syslog string
+        \\        Monitor syslog (udp/tcp address e.g. udp:127.0.0.1:514)
         \\  --pattern string
         \\        Regex pattern to match (default "Error")
         \\  --exclude string
@@ -430,6 +447,10 @@ fn parseArgs(allocator: std.mem.Allocator) !Args {
         } else if (std.mem.eql(u8, arg, "--journalctl")) {
             if (arg_iter.next()) |jargs| {
                 args.journalctl = try allocator.dupe(u8, jargs);
+            }
+        } else if (std.mem.eql(u8, arg, "--syslog")) {
+            if (arg_iter.next()) |saddr| {
+                args.syslog = try allocator.dupe(u8, saddr);
             }
         } else if (std.mem.eql(u8, arg, "--pattern")) {
             if (arg_iter.next()) |pattern| {
@@ -546,7 +567,7 @@ fn monitorFile(allocator: std.mem.Allocator, file_path: []const u8, pattern: []c
                     std.debug.print("Matched line: {s}\n", .{line});
                 }
 
-                const timestamp = extractTimestamp(line);
+                const timestamp = utils.extractTimestamp(line);
                 try batcher.add(timestamp, line);
             }
         } else {
@@ -624,7 +645,7 @@ fn monitorCommand(allocator: std.mem.Allocator, argv: []const []const u8, patter
                                 std.debug.print("Matched line: {s}\n", .{line});
                             }
 
-                            const timestamp = extractTimestamp(line);
+                            const timestamp = utils.extractTimestamp(line);
                             batcher.add(timestamp, line) catch |err| {
                                 std.debug.print("Error adding to batch: {}\n", .{err});
                             };
@@ -650,39 +671,6 @@ fn monitorCommand(allocator: std.mem.Allocator, argv: []const []const u8, patter
     }
 }
 
-fn shouldLog(line: []const u8, format: ?[]const u8, pattern: []const u8) bool {
-    if (format) |fmt| {
-        if (std.mem.eql(u8, fmt, "nginx") or std.mem.eql(u8, fmt, "nginx-error")) {
-            const patterns = [_][]const u8{ "error", "critical", "crit", "alert", "emerg" };
-            return containsAny(line, &patterns);
-        } else if (std.mem.eql(u8, fmt, "dmesg")) {
-            const patterns = [_][]const u8{ "error", "fail", "panic", "oops", "exception" };
-            return containsAny(line, &patterns);
-        }
-    }
-    return containsPattern(line, pattern);
-}
-
-fn containsAny(haystack: []const u8, needles: []const []const u8) bool {
-    for (needles) |needle| {
-        if (containsPattern(haystack, needle)) return true;
-    }
-    return false;
-}
-
-fn containsPattern(haystack: []const u8, needle: []const u8) bool {
-    return std.ascii.indexOfIgnoreCase(haystack, needle) != null;
-}
-
-fn extractTimestamp(line: []const u8) []const u8 {
-    // Look for pattern like [123.456]
-    if (std.mem.indexOf(u8, line, "[")) |start| {
-        if (std.mem.indexOf(u8, line[start..], "]")) |end| {
-            return line[start + 1 .. start + end];
-        }
-    }
-    return "unknown";
-}
 
 const MonitorContext = struct {
     allocator: std.mem.Allocator,
@@ -860,39 +848,7 @@ test {
     _ = batcher_mod;
     _ = detectors;
     _ = sysstat;
+    _ = syslog;
+    _ = utils;
 }
 
-test "containsPattern" {
-    const haystack = "Hello World";
-    try std.testing.expect(containsPattern(haystack, "world"));
-    try std.testing.expect(containsPattern(haystack, "HELLO"));
-    try std.testing.expect(!containsPattern(haystack, "foo"));
-}
-
-test "exclusion logic" {
-    const pattern = "error";
-    const exclude_pattern = "test";
-
-    // Should match pattern but not exclude pattern
-    try std.testing.expect(containsPattern("This is an error", pattern));
-    try std.testing.expect(!containsPattern("This is an error", exclude_pattern));
-
-    // Should match both (excluded case)
-    const line = "This is an error in test";
-    const match = containsPattern(line, pattern);
-    const excluded = containsPattern(line, exclude_pattern);
-
-    try std.testing.expect(match);
-    try std.testing.expect(excluded);
-
-    // Verify exclusion logic result
-    const should_process = match and !excluded;
-    try std.testing.expect(!should_process);
-
-    // Case where it matches pattern but not exclude
-    const line2 = "This is an error in production";
-    const match2 = containsPattern(line2, pattern);
-    const excluded2 = containsPattern(line2, exclude_pattern);
-    const should_process2 = match2 and !excluded2;
-    try std.testing.expect(should_process2);
-}
