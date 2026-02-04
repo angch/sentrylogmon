@@ -17,6 +17,10 @@ This file contains completed features and improvements for `sentrylogmon`, migra
 - **Date Parsing**: Enhanced `extractTimestamp` to support Nginx Error and Access logs and handle timezones.
 - **Rate Limiting**: Implemented configurable per-issue rate limiting.
 - **Dynamic Clock Tick**: Used `sysconf` for accurate `CLK_TCK` detection in CPU usage calculations.
+- **Lazy Load Process Command Lines in `sysstat` (Go)**: Optimized process stats collection by fetching command lines only for top processes, reducing I/O.
+- **Optimize Buffering in `Monitor` (Go)**: Replaced string concatenation with `strings.Builder` to reduce allocations.
+- **Optimize `DmesgDetector` Allocations (Go)**: Switched to `FindSubmatchIndex` and direct byte checks to reduce memory allocations by 65%.
+- **Optimize `sysstat` System Refresh (Rust)**: Replaced `refresh_all()` with granular `refresh_memory()` and `refresh_processes()` to skip unnecessary sensor/network refreshes.
 
 ### Testing
 - **Fuzz Testing**: Added fuzz tests for detector logic (`detectors/fuzz_test.go`).
