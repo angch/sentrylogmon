@@ -21,7 +21,8 @@ pub struct StatusResponse {
 
 pub fn ensure_secure_directory(path: &Path) -> Result<()> {
     if !path.exists() {
-        fs::create_dir_all(path).with_context(|| format!("Failed to create directory {:?}", path))?;
+        fs::create_dir_all(path)
+            .with_context(|| format!("Failed to create directory {:?}", path))?;
     }
 
     let metadata = fs::symlink_metadata(path)

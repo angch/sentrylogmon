@@ -36,7 +36,7 @@ This file tracks active work items to bring documentation and implementations (R
   - Implement a simple HTTP server to expose Prometheus metrics at `/metrics`.
   - Implement `/healthz` endpoint returning 200 OK.
 
-- [ ] **Improve Status Output Alignment**
+- [x] **Improve Status Output Alignment**
   - Use a dynamic table formatter (like `tabwriter` crate or manual padding calculation) to match Go's alignment behavior, ensuring columns don't break with long values.
 
 - [ ] **Implement pprof Support**

@@ -8,6 +8,7 @@ mod sysstat;
 
 use anyhow::Result;
 use chrono::prelude::*;
+use std::cmp::max;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -241,80 +242,204 @@ fn print_instance_table(instances: Vec<ipc::StatusResponse>) {
         return;
     }
 
-    // PID STARTED UPTIME VERSION DETAILS
-    println!(
-        "{:<6} {:<20} {:<10} {:<8} DETAILS",
-        "PID", "STARTED", "UPTIME", "VERSION"
-    );
+    let output = format_instance_table(&instances, SystemTime::now());
+    print!("{}", output);
+}
+
+struct InstanceRow {
+    pid: String,
+    started: String,
+    uptime: String,
+    version: String,
+    details: String,
+}
+
+fn format_instance_table(instances: &[ipc::StatusResponse], now: SystemTime) -> String {
+    let mut rows = Vec::with_capacity(instances.len());
 
     for inst in instances {
         let start_dt: DateTime<Local> = inst.start_time.into();
         let start_str = start_dt.format("%Y-%m-%d %H:%M:%S").to_string();
 
-        let uptime_secs = match SystemTime::now().duration_since(inst.start_time) {
-            Ok(d) => d.as_secs(),
-            Err(_) => 0,
-        };
+        let uptime_secs = now
+            .duration_since(inst.start_time)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
         let uptime_str = format_duration(uptime_secs);
 
-        let mut details = String::new();
-        if let Some(cfg) = &inst.config {
-            let limit = 60;
-            let monitors = &cfg.monitors;
-            let mut parts = Vec::new();
-
-            for m in monitors {
-                parts.push(format!("{}({})", m.name, m.monitor_type));
-            }
-
-            let mut buffer = String::new();
-            for (i, part) in parts.iter().enumerate() {
-                let sep = if i > 0 { ", " } else { "" };
-
-                if i == 0 {
-                    let remaining = parts.len() - 1;
-                    let suffix_len = if remaining > 0 { 12 } else { 0 };
-
-                    let mut part_display = part.clone();
-                    if part.len() + suffix_len > limit {
-                        let avail = limit - suffix_len - 3; // -3 for ...
-                        let avail = if avail < 10 { 10 } else { avail };
-                        if part.len() > avail {
-                            let safe_part: String = part.chars().take(avail).collect();
-                            part_display = format!("{}...", safe_part);
-                        }
-                    }
-                    buffer.push_str(&part_display);
-                    continue;
-                }
-
-                let reserved = if i == parts.len() - 1 { 0 } else { 12 };
-
-                if buffer.len() + sep.len() + part.len() + reserved <= limit {
-                    buffer.push_str(sep);
-                    buffer.push_str(part);
-                } else {
-                    let remaining = parts.len() - i;
-                    buffer.push_str(&format!(" (+{} more)", remaining));
-                    break;
-                }
-            }
-            details = buffer;
-        }
-
-        if details.is_empty() {
-            details = "-".to_string();
-        }
-
         let version = if inst.version.is_empty() {
-            "-"
+            "-".to_string()
         } else {
-            &inst.version
+            inst.version.clone()
         };
 
-        println!(
-            "{:<6} {:<20} {:<10} {:<8} {}",
-            inst.pid, start_str, uptime_str, version, details
-        );
+        rows.push(InstanceRow {
+            pid: inst.pid.to_string(),
+            started: start_str,
+            uptime: uptime_str,
+            version,
+            details: format_details(inst.config.as_ref()),
+        });
+    }
+
+    let headers = ["PID", "STARTED", "UPTIME", "VERSION", "DETAILS"];
+    let mut widths = [
+        headers[0].len(),
+        headers[1].len(),
+        headers[2].len(),
+        headers[3].len(),
+    ];
+
+    for row in &rows {
+        widths[0] = max(widths[0], row.pid.len());
+        widths[1] = max(widths[1], row.started.len());
+        widths[2] = max(widths[2], row.uptime.len());
+        widths[3] = max(widths[3], row.version.len());
+    }
+
+    let mut output = String::new();
+    output.push_str(&format!(
+        "{:<w0$} {:<w1$} {:<w2$} {:<w3$} {}\n",
+        headers[0],
+        headers[1],
+        headers[2],
+        headers[3],
+        headers[4],
+        w0 = widths[0],
+        w1 = widths[1],
+        w2 = widths[2],
+        w3 = widths[3]
+    ));
+
+    for row in rows {
+        output.push_str(&format!(
+            "{:<w0$} {:<w1$} {:<w2$} {:<w3$} {}\n",
+            row.pid,
+            row.started,
+            row.uptime,
+            row.version,
+            row.details,
+            w0 = widths[0],
+            w1 = widths[1],
+            w2 = widths[2],
+            w3 = widths[3]
+        ));
+    }
+
+    output
+}
+
+fn format_details(config: Option<&config::Config>) -> String {
+    let Some(cfg) = config else {
+        return "-".to_string();
+    };
+
+    let limit = 60;
+    let monitors = &cfg.monitors;
+    let mut parts = Vec::new();
+
+    for m in monitors {
+        parts.push(format!("{}({})", m.name, m.monitor_type));
+    }
+
+    let mut buffer = String::new();
+    for (i, part) in parts.iter().enumerate() {
+        let sep = if i > 0 { ", " } else { "" };
+
+        if i == 0 {
+            let remaining = parts.len() - 1;
+            let suffix_len = if remaining > 0 { 12 } else { 0 };
+
+            let mut part_display = part.clone();
+            if part.len() + suffix_len > limit {
+                let avail = limit - suffix_len - 3; // -3 for ...
+                let avail = if avail < 10 { 10 } else { avail };
+                if part.len() > avail {
+                    let safe_part: String = part.chars().take(avail).collect();
+                    part_display = format!("{}...", safe_part);
+                }
+            }
+            buffer.push_str(&part_display);
+            continue;
+        }
+
+        let reserved = if i == parts.len() - 1 { 0 } else { 12 };
+
+        if buffer.len() + sep.len() + part.len() + reserved <= limit {
+            buffer.push_str(sep);
+            buffer.push_str(part);
+        } else {
+            let remaining = parts.len() - i;
+            buffer.push_str(&format!(" (+{} more)", remaining));
+            break;
+        }
+    }
+
+    if buffer.is_empty() {
+        "-".to_string()
+    } else {
+        buffer
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{Config, MonitorConfig, SentryConfig};
+    use crate::ipc::StatusResponse;
+    use std::time::Duration;
+
+    fn sample_config(name: &str, monitor_type: &str) -> Config {
+        Config {
+            sentry: SentryConfig::default(),
+            monitors: vec![MonitorConfig {
+                name: name.to_string(),
+                monitor_type: monitor_type.to_string(),
+                path: String::new(),
+                args: String::new(),
+                pattern: "Error".to_string(),
+                format: String::new(),
+                exclude_pattern: String::new(),
+                rate_limit_burst: None,
+                rate_limit_window: None,
+            }],
+            verbose: false,
+            oneshot: false,
+            status: false,
+            update: false,
+            metrics_port: 0,
+        }
+    }
+
+    #[test]
+    fn format_instance_table_aligns_details_column() {
+        let start_time = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000);
+        let now = start_time + Duration::from_secs(65);
+
+        let instances = vec![
+            StatusResponse {
+                pid: 9,
+                start_time,
+                version: "0.1.0".to_string(),
+                config: Some(sample_config("alpha", "file")),
+            },
+            StatusResponse {
+                pid: 1010,
+                start_time,
+                version: "0.10.0".to_string(),
+                config: Some(sample_config("beta", "file")),
+            },
+        ];
+
+        let output = format_instance_table(&instances, now);
+        let lines: Vec<&str> = output.lines().collect();
+        assert!(lines.len() >= 3);
+
+        let header_details_idx = lines[0].find("DETAILS").expect("header details");
+        let first_details_idx = lines[1].find("alpha(file)").expect("first details");
+        let second_details_idx = lines[2].find("beta(file)").expect("second details");
+
+        assert_eq!(header_details_idx, first_details_idx);
+        assert_eq!(header_details_idx, second_details_idx);
     }
 }

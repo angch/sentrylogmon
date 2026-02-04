@@ -15,14 +15,8 @@ static SENSITIVE_FLAGS: Lazy<HashMap<&'static str, bool>> = Lazy::new(|| {
     m
 });
 
-static SENSITIVE_SUFFIXES: Lazy<Vec<&'static str>> = Lazy::new(|| {
-    vec![
-        "password",
-        "token",
-        "secret",
-        "_key",
-    ]
-});
+static SENSITIVE_SUFFIXES: Lazy<Vec<&'static str>> =
+    Lazy::new(|| vec!["password", "token", "secret", "_key"]);
 
 // sanitize_command reconstructs the command line string from arguments while redacting sensitive information.
 // It aims for parity with the Go implementation, handling both `--flag=value` and `--flag value` patterns.
@@ -138,7 +132,12 @@ mod tests {
 
         for (input, expected) in cases {
             let input_vec: Vec<String> = input.iter().map(|s| s.to_string()).collect();
-            assert_eq!(sanitize_command(&input_vec), expected, "Failed on input: {:?}", input);
+            assert_eq!(
+                sanitize_command(&input_vec),
+                expected,
+                "Failed on input: {:?}",
+                input
+            );
         }
     }
 }

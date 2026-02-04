@@ -286,9 +286,12 @@ mod tests {
     fn test_config_from_args_with_format() {
         let args = Args::parse_from(&[
             "sentrylogmon",
-            "--file", "/tmp/test.log",
-            "--format", "nginx",
-            "--dsn", "https://example.com"
+            "--file",
+            "/tmp/test.log",
+            "--format",
+            "nginx",
+            "--dsn",
+            "https://example.com",
         ]);
 
         let config = Config::from_args(args).unwrap();
@@ -300,8 +303,10 @@ mod tests {
     fn test_config_from_args_without_format() {
         let args = Args::parse_from(&[
             "sentrylogmon",
-            "--file", "/tmp/test.log",
-            "--dsn", "https://example.com"
+            "--file",
+            "/tmp/test.log",
+            "--dsn",
+            "https://example.com",
         ]);
 
         let config = Config::from_args(args).unwrap();
@@ -311,11 +316,7 @@ mod tests {
 
     #[test]
     fn test_config_from_args_dmesg_default_format() {
-         let args = Args::parse_from(&[
-            "sentrylogmon",
-            "--dmesg",
-            "--dsn", "https://example.com"
-        ]);
+        let args = Args::parse_from(&["sentrylogmon", "--dmesg", "--dsn", "https://example.com"]);
 
         let config = Config::from_args(args).unwrap();
         assert_eq!(config.monitors.len(), 1);
@@ -324,11 +325,13 @@ mod tests {
 
     #[test]
     fn test_config_from_args_dmesg_override_format() {
-         let args = Args::parse_from(&[
+        let args = Args::parse_from(&[
             "sentrylogmon",
             "--dmesg",
-            "--format", "custom",
-            "--dsn", "https://example.com"
+            "--format",
+            "custom",
+            "--dsn",
+            "https://example.com",
         ]);
 
         let config = Config::from_args(args).unwrap();
@@ -340,9 +343,12 @@ mod tests {
     fn test_config_metrics_port() {
         let args = Args::parse_from(&[
             "sentrylogmon",
-            "--file", "/tmp/test.log",
-            "--dsn", "https://example.com",
-            "--metrics-port", "9090"
+            "--file",
+            "/tmp/test.log",
+            "--dsn",
+            "https://example.com",
+            "--metrics-port",
+            "9090",
         ]);
 
         let config = Config::from_args(args).unwrap();
