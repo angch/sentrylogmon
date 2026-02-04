@@ -24,6 +24,18 @@ This document indexes resources and guidelines for agents working on `sentrylogm
 - **12-Factor App**: https://12factor.net/
 - **Unix Philosophy**: https://en.wikipedia.org/wiki/Unix_philosophy
 
+## Performance Profile (2026-02-04)
+
+### Memory Profile Analysis
+A heap profile was captured under load (100,000 log lines) using `net/http/pprof`.
+
+- **Total Memory Usage**: ~9MB in-use during high load test.
+- **Top Consumers**:
+  - `bytes.growSlice` (53%): Primarily driven by `github.com/getsentry/sentry-go` during envelope creation and event buffering.
+  - `crypto/tls` & `encoding/pem` (~11%): SSL/TLS handshake overhead for Sentry connections.
+  - `regexp` (~6%): Timestamp extraction in `monitor.extractTimestamp`.
+- **Conclusion**: The application is memory efficient. Most allocation comes from the Sentry SDK's necessary buffering and transmission logic. No obvious leaks or inefficiencies in the application code were found.
+
 ---
 
-**Last Updated**: 2026-02-02
+**Last Updated**: 2026-02-04

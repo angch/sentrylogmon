@@ -134,7 +134,8 @@ func TestSyslogSource_Close(t *testing.T) {
 	// Start reading in bg to drain pipe
 	go func() {
 		scanner := bufio.NewScanner(reader)
-		for scanner.Scan() {}
+		for scanner.Scan() {
+		}
 	}()
 
 	time.Sleep(100 * time.Millisecond)
