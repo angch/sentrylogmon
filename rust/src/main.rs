@@ -132,6 +132,10 @@ async fn main() -> Result<()> {
                     args,
                 ))
             }
+            "syslog" => Box::new(sources::syslog::SyslogSource::new(
+                mon_cfg.name.clone(),
+                mon_cfg.path.clone(),
+            )),
             _ => {
                 tracing::warn!("Unknown monitor type: {}", mon_cfg.monitor_type);
                 continue;
