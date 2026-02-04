@@ -65,7 +65,7 @@ This file tracks active work items to bring documentation and implementations (R
 - [x] **Improve Status Output Alignment**
   - Implement tab-writer style alignment for the status table instead of relying on simple tabs `\t`, to ensure consistent column spacing.
 
-- [ ] **Implement pprof Support**
+- [x] **Implement pprof Support**
   - Investigate and implement pprof-compatible endpoints (optional, for parity).
 
 ## General

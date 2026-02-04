@@ -372,7 +372,7 @@ pub fn main() !void {
 
     if (final_metrics_port) |port| {
         // Spawn metrics server thread
-        const t = try std.Thread.spawn(.{}, metrics.startServer, .{ allocator, port, collector });
+        const t = try std.Thread.spawn(.{}, metrics.startServer, .{ allocator, port, collector, raw_args_slice });
         t.detach();
     }
 

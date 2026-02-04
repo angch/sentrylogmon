@@ -1,7 +1,7 @@
 const std = @import("std");
 const sysstat = @import("sysstat.zig");
 
-pub fn startServer(allocator: std.mem.Allocator, port: u16, collector: *sysstat.Collector) !void {
+pub fn startServer(allocator: std.mem.Allocator, port: u16, collector: *sysstat.Collector, cmdline: []const []const u8) !void {
     const address = std.net.Address.initIp4(.{ 0, 0, 0, 0 }, port);
     var server = try address.listen(.{ .kernel_backlog = 128 });
     defer server.deinit();
@@ -15,13 +15,13 @@ pub fn startServer(allocator: std.mem.Allocator, port: u16, collector: *sysstat.
         };
         defer connection.stream.close();
 
-        handleConnection(allocator, connection.stream, collector) catch |err| {
+        handleConnection(allocator, connection.stream, collector, cmdline) catch |err| {
             std.debug.print("Metrics handle error: {}\n", .{err});
         };
     }
 }
 
-fn handleConnection(allocator: std.mem.Allocator, stream: std.net.Stream, collector: *sysstat.Collector) !void {
+fn handleConnection(allocator: std.mem.Allocator, stream: std.net.Stream, collector: *sysstat.Collector, cmdline: []const []const u8) !void {
     var buf: [1024]u8 = undefined;
     const bytes_read = try stream.read(&buf);
     if (bytes_read == 0) return;
@@ -30,7 +30,11 @@ fn handleConnection(allocator: std.mem.Allocator, stream: std.net.Stream, collec
 
     var iter = std.mem.tokenizeScalar(u8, request, ' ');
     const method = iter.next() orelse return;
-    const path = iter.next() orelse return;
+    const full_path = iter.next() orelse return;
+
+    // Strip query params for routing
+    const path_end = std.mem.indexOfScalar(u8, full_path, '?') orelse full_path.len;
+    const path = full_path[0..path_end];
 
     if (std.mem.eql(u8, method, "GET")) {
         if (std.mem.eql(u8, path, "/healthz")) {
@@ -43,10 +47,55 @@ fn handleConnection(allocator: std.mem.Allocator, stream: std.net.Stream, collec
             try stream.writeAll("HTTP/1.1 200 OK\r\nContent-Type: text/plain; version=0.0.4\r\nConnection: close\r\n\r\n");
             try stream.writeAll(response);
             return;
+        } else if (std.mem.startsWith(u8, path, "/debug/pprof")) {
+             try handlePprof(stream, path, cmdline);
+             return;
         }
     }
 
     try stream.writeAll("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
+}
+
+fn handlePprof(stream: std.net.Stream, path: []const u8, cmdline: []const []const u8) !void {
+    if (std.mem.eql(u8, path, "/debug/pprof")) {
+        try stream.writeAll("HTTP/1.1 301 Moved Permanently\r\nLocation: /debug/pprof/\r\nConnection: close\r\n\r\n");
+        return;
+    }
+
+    if (std.mem.eql(u8, path, "/debug/pprof/")) {
+        const index_html =
+            \\<html>
+            \\<head>
+            \\<title>/debug/pprof/</title>
+            \\</head>
+            \\<body>
+            \\/debug/pprof/<br>
+            \\<br>
+            \\<a href="cmdline">cmdline</a><br>
+            \\<a href="profile">profile</a><br>
+            \\<a href="symbol">symbol</a><br>
+            \\<a href="trace">trace</a><br>
+            \\</body>
+            \\</html>
+        ;
+        try stream.writeAll("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n\r\n");
+        try stream.writeAll(index_html);
+        return;
+    }
+
+    if (std.mem.eql(u8, path, "/debug/pprof/cmdline")) {
+         try stream.writeAll("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n");
+         for (cmdline, 0..) |arg, i| {
+             if (i > 0) try stream.writeAll("\x00");
+             try stream.writeAll(arg);
+         }
+         return;
+    }
+
+    // For other endpoints, return 501
+    const not_implemented = "Not Implemented. Zig implementation does not support runtime profiling via HTTP. Please use perf, Valgrind, or Massif.\n";
+    try stream.writeAll("HTTP/1.1 501 Not Implemented\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n");
+    try stream.writeAll(not_implemented);
 }
 
 fn generateMetrics(allocator: std.mem.Allocator, collector: *sysstat.Collector) ![]u8 {
