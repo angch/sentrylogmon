@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/angch/sentrylogmon/detectors"
@@ -216,11 +217,17 @@ type Monitor struct {
 	currentBatchMeta BatchMetadata
 	flushTimer       *time.Timer
 	lastActivityTime time.Time
+
+	// Inactivity detection
+	maxInactivity     time.Duration
+	lastReadTime      int64 // atomic unix nano
+	inactivityAlerted int32 // atomic boolean
 }
 
 type Options struct {
 	Verbose           bool
 	ExcludePattern    string
+	MaxInactivity     string
 	RateLimitBurst    int
 	RateLimitWindow   string
 	SentryDSN         string
@@ -291,6 +298,16 @@ func New(ctx context.Context, source sources.LogSource, detector detectors.Detec
 		}
 	}
 
+	// Initialize MaxInactivity
+	if opts.MaxInactivity != "" {
+		d, err := time.ParseDuration(opts.MaxInactivity)
+		if err == nil {
+			m.maxInactivity = d
+		} else {
+			log.Printf("Invalid max inactivity duration '%s': %v", opts.MaxInactivity, err)
+		}
+	}
+
 	// Initialize timer as stopped
 	m.flushTimer = time.AfterFunc(FlushInterval, func() {
 		m.flushBuffer()
@@ -302,6 +319,12 @@ func New(ctx context.Context, source sources.LogSource, detector detectors.Detec
 func (m *Monitor) Start() {
 	if m.Verbose {
 		log.Printf("Starting monitor for %s", m.Source.Name())
+	}
+
+	atomic.StoreInt64(&m.lastReadTime, time.Now().UnixNano())
+
+	if m.maxInactivity > 0 {
+		go m.watchdog()
 	}
 
 	for {
@@ -322,6 +345,9 @@ func (m *Monitor) Start() {
 			m.metricProcessedLines.Inc()
 
 			now := time.Now()
+			// Update lastReadTime for inactivity detection
+			atomic.StoreInt64(&m.lastReadTime, now.UnixNano())
+
 			if now.Sub(lastMetricUpdateTime) > 1*time.Second {
 				m.metricLastActivity.Set(float64(now.Unix()))
 				lastMetricUpdateTime = now
@@ -368,6 +394,56 @@ func (m *Monitor) Start() {
 		case <-m.ctx.Done():
 			return
 		case <-time.After(1 * time.Second):
+		}
+	}
+}
+
+func (m *Monitor) watchdog() {
+	// Check at half the inactivity duration or at least every 100ms
+	interval := m.maxInactivity / 2
+	if interval < 100*time.Millisecond {
+		interval = 100 * time.Millisecond
+	}
+	if interval > 10*time.Second {
+		interval = 10 * time.Second
+	}
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-m.ctx.Done():
+			return
+		case <-ticker.C:
+			lastRead := time.Unix(0, atomic.LoadInt64(&m.lastReadTime))
+			silenceDuration := time.Since(lastRead)
+
+			if silenceDuration > m.maxInactivity {
+				if atomic.CompareAndSwapInt32(&m.inactivityAlerted, 0, 1) {
+					if m.Verbose {
+						log.Printf("[%s] Inactivity detected: %v > %v", m.Source.Name(), silenceDuration, m.maxInactivity)
+					}
+					m.Hub.WithScope(func(scope *sentry.Scope) {
+						scope.SetTag("source", m.Source.Name())
+						scope.SetTag("alert_type", "inactivity")
+						scope.SetLevel(sentry.LevelWarning)
+						m.Hub.CaptureMessage(m.Source.Name() + ": Monitor source inactivity detected (silence for " + silenceDuration.String() + ")")
+					})
+				}
+			} else {
+				if atomic.CompareAndSwapInt32(&m.inactivityAlerted, 1, 0) {
+					if m.Verbose {
+						log.Printf("[%s] Activity resumed.", m.Source.Name())
+					}
+					m.Hub.WithScope(func(scope *sentry.Scope) {
+						scope.SetTag("source", m.Source.Name())
+						scope.SetTag("alert_type", "inactivity")
+						scope.SetLevel(sentry.LevelInfo)
+						m.Hub.CaptureMessage(m.Source.Name() + ": Monitor source activity resumed")
+					})
+				}
+			}
 		}
 	}
 }

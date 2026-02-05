@@ -171,6 +171,7 @@ func main() {
 		m, err := monitor.New(ctx, src, det, sysstatCollector, monitor.Options{
 			Verbose:           cfg.Verbose,
 			ExcludePattern:    monCfg.ExcludePattern,
+			MaxInactivity:     monCfg.MaxInactivity,
 			RateLimitBurst:    monCfg.RateLimitBurst,
 			RateLimitWindow:   monCfg.RateLimitWindow,
 			SentryDSN:         sentryDSN,
