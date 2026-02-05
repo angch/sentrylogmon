@@ -82,3 +82,35 @@ func BenchmarkDmesgDetector_Detect(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkJsonDetector(b *testing.B) {
+	d, err := NewJsonDetector("level:error")
+	if err != nil {
+		b.Fatalf("Failed to create detector: %v", err)
+	}
+
+	line := []byte(`{"level":"error","msg":"something went wrong","time":"2023-10-27T10:00:00Z"}`)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if !d.Detect(line) {
+			b.Fatal("Expected match")
+		}
+		// Also simulate getting context as Monitor does
+		d.GetContext(line)
+	}
+}
+
+func BenchmarkJsonDetector_NoMatch(b *testing.B) {
+	d, err := NewJsonDetector("level:error")
+	if err != nil {
+		b.Fatalf("Failed to create detector: %v", err)
+	}
+
+	line := []byte(`{"level":"info","msg":"everything is fine","time":"2023-10-27T10:00:00Z"}`)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if d.Detect(line) {
+			b.Fatal("Expected no match")
+		}
+	}
+}
