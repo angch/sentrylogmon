@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
+	"github.com/angch/sentrylogmon/sysstat"
 	"gopkg.in/yaml.v3"
 )
 
@@ -184,6 +186,10 @@ func (c *Config) Redacted() *Config {
 	for i := range newC.Monitors {
 		if newC.Monitors[i].Sentry.DSN != "" {
 			newC.Monitors[i].Sentry.DSN = "***"
+		}
+		if newC.Monitors[i].Args != "" {
+			parts := strings.Fields(newC.Monitors[i].Args)
+			newC.Monitors[i].Args = sysstat.SanitizeCommand(parts)
 		}
 	}
 

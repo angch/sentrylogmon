@@ -29,6 +29,7 @@ func TestStatusRedaction(t *testing.T) {
 				Sentry: config.SentryConfig{
 					DSN: secretDSN,
 				},
+				Args: "--password=secret --token supersecret",
 			},
 		},
 	}
@@ -92,6 +93,15 @@ func TestStatusRedaction(t *testing.T) {
 			t.Error("Monitor DSN was exposed (not redacted)")
 		} else if status.Config.Monitors[0].Sentry.DSN != "***" {
 			t.Errorf("Monitor DSN was %q, expected '***'", status.Config.Monitors[0].Sentry.DSN)
+		}
+
+		// Check Monitor Args Redaction
+		args := status.Config.Monitors[0].Args
+		if args == "--password=secret --token supersecret" {
+			t.Error("Monitor Args were exposed (not redacted)")
+		}
+		if args != "--password=[REDACTED] --token [REDACTED]" {
+			t.Errorf("Monitor Args were %q, expected '--password=[REDACTED] --token [REDACTED]'", args)
 		}
 	} else {
 		t.Error("Monitors list is empty, expected 1 monitor")
