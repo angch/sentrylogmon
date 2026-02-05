@@ -236,6 +236,23 @@ fn format_duration(seconds: u64) -> String {
     }
 }
 
+fn format_bytes(b: u64) -> String {
+    const UNIT: u64 = 1024;
+    if b < UNIT {
+        return format!("{} B", b);
+    }
+    let mut div = UNIT;
+    let mut exp = 0;
+    let mut n = b / UNIT;
+    while n >= UNIT {
+        div *= UNIT;
+        exp += 1;
+        n /= UNIT;
+    }
+    let suffix = "KMGTPE".chars().nth(exp).unwrap_or('?');
+    format!("{:.1} {}iB", b as f64 / div as f64, suffix)
+}
+
 fn print_instance_table(instances: Vec<ipc::StatusResponse>) {
     if instances.is_empty() {
         println!("No running instances found.");
@@ -250,8 +267,9 @@ struct InstanceRow {
     pid: String,
     started: String,
     uptime: String,
+    mem: String,
     version: String,
-    details: String,
+    monitors: String,
 }
 
 fn format_instance_table(instances: &[ipc::StatusResponse], now: SystemTime) -> String {
@@ -267,6 +285,8 @@ fn format_instance_table(instances: &[ipc::StatusResponse], now: SystemTime) -> 
             .unwrap_or(0);
         let uptime_str = format_duration(uptime_secs);
 
+        let mem_str = format_bytes(inst.memory_alloc);
+
         let version = if inst.version.is_empty() {
             "-".to_string()
         } else {
@@ -277,52 +297,59 @@ fn format_instance_table(instances: &[ipc::StatusResponse], now: SystemTime) -> 
             pid: inst.pid.to_string(),
             started: start_str,
             uptime: uptime_str,
+            mem: mem_str,
             version,
-            details: format_details(inst.config.as_ref()),
+            monitors: format_details(inst.config.as_ref()),
         });
     }
 
-    let headers = ["PID", "STARTED", "UPTIME", "VERSION", "DETAILS"];
+    let headers = ["PID", "STARTED", "UPTIME", "MEM", "VERSION", "MONITORS"];
     let mut widths = [
         headers[0].len(),
         headers[1].len(),
         headers[2].len(),
         headers[3].len(),
+        headers[4].len(),
     ];
 
     for row in &rows {
         widths[0] = max(widths[0], row.pid.len());
         widths[1] = max(widths[1], row.started.len());
         widths[2] = max(widths[2], row.uptime.len());
-        widths[3] = max(widths[3], row.version.len());
+        widths[3] = max(widths[3], row.mem.len());
+        widths[4] = max(widths[4], row.version.len());
     }
 
     let mut output = String::new();
     output.push_str(&format!(
-        "{:<w0$} {:<w1$} {:<w2$} {:<w3$} {}\n",
+        "{:<w0$} {:<w1$} {:<w2$} {:<w3$} {:<w4$} {}\n",
         headers[0],
         headers[1],
         headers[2],
         headers[3],
         headers[4],
+        headers[5],
         w0 = widths[0],
         w1 = widths[1],
         w2 = widths[2],
-        w3 = widths[3]
+        w3 = widths[3],
+        w4 = widths[4]
     ));
 
     for row in rows {
         output.push_str(&format!(
-            "{:<w0$} {:<w1$} {:<w2$} {:<w3$} {}\n",
+            "{:<w0$} {:<w1$} {:<w2$} {:<w3$} {:<w4$} {}\n",
             row.pid,
             row.started,
             row.uptime,
+            row.mem,
             row.version,
-            row.details,
+            row.monitors,
             w0 = widths[0],
             w1 = widths[1],
             w2 = widths[2],
-            w3 = widths[3]
+            w3 = widths[3],
+            w4 = widths[4]
         ));
     }
 
@@ -412,7 +439,7 @@ mod tests {
     }
 
     #[test]
-    fn format_instance_table_aligns_details_column() {
+    fn format_instance_table_aligns_monitors_column() {
         let start_time = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000);
         let now = start_time + Duration::from_secs(65);
 
@@ -422,12 +449,14 @@ mod tests {
                 start_time,
                 version: "0.1.0".to_string(),
                 config: Some(sample_config("alpha", "file")),
+                memory_alloc: 1024 * 1024,
             },
             StatusResponse {
                 pid: 1010,
                 start_time,
                 version: "0.10.0".to_string(),
                 config: Some(sample_config("beta", "file")),
+                memory_alloc: 2048 * 1024,
             },
         ];
 
@@ -435,11 +464,11 @@ mod tests {
         let lines: Vec<&str> = output.lines().collect();
         assert!(lines.len() >= 3);
 
-        let header_details_idx = lines[0].find("DETAILS").expect("header details");
-        let first_details_idx = lines[1].find("alpha(file)").expect("first details");
-        let second_details_idx = lines[2].find("beta(file)").expect("second details");
+        let header_monitors_idx = lines[0].find("MONITORS").expect("header monitors");
+        let first_monitors_idx = lines[1].find("alpha(file)").expect("first monitors");
+        let second_monitors_idx = lines[2].find("beta(file)").expect("second monitors");
 
-        assert_eq!(header_details_idx, first_details_idx);
-        assert_eq!(header_details_idx, second_details_idx);
+        assert_eq!(header_monitors_idx, first_monitors_idx);
+        assert_eq!(header_monitors_idx, second_monitors_idx);
     }
 }

@@ -8,6 +8,7 @@ use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::SystemTime;
+use sysinfo::{Pid, System};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixListener;
 
@@ -17,6 +18,7 @@ pub struct StatusResponse {
     pub start_time: SystemTime,
     pub version: String,
     pub config: Option<Config>,
+    pub memory_alloc: u64,
 }
 
 pub fn ensure_secure_directory(path: &Path) -> Result<()> {
@@ -95,11 +97,21 @@ pub async fn start_server(
             let path = parts.next().unwrap_or("");
 
             if method == "GET" && path == "/status" {
+                let mut sys = System::new();
+                let pid = Pid::from_u32(std::process::id());
+                sys.refresh_process(pid);
+                let memory_alloc = if let Some(p) = sys.process(pid) {
+                    p.memory()
+                } else {
+                    0
+                };
+
                 let response = StatusResponse {
                     pid: std::process::id(),
                     start_time,
                     version: env!("CARGO_PKG_VERSION").to_string(),
                     config: Some((*config).clone()),
+                    memory_alloc,
                 };
 
                 if let Ok(json) = serde_json::to_string(&response) {
