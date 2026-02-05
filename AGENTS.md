@@ -50,3 +50,8 @@ A heap profile was captured under load (100,000 log lines) using `net/http/pprof
 - 2026-02-05: `JsonDetector` optimized with caching.
   - **Key Decision**: Detectors can be stateful but must be thread-safe (`sync.Mutex`) and validate cache against input (`bytes.Equal`) because `GetContext` can be called with arbitrary lines.
   - **Performance**: Safe caching (Mutex + Copy + Compare) yielded ~50% speedup over double unmarshalling (2900ns vs 6100ns).
+
+## Workflow & Verification
+
+- **Runtime Verification**: Execute the binaries and check for runtime errors as part of the tests before committing code.
+- **Documentation Sync**: Make sure README.md or linked document shows any updated or changed usage for this application after code update, and always strive to maintain documentation matching the code.
