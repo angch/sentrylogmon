@@ -25,6 +25,7 @@ type MonitorConfig struct {
 	Pattern         string       `yaml:"pattern"`         // regex pattern for custom format
 	Format          string       `yaml:"format"`          // dmesg, nginx, custom (default: custom if pattern set)
 	ExcludePattern  string       `yaml:"exclude_pattern"` // regex pattern to exclude from reporting
+	MaxInactivity   string       `yaml:"max_inactivity"`  // max duration of inactivity before alerting
 	RateLimitBurst  int          `yaml:"rate_limit_burst"`
 	RateLimitWindow string       `yaml:"rate_limit_window"`
 	Sentry          SentryConfig `yaml:"sentry"` // Override global Sentry config
