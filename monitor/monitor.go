@@ -17,6 +17,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+var commonTimeLayouts = []string{
+	time.RFC3339,
+	time.RFC3339Nano,
+	"2006-01-02 15:04:05",
+	"2006-01-02T15:04:05",
+}
+
 func extractSyslogPriority(line []byte) (int, int, int, bool) {
 	// Fast path: must start with '<'
 	if len(line) < 3 || line[0] != '<' {
@@ -88,13 +95,7 @@ func extractTimestamp(line []byte) (float64, string) {
 		if indices := detectors.TimestampRegexISO.FindSubmatchIndex(line); len(indices) >= 4 {
 			tsStr := string(line[indices[2]:indices[3]])
 			// Try parsing with common layouts
-			layouts := []string{
-				time.RFC3339,
-				time.RFC3339Nano,
-				"2006-01-02 15:04:05",
-				"2006-01-02T15:04:05",
-			}
-			for _, layout := range layouts {
+			for _, layout := range commonTimeLayouts {
 				if t, err := time.Parse(layout, tsStr); err == nil {
 					return float64(t.Unix()) + float64(t.Nanosecond())/1e9, tsStr
 				}
