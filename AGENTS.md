@@ -47,3 +47,6 @@ A heap profile was captured under load (100,000 log lines) using `net/http/pprof
   - Zig 0.15.2 `std.fs.File.stdout().writer()` requires a buffer argument and returns a struct where the `Writer` interface is accessed via `.interface` field.
   - `std.ArrayList` behaves like `std.ArrayListUnmanaged` in this version (requires explicit allocator for methods).
 - 2026-02-04: Zig implementation now exposes `/debug/pprof/` endpoints for parity. `cmdline` is fully implemented, while `profile`, `heap`, etc., return 501 Not Implemented with instructions to use native tools (perf, Valgrind) as Zig lacks a standard runtime profiler.
+- 2026-02-05: `JsonDetector` optimized with caching.
+  - **Key Decision**: Detectors can be stateful but must be thread-safe (`sync.Mutex`) and validate cache against input (`bytes.Equal`) because `GetContext` can be called with arbitrary lines.
+  - **Performance**: Safe caching (Mutex + Copy + Compare) yielded ~50% speedup over double unmarshalling (2900ns vs 6100ns).
