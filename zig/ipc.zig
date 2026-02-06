@@ -7,6 +7,7 @@ pub const StatusResponse = struct {
     version: []const u8,
     config: ?config_mod.Config,
     command_line: []const u8 = "",
+    memory_alloc: u64 = 0,
 
     pub fn deinit(self: *StatusResponse, allocator: std.mem.Allocator) void {
         allocator.free(self.start_time);
@@ -81,12 +82,15 @@ fn handleConnection(allocator: std.mem.Allocator, stream: std.net.Stream, config
 
         const pid: i32 = if (@import("builtin").os.tag == .linux) @intCast(std.os.linux.getpid()) else 0;
 
+        const mem_alloc = readProcessMemory(allocator) catch 0;
+
         const status = StatusResponse{
             .pid = pid,
             .start_time = time_str,
             .version = if (config) |c| c.sentry.release else "unknown",
             .config = config,
             .command_line = command_line,
+            .memory_alloc = mem_alloc,
         };
 
         var json_buf = std.ArrayList(u8).empty; // Unmanaged
@@ -168,11 +172,26 @@ fn getStatus(allocator: std.mem.Allocator, socket_path: []const u8) !StatusRespo
     return error.InvalidResponse;
 }
 
+fn readProcessMemory(allocator: std.mem.Allocator) !u64 {
+    const file = try std.fs.openFileAbsolute("/proc/self/statm", .{});
+    defer file.close();
+    const content = try file.readToEndAlloc(allocator, 1024);
+    defer allocator.free(content);
+
+    var iter = std.mem.tokenizeScalar(u8, content, ' ');
+    _ = iter.next(); // size
+    const resident_str = iter.next() orelse return error.InvalidFormat;
+    const resident_pages = try std.fmt.parseInt(u64, resident_str, 10);
+    const page_size = 4096; // Assume 4KB for now
+    return resident_pages * page_size;
+}
+
 fn deepCopyStatus(allocator: std.mem.Allocator, src: StatusResponse) !StatusResponse {
     var dst = src;
     dst.start_time = try allocator.dupe(u8, src.start_time);
     dst.version = try allocator.dupe(u8, src.version);
     dst.command_line = try allocator.dupe(u8, src.command_line);
+    dst.memory_alloc = src.memory_alloc;
     if (src.config) |c| {
         dst.config = try deepCopyConfig(allocator, c);
     }
