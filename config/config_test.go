@@ -106,6 +106,9 @@ monitors:
 	*configFile = tmpfile.Name()
 	defer func() { *configFile = "" }()
 
+	*dsn = "https://example.com"
+	defer func() { *dsn = "" }()
+
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Failed to load config: %v", err)
@@ -127,6 +130,9 @@ func TestLoadConfigFromFlags(t *testing.T) {
 	// Set flags
 	*inputFile = "/tmp/test.log"
 	defer func() { *inputFile = "" }()
+
+	*dsn = "https://example.com"
+	defer func() { *dsn = "" }()
 
 	*pattern = "Error"
 	defer func() { *pattern = "Error" }()
@@ -155,6 +161,9 @@ func TestLoadConfigFromFlags_Format(t *testing.T) {
 	// Set flags
 	*inputFile = "/tmp/test.log"
 	defer func() { *inputFile = "" }()
+
+	*dsn = "https://example.com"
+	defer func() { *dsn = "" }()
 
 	*format = "nginx"
 	defer func() { *format = "" }()

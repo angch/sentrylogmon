@@ -68,7 +68,12 @@ func watchConfig(ctx context.Context, configPath string, onReload func()) {
 
 					var cfg config.Config
 					if err := yaml.Unmarshal(data, &cfg); err != nil {
-						log.Printf("Config file changed but is invalid, ignoring reload: %v", err)
+						log.Printf("Config file changed but is invalid (YAML error), ignoring reload: %v", err)
+						return
+					}
+
+					if err := cfg.Validate(); err != nil {
+						log.Printf("Config file changed but is invalid (Validation error), ignoring reload: %v", err)
 						return
 					}
 
