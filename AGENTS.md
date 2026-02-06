@@ -58,6 +58,10 @@ A heap profile was captured under load (100,000 log lines) using `net/http/pprof
   - **Key Decision**: Replaced regex-based timestamp parsing with a manual byte-scanning parser (`ParseSyslogTimestamp`).
   - **Performance**: 3.6x speedup (219ns vs 794ns) and reduced allocations (32B -> 16B).
   - **Compatibility**: Preserved logic for year inference (defaulting to current year with boundary checks).
+- 2026-02-08: `ISO8601 Timestamp` optimized.
+  - **Key Decision**: Replaced `time.Parse` with manual byte parsing for ISO8601/RFC3339 timestamps.
+  - **Performance**: Significant speedup (up to 73%) by avoiding layout string parsing overhead.
+  - **Compatibility**: Supports RFC3339 (T separator) and generic ISO8601 (space separator) with fractional seconds and timezones.
 
 ## Workflow & Verification
 

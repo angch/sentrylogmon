@@ -35,50 +35,115 @@ func ParseISO8601(line []byte) (float64, string, bool) {
 		return 0, "", false
 	}
 
+	y := atoi4(line[0:4])
+	m := atoi2(line[5:7])
+	d := atoi2(line[8:10])
+	h := atoi2(line[11:13])
+	min := atoi2(line[14:16])
+	s := atoi2(line[17:19])
+
+	if y < 0 || m < 1 || m > 12 || d < 1 || d > 31 || h > 23 || min > 59 || s > 60 {
+		return 0, "", false
+	}
+
 	// Determine end of timestamp
 	end := 19
+	nsec := 0
+
 	// Scan fractional seconds
 	if end < len(line) && line[end] == '.' {
 		end++
+		fracStart := end
 		for end < len(line) && line[end] >= '0' && line[end] <= '9' {
 			end++
 		}
+		if end > fracStart {
+			fracLen := end - fracStart
+			if fracLen > 9 {
+				nsec = atoiN(line[fracStart : fracStart+9])
+			} else {
+				val := atoiN(line[fracStart:end])
+				// Scale to nanoseconds
+				for i := 0; i < 9-fracLen; i++ {
+					val *= 10
+				}
+				nsec = val
+			}
+		}
 	}
+
+	loc := time.UTC
+
 	// Scan timezone
 	if end < len(line) {
 		if line[end] == 'Z' {
 			end++
 		} else if line[end] == '+' || line[end] == '-' {
+			sign := 1
+			if line[end] == '-' {
+				sign = -1
+			}
 			end++
-			// Expect digits and colon
+
+			tzStart := end
 			for end < len(line) && ((line[end] >= '0' && line[end] <= '9') || line[end] == ':') {
 				end++
+			}
+
+			tzStr := line[tzStart:end]
+			var tzH, tzM int
+			// Simplistic parsing: HH:MM or HH or HHMM
+			if len(tzStr) == 5 && tzStr[2] == ':' { // 07:00
+				tzH = atoi2(tzStr[0:2])
+				tzM = atoi2(tzStr[3:5])
+			} else if len(tzStr) == 2 { // 07
+				tzH = atoi2(tzStr[0:2])
+			} else if len(tzStr) == 4 { // 0700
+				tzH = atoi2(tzStr[0:2])
+				tzM = atoi2(tzStr[2:4])
+			}
+
+			if tzH >= 0 && tzM >= 0 {
+				offset := (tzH*60 + tzM) * 60 * sign
+				if offset == 0 {
+					loc = time.UTC
+				} else {
+					loc = time.FixedZone("", offset)
+				}
 			}
 		}
 	}
 
 	tsStr := string(line[:end])
+	t := time.Date(y, time.Month(m), d, h, min, s, nsec, loc)
 
-	// Parse
-	var t time.Time
-	var err error
+	return float64(t.Unix()) + float64(t.Nanosecond())/1e9, tsStr, true
+}
 
-	if line[10] == 'T' {
-		t, err = time.Parse(time.RFC3339Nano, tsStr)
-	} else {
-		// Space separator
-		// Try full layout if timezone present
-		if len(tsStr) > 19 {
-			t, err = time.Parse("2006-01-02 15:04:05.999999999Z07:00", tsStr)
-		} else {
-			t, err = time.Parse("2006-01-02 15:04:05", tsStr)
+func atoi2(b []byte) int {
+	if b[0] < '0' || b[0] > '9' || b[1] < '0' || b[1] > '9' {
+		return -1
+	}
+	return int(b[0]-'0')*10 + int(b[1]-'0')
+}
+
+func atoi4(b []byte) int {
+	if b[0] < '0' || b[0] > '9' || b[1] < '0' || b[1] > '9' ||
+		b[2] < '0' || b[2] > '9' || b[3] < '0' || b[3] > '9' {
+		return -1
+	}
+	return int(b[0]-'0')*1000 + int(b[1]-'0')*100 + int(b[2]-'0')*10 + int(b[3]-'0')
+}
+
+func atoiN(b []byte) int {
+	n := 0
+	for _, c := range b {
+		if c < '0' || c > '9' {
+			return 0
 		}
+		n = n*10 + int(c-'0')
 	}
-
-	if err == nil {
-		return float64(t.Unix()) + float64(t.Nanosecond())/1e9, tsStr, true
-	}
-	return 0, "", false
+	return n
 }
 
 func ParseNginxError(line []byte) (float64, string, bool) {
