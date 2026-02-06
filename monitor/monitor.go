@@ -18,13 +18,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-var commonTimeLayouts = []string{
-	time.RFC3339,
-	time.RFC3339Nano,
-	"2006-01-02 15:04:05",
-	"2006-01-02T15:04:05",
-}
-
 var severityKeys = []string{"level", "severity", "log_level", "type"}
 
 func extractSyslogPriority(line []byte) (int, int, int, bool) {
@@ -93,24 +86,6 @@ func extractTimestamp(line []byte) (float64, string) {
 
 		if ts, tsStr, ok := detectors.ParseNginxError(line); ok {
 			return ts, tsStr
-		}
-
-		if indices := detectors.TimestampRegexISO.FindSubmatchIndex(line); len(indices) >= 4 {
-			tsStr := string(line[indices[2]:indices[3]])
-			// Try parsing with common layouts
-			for _, layout := range commonTimeLayouts {
-				if t, err := time.Parse(layout, tsStr); err == nil {
-					return float64(t.Unix()) + float64(t.Nanosecond())/1e9, tsStr
-				}
-			}
-		}
-
-		// Try Nginx Error (2023/10/27 10:00:00)
-		if indices := detectors.TimestampRegexNginxError.FindSubmatchIndex(line); len(indices) >= 4 {
-			tsStr := string(line[indices[2]:indices[3]])
-			if t, err := time.Parse("2006/01/02 15:04:05", tsStr); err == nil {
-				return float64(t.Unix()) + float64(t.Nanosecond())/1e9, tsStr
-			}
 		}
 	}
 
