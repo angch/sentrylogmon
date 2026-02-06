@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"strings"
+	"time"
 
 	"github.com/angch/sentrylogmon/sysstat"
 	"gopkg.in/yaml.v3"
@@ -165,7 +167,69 @@ func Load() (*Config, error) {
 		cfg.Monitors = append(cfg.Monitors, monitor)
 	}
 
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("configuration validation failed: %w", err)
+	}
+
 	return cfg, nil
+}
+
+// Validate checks the configuration for errors.
+func (c *Config) Validate() error {
+	if c.Sentry.DSN == "" {
+		return fmt.Errorf("Sentry DSN is required")
+	}
+	if len(c.Monitors) == 0 {
+		return fmt.Errorf("no monitors configured")
+	}
+	for i, m := range c.Monitors {
+		if err := m.Validate(); err != nil {
+			return fmt.Errorf("monitor %d ('%s') invalid: %w", i, m.Name, err)
+		}
+	}
+	return nil
+}
+
+// Validate checks the monitor configuration for errors.
+func (m MonitorConfig) Validate() error {
+	if m.Name == "" {
+		return fmt.Errorf("monitor name is required")
+	}
+	switch m.Type {
+	case "file", "journalctl", "dmesg", "command", "syslog":
+		// ok
+	default:
+		return fmt.Errorf("unknown monitor type: %s", m.Type)
+	}
+
+	if m.Type == "file" && m.Path == "" {
+		return fmt.Errorf("path is required for file monitor")
+	}
+	if m.Type == "command" && m.Args == "" {
+		return fmt.Errorf("command args are required")
+	}
+
+	if m.Pattern != "" {
+		if _, err := regexp.Compile(m.Pattern); err != nil {
+			return fmt.Errorf("invalid pattern regex: %w", err)
+		}
+	}
+	if m.ExcludePattern != "" {
+		if _, err := regexp.Compile(m.ExcludePattern); err != nil {
+			return fmt.Errorf("invalid exclude_pattern regex: %w", err)
+		}
+	}
+	if m.MaxInactivity != "" {
+		if _, err := time.ParseDuration(m.MaxInactivity); err != nil {
+			return fmt.Errorf("invalid max_inactivity: %w", err)
+		}
+	}
+	if m.RateLimitWindow != "" {
+		if _, err := time.ParseDuration(m.RateLimitWindow); err != nil {
+			return fmt.Errorf("invalid rate_limit_window: %w", err)
+		}
+	}
+	return nil
 }
 
 // Redacted returns a deep copy of the configuration with sensitive fields redacted.

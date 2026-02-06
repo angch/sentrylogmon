@@ -48,7 +48,10 @@ monitors:
 	newConfig := `
 sentry:
   dsn: "https://example@sentry.io/456"
-monitors: []
+monitors:
+  - name: "test-reloaded"
+    type: "file"
+    path: "/tmp/test-reloaded.log"
 `
 	if err := os.WriteFile(tmpfile.Name(), []byte(newConfig), 0644); err != nil {
 		t.Fatal(err)
