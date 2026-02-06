@@ -50,6 +50,10 @@ A heap profile was captured under load (100,000 log lines) using `net/http/pprof
 - 2026-02-05: `JsonDetector` optimized with caching.
   - **Key Decision**: Detectors can be stateful but must be thread-safe (`sync.Mutex`) and validate cache against input (`bytes.Equal`) because `GetContext` can be called with arbitrary lines.
   - **Performance**: Safe caching (Mutex + Copy + Compare) yielded ~50% speedup over double unmarshalling (2900ns vs 6100ns).
+- 2026-02-07: `DmesgDetector` optimized.
+  - **Key Decision**: Replaced `strconv.ParseFloat` with a custom zero-allocation parser (`parseFloatFromBytes`) for dmesg timestamps (simple positive floats).
+  - **Optimization**: Updated context tracking to use `[]byte` comparisons instead of string conversions.
+  - **Performance**: Reduced allocations in `Detect` hot path. Context line processing allocs dropped from 4 to 2 (50% reduction).
 
 ## Workflow & Verification
 

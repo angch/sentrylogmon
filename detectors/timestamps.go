@@ -136,9 +136,39 @@ func ParseDmesgTimestamp(line []byte) (float64, string, bool) {
 	}
 
 	tsStr := string(numBytes)
-	ts, err := strconv.ParseFloat(tsStr, 64)
+	ts, err := parseFloatFromBytes(numBytes)
 	if err != nil {
 		return 0, "", false
 	}
 	return ts, tsStr, true
+}
+
+func parseFloatFromBytes(b []byte) (float64, error) {
+	var integerPart uint64
+	var fractionalPart uint64
+	var divisor float64 = 1
+	var dotSeen bool
+
+	if len(b) == 0 {
+		return 0, strconv.ErrSyntax
+	}
+
+	for _, c := range b {
+		if c >= '0' && c <= '9' {
+			if !dotSeen {
+				integerPart = integerPart*10 + uint64(c-'0')
+			} else {
+				fractionalPart = fractionalPart*10 + uint64(c-'0')
+				divisor *= 10
+			}
+		} else if c == '.' {
+			if dotSeen {
+				return 0, strconv.ErrSyntax
+			}
+			dotSeen = true
+		} else {
+			return 0, strconv.ErrSyntax
+		}
+	}
+	return float64(integerPart) + float64(fractionalPart)/divisor, nil
 }

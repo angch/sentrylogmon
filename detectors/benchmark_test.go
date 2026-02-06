@@ -83,6 +83,42 @@ func BenchmarkDmesgDetector_Detect(b *testing.B) {
 	}
 }
 
+// BenchmarkDmesgDetector_FullLifecycle measures Detect + ExtractTimestamp for an error line.
+func BenchmarkDmesgDetector_FullLifecycle(b *testing.B) {
+	detector := NewDmesgDetector()
+	line := []byte("[787739.009553] ata1.00: exception Emask 0x10 SAct 0x10000 SErr 0x40d0000")
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if detector.Detect(line) {
+			detector.ExtractTimestamp(line)
+		}
+	}
+}
+
+// BenchmarkDmesgDetector_ContextLine measures Detect + ExtractTimestamp for a context line.
+func BenchmarkDmesgDetector_ContextLine(b *testing.B) {
+	detector := NewDmesgDetector()
+	// Set up state
+	errorLine := []byte("[787739.009553] ata1.00: exception Emask 0x10 SAct 0x10000 SErr 0x40d0000")
+	detector.Detect(errorLine) // Sets lastMatchHeader
+
+	// Related line
+	contextLine := []byte("[787739.009558] ata1.00: irq_stat 0x00000040, connection status changed")
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		// Detect should return true (context)
+		if detector.Detect(contextLine) {
+			detector.ExtractTimestamp(contextLine)
+		} else {
+			b.Fatal("Should be detected as context")
+		}
+	}
+}
+
 func BenchmarkJsonDetector(b *testing.B) {
 	d, err := NewJsonDetector("level:error")
 	if err != nil {
