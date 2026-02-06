@@ -172,3 +172,158 @@ func parseFloatFromBytes(b []byte) (float64, error) {
 	}
 	return float64(integerPart) + float64(fractionalPart)/divisor, nil
 }
+
+func ParseSyslogTimestamp(line []byte) (float64, string, bool) {
+	if len(line) < 15 {
+		return 0, "", false
+	}
+
+	// Skip priority
+	offset := 0
+	if line[0] == '<' {
+		// Find '>'
+		// PRI is 1-3 digits. So '>' can be at index 2, 3, or 4.
+		// Start searching from index 2
+		found := false
+		for i := 2; i <= 4 && i < len(line); i++ {
+			if line[i] == '>' {
+				offset = i + 1
+				found = true
+				break
+			}
+		}
+		if !found {
+			return 0, "", false
+		}
+	}
+
+	if len(line)-offset < 15 {
+		return 0, "", false
+	}
+
+	tsBytes := line[offset : offset+15]
+
+	// Check Mmm (Month)
+	// Must be capitalized: A-Z
+	if tsBytes[0] < 'A' || tsBytes[0] > 'Z' {
+		return 0, "", false
+	}
+
+	m0, m1, m2 := tsBytes[0], tsBytes[1], tsBytes[2]
+	var month time.Month
+
+	switch m0 {
+	case 'J':
+		if m1 == 'a' && m2 == 'n' {
+			month = time.January
+		} else if m1 == 'u' && m2 == 'n' {
+			month = time.June
+		} else if m1 == 'u' && m2 == 'l' {
+			month = time.July
+		}
+	case 'F':
+		if m1 == 'e' && m2 == 'b' {
+			month = time.February
+		}
+	case 'M':
+		if m1 == 'a' && m2 == 'r' {
+			month = time.March
+		} else if m1 == 'a' && m2 == 'y' {
+			month = time.May
+		}
+	case 'A':
+		if m1 == 'p' && m2 == 'r' {
+			month = time.April
+		} else if m1 == 'u' && m2 == 'g' {
+			month = time.August
+		}
+	case 'S':
+		if m1 == 'e' && m2 == 'p' {
+			month = time.September
+		}
+	case 'O':
+		if m1 == 'c' && m2 == 't' {
+			month = time.October
+		}
+	case 'N':
+		if m1 == 'o' && m2 == 'v' {
+			month = time.November
+		}
+	case 'D':
+		if m1 == 'e' && m2 == 'c' {
+			month = time.December
+		}
+	}
+
+	if month == 0 {
+		return 0, "", false
+	}
+
+	if tsBytes[3] != ' ' {
+		return 0, "", false
+	}
+
+	// Day
+	var day int
+	d1, d2 := tsBytes[4], tsBytes[5]
+	if d1 == ' ' {
+		if d2 < '0' || d2 > '9' {
+			return 0, "", false
+		}
+		day = int(d2 - '0')
+	} else {
+		if d1 < '0' || d1 > '9' || d2 < '0' || d2 > '9' {
+			return 0, "", false
+		}
+		day = int(d1-'0')*10 + int(d2-'0')
+	}
+
+	if tsBytes[6] != ' ' {
+		return 0, "", false
+	}
+
+	// Time HH:MM:SS
+	h1, h2 := tsBytes[7], tsBytes[8]
+	if h1 < '0' || h1 > '9' || h2 < '0' || h2 > '9' {
+		return 0, "", false
+	}
+	hour := int(h1-'0')*10 + int(h2-'0')
+
+	if tsBytes[9] != ':' {
+		return 0, "", false
+	}
+
+	min1, min2 := tsBytes[10], tsBytes[11]
+	if min1 < '0' || min1 > '9' || min2 < '0' || min2 > '9' {
+		return 0, "", false
+	}
+	minute := int(min1-'0')*10 + int(min2-'0')
+
+	if tsBytes[12] != ':' {
+		return 0, "", false
+	}
+
+	s1, s2 := tsBytes[13], tsBytes[14]
+	if s1 < '0' || s1 > '9' || s2 < '0' || s2 > '9' {
+		return 0, "", false
+	}
+	sec := int(s1-'0')*10 + int(s2-'0')
+
+	// Validation
+	if day < 1 || day > 31 || hour > 23 || minute > 59 || sec > 60 {
+		return 0, "", false
+	}
+
+	// Year Inference
+	now := time.Now()
+	// Use UTC to match time.Parse(time.Stamp) behavior which defaults to UTC
+	currentYear := now.Year()
+	t := time.Date(currentYear, month, day, hour, minute, sec, 0, time.UTC)
+
+	// Simple heuristic for year boundary
+	if t.Sub(now) > 30*24*time.Hour {
+		t = t.AddDate(-1, 0, 0)
+	}
+
+	return float64(t.Unix()) + float64(t.Nanosecond())/1e9, string(tsBytes), true
+}

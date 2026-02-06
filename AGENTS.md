@@ -54,6 +54,10 @@ A heap profile was captured under load (100,000 log lines) using `net/http/pprof
   - **Key Decision**: Replaced `strconv.ParseFloat` with a custom zero-allocation parser (`parseFloatFromBytes`) for dmesg timestamps (simple positive floats).
   - **Optimization**: Updated context tracking to use `[]byte` comparisons instead of string conversions.
   - **Performance**: Reduced allocations in `Detect` hot path. Context line processing allocs dropped from 4 to 2 (50% reduction).
+- 2026-02-06: `Syslog Timestamp` optimized.
+  - **Key Decision**: Replaced regex-based timestamp parsing with a manual byte-scanning parser (`ParseSyslogTimestamp`).
+  - **Performance**: 3.6x speedup (219ns vs 794ns) and reduced allocations (32B -> 16B).
+  - **Compatibility**: Preserved logic for year inference (defaulting to current year with boundary checks).
 
 ## Workflow & Verification
 
