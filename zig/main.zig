@@ -37,6 +37,24 @@ const RateLimiter = struct {
     }
 };
 
+fn formatBytes(allocator: std.mem.Allocator, b: u64) ![]u8 {
+    const unit: u64 = 1024;
+    if (b < unit) {
+        return std.fmt.allocPrint(allocator, "{d} B", .{b});
+    }
+    var div = unit;
+    var exp: usize = 0;
+    var n = b / unit;
+    while (n >= unit) {
+        div *= unit;
+        exp += 1;
+        n /= unit;
+    }
+    const suffix = "KMGTPE"[exp];
+    const val = @as(f64, @floatFromInt(b)) / @as(f64, @floatFromInt(div));
+    return std.fmt.allocPrint(allocator, "{d:.1} {c}iB", .{ val, suffix });
+}
+
 fn formatDuration(allocator: std.mem.Allocator, seconds: i64) ![]u8 {
     if (seconds < 0) return allocator.dupe(u8, "0s");
 
@@ -212,7 +230,7 @@ pub fn main() !void {
             var tw = tabwriter.TabWriter(@TypeOf(w.interface)).init(allocator, w.interface);
             defer tw.deinit();
 
-            try tw.print("PID\tSTARTED\tUPTIME\tVERSION\tDETAILS\n", .{});
+            try tw.print("PID\tSTARTED\tUPTIME\tMEM\tVERSION\tDETAILS\n", .{});
             for (instances.items) |inst| {
                 const start_ts = std.fmt.parseInt(i64, inst.start_time, 10) catch 0;
                 const now = std.time.timestamp();
@@ -224,10 +242,13 @@ pub fn main() !void {
                 const uptime_str = formatDuration(allocator, uptime_sec) catch "unknown";
                 defer if (!std.mem.eql(u8, uptime_str, "unknown")) allocator.free(uptime_str);
 
+                const mem_str = formatBytes(allocator, inst.memory_alloc) catch "unknown";
+                defer if (!std.mem.eql(u8, mem_str, "unknown")) allocator.free(mem_str);
+
                 const details = getDetails(allocator, inst) catch "error";
                 defer if (!std.mem.eql(u8, details, "error")) allocator.free(details);
 
-                try tw.print("{d}\t{s}\t{s}\t{s}\t{s}\n", .{ inst.pid, started_str, uptime_str, inst.version, details });
+                try tw.print("{d}\t{s}\t{s}\t{s}\t{s}\t{s}\n", .{ inst.pid, started_str, uptime_str, mem_str, inst.version, details });
             }
             try tw.flush();
         } else {
