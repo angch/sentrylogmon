@@ -21,3 +21,8 @@ This file tracks active work items.
   - Implemented zero-allocation `parseFloatFromBytes` to avoid string conversion during timestamp parsing.
   - Optimized `areHeadersRelated` to accept `[]byte` and perform allocation-free comparisons.
   - Reduced allocations for `DmesgDetector.Detect` by 25% for error lines and 50% for context lines.
+- [x] **ISO8601 Timestamp Optimization** (2026-02-08)
+  - Implemented `ParseISO8601` manual parser to replace `time.Parse`.
+  - Improved performance by 36% for standard RFC3339 (142ns -> 90ns) and 73% for space-separated format (270ns -> 73ns).
+  - Maintained zero-allocation correctness (excluding return string).
+  - Added comprehensive unit tests and benchmarks.
