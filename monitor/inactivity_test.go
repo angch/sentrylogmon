@@ -53,7 +53,7 @@ func TestInactivityAlert(t *testing.T) {
 	// Short inactivity duration for testing
 	mon, err := New(ctx, source, detector, nil, Options{
 		MaxInactivity: "200ms",
-		Verbose: true, // Enable verbose to see logs if needed
+		Verbose:       true, // Enable verbose to see logs if needed
 	})
 	if err != nil {
 		t.Fatalf("Failed to create monitor: %v", err)

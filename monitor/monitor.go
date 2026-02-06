@@ -25,6 +25,8 @@ var commonTimeLayouts = []string{
 	"2006-01-02T15:04:05",
 }
 
+var severityKeys = []string{"level", "severity", "log_level", "type"}
+
 func extractSyslogPriority(line []byte) (int, int, int, bool) {
 	// Fast path: must start with '<'
 	if len(line) < 3 || line[0] != '<' {
@@ -646,6 +648,38 @@ func (m *Monitor) sendToSentry(line string, meta BatchMetadata) {
 
 		if meta.Context != nil {
 			scope.SetContext("Log Data", meta.Context)
+
+			// Try to extract level/severity from context
+			var levelStr string
+
+			for _, key := range severityKeys {
+				if val, ok := meta.Context[key]; ok {
+					if s, ok := val.(string); ok {
+						levelStr = strings.ToLower(s)
+						break
+					}
+				}
+			}
+
+			if levelStr != "" {
+				var level sentry.Level
+				switch levelStr {
+				case "fatal", "critical", "alert", "emergency", "panic":
+					level = sentry.LevelFatal
+				case "error", "err":
+					level = sentry.LevelError
+				case "warning", "warn":
+					level = sentry.LevelWarning
+				case "info", "information":
+					level = sentry.LevelInfo
+				case "debug", "trace":
+					level = sentry.LevelDebug
+				}
+
+				if level != "" {
+					scope.SetLevel(level)
+				}
+			}
 		}
 
 		// We send the line as the message.
