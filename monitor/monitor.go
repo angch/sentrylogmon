@@ -123,13 +123,9 @@ func extractTimestamp(line []byte) (float64, string) {
 	}
 
 	// 4. Try Nginx Access ([27/Oct/2023:10:00:00 +0000])
-	// This regex is unanchored, so it can find the timestamp anywhere in the line.
 	// This handles IPv6 access logs starting with '[' or other custom formats.
-	if indices := detectors.TimestampRegexNginxAccess.FindSubmatchIndex(line); len(indices) >= 4 {
-		tsStr := string(line[indices[2]:indices[3]])
-		if t, err := time.Parse("02/Jan/2006:15:04:05 -0700", tsStr); err == nil {
-			return float64(t.Unix()) + float64(t.Nanosecond())/1e9, tsStr
-		}
+	if ts, tsStr, ok := detectors.ParseNginxAccess(line); ok {
+		return ts, tsStr
 	}
 
 	return 0, ""
