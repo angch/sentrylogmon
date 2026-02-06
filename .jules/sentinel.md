@@ -37,3 +37,10 @@
 **Prevention:**
 1. When using suffix matching for flag detection, enforce that the suffix is preceded by a separator or constitutes the entire string.
 2. Avoid applying generic flag heuristics to arguments that don't look like standard flags (e.g. short flags with attached values).
+
+## 2026-02-06 - Unbounded Memory Consumption via Log Buffering
+**Vulnerability:** The application buffered log lines based solely on line count (1000 lines) before flushing to Sentry. An attacker or a verbose system could generate large log lines (up to 1MB each), causing the buffer to grow to ~1GB, leading to potential OOM crashes or Sentry payload rejection.
+**Learning:** Limiting buffers by "item count" is insufficient when the size of items varies significantly. Always enforce a hard byte limit (e.g., 256KB) in addition to count limits to ensure predictable memory usage and stay within external service payload limits.
+**Prevention:**
+1. Implement dual thresholds (count AND size) for all buffering logic.
+2. Flush the buffer immediately when either threshold is exceeded.
