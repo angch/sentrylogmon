@@ -392,3 +392,117 @@ func ParseSyslogTimestamp(line []byte) (float64, string, bool) {
 
 	return float64(t.Unix()) + float64(t.Nanosecond())/1e9, string(tsBytes), true
 }
+
+func ParseNginxAccess(line []byte) (float64, string, bool) {
+	const expectedLen = 26
+
+	for i := 0; i < len(line); i++ {
+		if line[i] != '[' {
+			continue
+		}
+
+		if i+expectedLen+1 >= len(line) {
+			break
+		}
+
+		if line[i+expectedLen+1] != ']' {
+			continue
+		}
+
+		// dd/Mon/yyyy:HH:mm:ss ±ZZZZ
+		start := i + 1
+
+		if line[start+2] != '/' || line[start+6] != '/' || line[start+11] != ':' || line[start+14] != ':' || line[start+17] != ':' || line[start+20] != ' ' {
+			continue
+		}
+
+		d := atoi2(line[start : start+2])
+
+		// Month
+		mBytes := line[start+3 : start+6]
+		if mBytes[0] < 'A' || mBytes[0] > 'Z' {
+			continue
+		}
+		m0, m1, m2 := mBytes[0], mBytes[1], mBytes[2]
+		var month time.Month
+
+		switch m0 {
+		case 'J':
+			if m1 == 'a' && m2 == 'n' {
+				month = time.January
+			} else if m1 == 'u' && m2 == 'n' {
+				month = time.June
+			} else if m1 == 'u' && m2 == 'l' {
+				month = time.July
+			}
+		case 'F':
+			if m1 == 'e' && m2 == 'b' {
+				month = time.February
+			}
+		case 'M':
+			if m1 == 'a' && m2 == 'r' {
+				month = time.March
+			} else if m1 == 'a' && m2 == 'y' {
+				month = time.May
+			}
+		case 'A':
+			if m1 == 'p' && m2 == 'r' {
+				month = time.April
+			} else if m1 == 'u' && m2 == 'g' {
+				month = time.August
+			}
+		case 'S':
+			if m1 == 'e' && m2 == 'p' {
+				month = time.September
+			}
+		case 'O':
+			if m1 == 'c' && m2 == 't' {
+				month = time.October
+			}
+		case 'N':
+			if m1 == 'o' && m2 == 'v' {
+				month = time.November
+			}
+		case 'D':
+			if m1 == 'e' && m2 == 'c' {
+				month = time.December
+			}
+		}
+
+		if month == 0 {
+			continue
+		}
+
+		y := atoi4(line[start+7 : start+11])
+		h := atoi2(line[start+12 : start+14])
+		min := atoi2(line[start+15 : start+17])
+		s := atoi2(line[start+18 : start+20])
+
+		sign := 1
+		if line[start+21] == '-' {
+			sign = -1
+		} else if line[start+21] != '+' {
+			continue
+		}
+
+		tzH := atoi2(line[start+22 : start+24])
+		tzM := atoi2(line[start+24 : start+26])
+
+		if d < 1 || d > 31 || y < 1970 || h > 23 || min > 59 || s > 60 || tzH < 0 || tzM < 0 || tzM > 59 {
+			continue
+		}
+
+		offset := (tzH*60 + tzM) * 60 * sign
+		loc := time.UTC
+		if offset != 0 {
+			loc = time.FixedZone("", offset)
+		}
+
+		t := time.Date(y, month, d, h, min, s, 0, loc)
+		tsStr := string(line[start : start+expectedLen])
+
+		return float64(t.Unix()) + float64(t.Nanosecond())/1e9, tsStr, true
+	}
+
+	return 0, "", false
+}
