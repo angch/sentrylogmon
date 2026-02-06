@@ -4,6 +4,11 @@ This file tracks active work items.
 
 ## Completed
 
+- [x] **Syslog Timestamp Optimization** (2026-02-06)
+  - Implemented `ParseSyslogTimestamp` manual parser to replace regex.
+  - Reduced allocations from 32B/op to 16B/op.
+  - Improved performance by 3.6x (794ns -> 219ns).
+  - Verified with new unit tests and benchmarks.
 - [x] **JSON Log Support** (2026-02-05)
   - Implemented `ExtractTimestamp` in `JsonDetector`.
   - Optimized `JsonDetector` with thread-safe caching (mutex + byte comparison) to avoid double unmarshalling.

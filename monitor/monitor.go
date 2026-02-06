@@ -117,19 +117,8 @@ func extractTimestamp(line []byte) (float64, string) {
 	// 3. Try Syslog (Oct 27 10:00:00)
 	// Starts with '<' or uppercase letter
 	if line[0] == '<' || (line[0] >= 'A' && line[0] <= 'Z') {
-		if indices := detectors.TimestampRegexSyslog.FindSubmatchIndex(line); len(indices) >= 4 {
-			tsStr := string(line[indices[2]:indices[3]])
-			// Syslog usually doesn't have year. We assume current year.
-			if t, err := time.Parse(time.Stamp, tsStr); err == nil {
-				// time.Parse(time.Stamp) returns year 0. Add current year.
-				now := time.Now()
-				t = t.AddDate(now.Year(), 0, 0)
-				// Simple heuristic for year boundary: if result is more than 30 days in future, assume previous year
-				if t.Sub(now) > 30*24*time.Hour {
-					t = t.AddDate(-1, 0, 0)
-				}
-				return float64(t.Unix()) + float64(t.Nanosecond())/1e9, tsStr
-			}
+		if ts, tsStr, ok := detectors.ParseSyslogTimestamp(line); ok {
+			return ts, tsStr
 		}
 	}
 
