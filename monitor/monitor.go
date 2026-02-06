@@ -138,6 +138,8 @@ func extractTimestamp(line []byte) (float64, string) {
 const (
 	// Max buffer size to prevent memory leaks (e.g. 1000 lines)
 	MaxBufferSize = 1000
+	// Max buffer bytes to prevent memory exhaustion (256KB)
+	MaxBufferBytes = 256 * 1024
 	// Scanner buffer size (1MB) to handle long log lines
 	MaxScanTokenSize = 1024 * 1024
 	// Flush interval
@@ -492,7 +494,7 @@ func (m *Monitor) processMatch(line []byte) {
 		m.resetTimerLocked()
 	} else {
 		// Check max buffer size to prevent memory leaks
-		if m.bufferCount >= MaxBufferSize {
+		if m.bufferCount >= MaxBufferSize || (m.buffer.Len()+len(line)) >= MaxBufferBytes {
 			// Force flush current buffer and start new
 			msgToSend = m.buffer.String()
 			metaToSend = m.currentBatchMeta
