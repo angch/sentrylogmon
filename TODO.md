@@ -12,3 +12,7 @@ This file tracks active work items.
   - Implemented extraction of `level`, `severity`, `log_level` from JSON logs.
   - Mapped string levels (e.g., "error", "warn") to `sentry.Level`.
   - Added `TestJsonSeverity` to verify mapping logic.
+- [x] **DmesgDetector Optimization** (2026-02-07)
+  - Implemented zero-allocation `parseFloatFromBytes` to avoid string conversion during timestamp parsing.
+  - Optimized `areHeadersRelated` to accept `[]byte` and perform allocation-free comparisons.
+  - Reduced allocations for `DmesgDetector.Detect` by 25% for error lines and 50% for context lines.

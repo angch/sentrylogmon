@@ -3,7 +3,6 @@ package detectors
 import (
 	"bytes"
 	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -50,8 +49,8 @@ func (d *DmesgDetector) Detect(line []byte) bool {
 		timestampBytes := line[indices[2]:indices[3]]
 		headerBytes = line[indices[4]:indices[5]]
 
-		// ParseFloat requires a string, but this allocation is unavoidable for float parsing.
-		timestamp, _ = strconv.ParseFloat(string(timestampBytes), 64)
+		// Use parseFloatFromBytes to avoid string allocation.
+		timestamp, _ = parseFloatFromBytes(timestampBytes)
 	}
 
 	if isError {
@@ -72,8 +71,8 @@ func (d *DmesgDetector) Detect(line []byte) bool {
 			// It's a new log line. Check if it's related.
 			if len(headerBytes) > 0 && timestamp > 0 {
 				if (timestamp - d.lastMatchTime) <= 5.0 {
-					// Convert headerBytes to string for comparison
-					if areHeadersRelated(d.lastMatchHeader, string(headerBytes)) {
+					// Pass headerBytes directly without string conversion
+					if areHeadersRelated(d.lastMatchHeader, headerBytes) {
 						return true
 					}
 				}
@@ -108,19 +107,55 @@ func (d *DmesgDetector) ExtractTimestamp(line []byte) (float64, string, bool) {
 	return ParseDmesgTimestamp(line)
 }
 
-func areHeadersRelated(h1, h2 string) bool {
+func areHeadersRelated(h1 string, h2 []byte) bool {
 	h1 = strings.TrimSpace(h1)
-	h2 = strings.TrimSpace(h2)
-	if h1 == "" || h2 == "" {
+	h2 = bytes.TrimSpace(h2)
+	if h1 == "" || len(h2) == 0 {
 		return false
 	}
 	// Check for strict equality
-	if h1 == h2 {
+	if equalsStringBytes(h1, h2) {
 		return true
 	}
 	// Check for prefix match (e.g. ata1 vs ata1.00)
-	if strings.HasPrefix(h1, h2) || strings.HasPrefix(h2, h1) {
+	if hasPrefixStringBytes(h1, h2) || hasPrefixBytesString(h2, h1) {
 		return true
 	}
 	return false
+}
+
+func equalsStringBytes(s string, b []byte) bool {
+	if len(s) != len(b) {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func hasPrefixStringBytes(s string, prefix []byte) bool {
+	if len(s) < len(prefix) {
+		return false
+	}
+	for i := 0; i < len(prefix); i++ {
+		if s[i] != prefix[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func hasPrefixBytesString(b []byte, prefix string) bool {
+	if len(b) < len(prefix) {
+		return false
+	}
+	for i := 0; i < len(prefix); i++ {
+		if b[i] != prefix[i] {
+			return false
+		}
+	}
+	return true
 }
