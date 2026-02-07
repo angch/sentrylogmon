@@ -188,6 +188,11 @@ sentrylogmon --dsn="..." --file=/var/log/app.log --pattern="(?i)(error|fatal|pan
 
 You can also use a configuration file to manage multiple monitors and settings. This is the recommended way for complex setups.
 
+Generate a starter configuration file:
+```bash
+sentrylogmon --init
+```
+
 Create `sentrylogmon.yaml`:
 
 ```yaml

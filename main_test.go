@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -260,5 +262,37 @@ func TestFormatDuration(t *testing.T) {
 				t.Errorf("formatDuration(%v) = %v, want %v", tt.d, got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestGenerateConfig(t *testing.T) {
+	// Create a temporary file path
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "sentrylogmon.yaml")
+
+	// 1. Test creating new config
+	err := generateConfig(configFile)
+	if err != nil {
+		t.Fatalf("generateConfig failed: %v", err)
+	}
+
+	// Verify content
+	content, err := os.ReadFile(configFile)
+	if err != nil {
+		t.Fatalf("Failed to read generated config: %v", err)
+	}
+
+	if !strings.Contains(string(content), "dsn: \"\"") {
+		t.Errorf("Generated config missing expected content")
+	}
+
+	// 2. Test overwrite protection
+	err = generateConfig(configFile)
+	if err == nil {
+		t.Error("generateConfig should fail if file exists")
+	}
+
+	if !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("Unexpected error message: %v", err)
 	}
 }

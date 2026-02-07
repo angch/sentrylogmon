@@ -31,6 +31,7 @@ import (
 var (
 	statusFlag = flag.Bool("status", false, "List running instances")
 	updateFlag = flag.Bool("update", false, "Update/Restart all running instances")
+	initFlag   = flag.Bool("init", false, "Generate a starter configuration file")
 )
 
 func main() {
@@ -72,6 +73,14 @@ func main() {
 				fmt.Printf("Update requested for PID %d\n", inst.PID)
 			}
 		}
+		return
+	}
+
+	if *initFlag {
+		if err := generateConfig("sentrylogmon.yaml"); err != nil {
+			log.Fatalf("Error generating config: %v", err)
+		}
+		fmt.Println("Generated sentrylogmon.yaml")
 		return
 	}
 
@@ -484,4 +493,36 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%dm %ds", m, s)
 	}
 	return fmt.Sprintf("%ds", s)
+}
+
+func generateConfig(filename string) error {
+	if _, err := os.Stat(filename); err == nil {
+		return fmt.Errorf("%s already exists. Will not overwrite", filename)
+	}
+
+	content := `# sentrylogmon.yaml - Configuration for Sentry Log Monitor
+
+# Global Sentry Configuration
+sentry:
+  # Your Sentry DSN (Data Source Name)
+  # Example: https://examplePublicKey@o0.ingest.sentry.io/0
+  dsn: ""
+  environment: production
+  release: v1.0.0
+
+monitors:
+  # Example: Monitor a log file for errors
+  - name: system-logs
+    type: file
+    path: /var/log/syslog
+    # Regex pattern to match (case-insensitive)
+    pattern: "(?i)(error|fatal|panic)"
+
+  # Example: Monitor Nginx error logs with built-in format
+  # - name: nginx-errors
+  #   type: file
+  #   path: /var/log/nginx/error.log
+  #   format: nginx
+`
+	return os.WriteFile(filename, []byte(content), 0644)
 }
