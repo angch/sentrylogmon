@@ -61,7 +61,8 @@ func SanitizeCommand(args []string) string {
 			}
 
 			// Also check if the key matches a sensitive flag explicitly
-			if sensitiveFlags[key] {
+			// We must check lowercased key to handle case variations
+			if sensitiveFlags[strings.ToLower(key)] {
 				sanitized = append(sanitized, key+"=[REDACTED]")
 				continue
 			}
