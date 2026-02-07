@@ -2,7 +2,6 @@ package detectors
 
 import (
 	"bytes"
-	"regexp"
 	"strings"
 )
 
@@ -15,13 +14,6 @@ type DmesgDetector struct {
 	lastMatchHeader string
 }
 
-var (
-	// Example: [787739.009553] ata1.00: exception Emask...
-	dmesgLineRegex = regexp.MustCompile(`^\[\s*(\d+\.\d+)\]\s*([^:]+):`)
-	// Example: [ 123.456] ...
-	dmesgStartRegex = regexp.MustCompile(`^\[\s*\d+\.\d+\]`)
-)
-
 func NewDmesgDetector() *DmesgDetector {
 	// Added "exception" to the pattern
 	d, _ := NewGenericDetector("(?i)(error|fail|panic|oops|exception)")
@@ -33,24 +25,35 @@ func (d *DmesgDetector) Detect(line []byte) bool {
 	isError := d.GenericDetector.Detect(line)
 
 	// 2. Check if it looks like a new dmesg line (starts with timestamp)
-	isDmesgLine := dmesgStartRegex.Match(line)
+	// Use ParseDmesgTimestamp to avoid regex and get timestamp in one go.
+	timestamp, _, isDmesgLine := ParseDmesgTimestamp(line)
 
-	// 3. Parse the line for detailed info using FindSubmatchIndex to avoid allocations.
-	// FindSubmatchIndex returns []int with indices instead of allocating [][]byte slices.
-	// For each capture group, we get a pair of indices [start, end).
-	// indices[0:2] = full match, indices[2:4] = first group (timestamp), indices[4:6] = second group (header)
-	indices := dmesgLineRegex.FindSubmatchIndex(line)
-	var timestamp float64
+	// 3. Parse the line for detailed info (header) manually to avoid allocations and regex.
 	var headerBytes []byte
 
-	if len(indices) >= 6 {
-		// Extract timestamp and header by slicing the original line bytes directly.
-		// This avoids the allocation that FindSubmatch would create.
-		timestampBytes := line[indices[2]:indices[3]]
-		headerBytes = line[indices[4]:indices[5]]
+	if isDmesgLine {
+		// Find header manually (replaces dmesgLineRegex)
+		// dmesgLineRegex was: ^\[\s*(\d+\.\d+)\]\s*([^:]+):
+		// ParseDmesgTimestamp ensures we have [ ... ] structure.
 
-		// Use parseFloatFromBytes to avoid string allocation.
-		timestamp, _ = parseFloatFromBytes(timestampBytes)
+		// Find closing bracket
+		closeBracket := bytes.IndexByte(line, ']')
+		if closeBracket != -1 {
+			// Skip spaces after timestamp
+			start := closeBracket + 1
+			for start < len(line) && line[start] == ' ' {
+				start++
+			}
+
+			// Find header separator (:)
+			// The header is everything up to the first colon
+			if start < len(line) {
+				colon := bytes.IndexByte(line[start:], ':')
+				if colon != -1 {
+					headerBytes = line[start : start+colon]
+				}
+			}
+		}
 	}
 
 	if isError {
@@ -93,11 +96,17 @@ func (d *DmesgDetector) Detect(line []byte) bool {
 
 // TransformMessage strips the timestamp from the dmesg line.
 func (d *DmesgDetector) TransformMessage(line []byte) []byte {
-	// Check if it starts with timestamp
-	if loc := dmesgStartRegex.FindIndex(line); loc != nil {
-		// loc[1] is the index after the timestamp (including brackets)
-		// Return the rest of the line, trimmed of whitespace
-		return bytes.TrimSpace(line[loc[1]:])
+	// Check if it starts with timestamp manually
+	// Just find the first ] and trim spaces after it.
+	if len(line) > 0 && line[0] == '[' {
+		closeBracket := bytes.IndexByte(line, ']')
+		if closeBracket != -1 {
+			// Verify content is valid dmesg timestamp structure
+			_, _, ok := ParseDmesgTimestamp(line)
+			if ok {
+				return bytes.TrimSpace(line[closeBracket+1:])
+			}
+		}
 	}
 	return line
 }
