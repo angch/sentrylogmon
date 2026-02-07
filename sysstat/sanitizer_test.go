@@ -130,6 +130,16 @@ func TestSanitizeCommand(t *testing.T) {
 			input:    []string{"curl", "--cookie", "session=123"},
 			expected: "curl --cookie [REDACTED]",
 		},
+		{
+			name:     "Case mismatch for sensitive flag with equals",
+			input:    []string{"--ApiKey=secret123"},
+			expected: "--ApiKey=[REDACTED]",
+		},
+		{
+			name:     "Case mismatch for sensitive flag with equals 2",
+			input:    []string{"--Session-Id=secret123"},
+			expected: "--Session-Id=[REDACTED]",
+		},
 	}
 
 	for _, tt := range tests {
