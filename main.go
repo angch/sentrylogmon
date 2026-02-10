@@ -80,7 +80,10 @@ func main() {
 		if err := generateConfig("sentrylogmon.yaml"); err != nil {
 			log.Fatalf("Error generating config: %v", err)
 		}
-		fmt.Println("Generated sentrylogmon.yaml")
+		fmt.Println("✨ Configuration generated at sentrylogmon.yaml")
+		fmt.Println("👉 Next steps:")
+		fmt.Println("   1. Edit the file to add your Sentry DSN")
+		fmt.Println("   2. Run: sentrylogmon --config=sentrylogmon.yaml")
 		return
 	}
 
@@ -390,7 +393,7 @@ func printInstanceTable(instances []ipc.StatusResponse) {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	fmt.Fprintln(w, "     PID\tSTARTED\t      UPTIME\t       MEM\tVERSION\tMONITORS")
+	fmt.Fprintln(w, "     PID\tStarted\t      Uptime\t    Memory\tVersion\tMonitors")
 	for _, inst := range instances {
 		uptime := time.Since(inst.StartTime).Round(time.Second)
 		uptimeStr := formatDuration(uptime)
@@ -476,23 +479,31 @@ func formatBytes(b uint64) string {
 
 func formatDuration(d time.Duration) string {
 	d = d.Round(time.Second)
-	day := d / (24 * time.Hour)
-	d -= day * 24 * time.Hour
-	h := d / time.Hour
-	d -= h * time.Hour
-	m := d / time.Minute
-	d -= m * time.Minute
-	s := d / time.Second
-	if day > 0 {
-		return fmt.Sprintf("%dd %dh %dm", day, h, m)
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Seconds()))
 	}
-	if h > 0 {
-		return fmt.Sprintf("%dh %dm %ds", h, m, s)
-	}
-	if m > 0 {
+	if d < time.Hour {
+		m := int(d.Minutes())
+		s := int(d.Seconds()) % 60
+		if s == 0 {
+			return fmt.Sprintf("%dm", m)
+		}
 		return fmt.Sprintf("%dm %ds", m, s)
 	}
-	return fmt.Sprintf("%ds", s)
+	if d < 24*time.Hour {
+		h := int(d.Hours())
+		m := int(d.Minutes()) % 60
+		if m == 0 {
+			return fmt.Sprintf("%dh", h)
+		}
+		return fmt.Sprintf("%dh %dm", h, m)
+	}
+	day := int(d.Hours() / 24)
+	h := int(d.Hours()) % 24
+	if h == 0 {
+		return fmt.Sprintf("%dd", day)
+	}
+	return fmt.Sprintf("%dd %dh", day, h)
 }
 
 func generateConfig(filename string) error {
