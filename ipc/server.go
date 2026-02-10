@@ -3,7 +3,6 @@ package ipc
 import (
 	"encoding/json"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"runtime"
@@ -16,7 +15,7 @@ func StartServer(socketPath string, cfg *config.Config, restartFunc func()) erro
 	// Ensure socket file is removed before listening, in case of crash/restart
 	os.Remove(socketPath)
 
-	listener, err := net.Listen("unix", socketPath)
+	listener, err := listenSecure("unix", socketPath)
 	if err != nil {
 		return err
 	}
