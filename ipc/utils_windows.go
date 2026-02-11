@@ -3,6 +3,7 @@
 package ipc
 
 import (
+	"net"
 	"os"
 	"path/filepath"
 )
@@ -16,4 +17,9 @@ func EnsureSecureDirectory(path string) error {
 // GetSocketDir returns the secure socket directory.
 func GetSocketDir() string {
 	return filepath.Join(os.TempDir(), "sentrylogmon")
+}
+
+// listenSecure creates a listener. Windows security is handled differently, so this is a pass-through.
+func listenSecure(network, address string) (net.Listener, error) {
+	return net.Listen(network, address)
 }

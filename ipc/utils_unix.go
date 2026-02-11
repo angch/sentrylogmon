@@ -4,6 +4,7 @@ package ipc
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -62,4 +63,11 @@ func EnsureSecureDirectory(path string) error {
 // GetSocketDir returns the secure socket directory for the current user.
 func GetSocketDir() string {
 	return filepath.Join(os.TempDir(), fmt.Sprintf("sentrylogmon-%d", os.Getuid()))
+}
+
+// listenSecure creates a unix socket listener with umask 0077 to prevent race conditions.
+func listenSecure(network, address string) (net.Listener, error) {
+	oldMask := syscall.Umask(0077)
+	defer syscall.Umask(oldMask)
+	return net.Listen(network, address)
 }
