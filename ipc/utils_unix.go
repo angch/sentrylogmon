@@ -4,10 +4,20 @@ package ipc
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"syscall"
 )
+
+// listenSecure creates a listener with secure permissions (0600) for unix sockets
+func listenSecure(network, address string) (net.Listener, error) {
+	if network == "unix" {
+		oldUmask := syscall.Umask(0077)
+		defer syscall.Umask(oldUmask)
+	}
+	return net.Listen(network, address)
+}
 
 // EnsureSecureDirectory ensures that the directory at path exists,
 // is a directory, has 0700 permissions, and is owned by the current user.
