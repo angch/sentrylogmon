@@ -1,5 +1,7 @@
 package detectors
 
+import "time"
+
 // Detector is the interface for detecting issues in log lines.
 type Detector interface {
 	// Detect returns true if the line contains an issue.
@@ -21,5 +23,5 @@ type MessageTransformer interface {
 // TimestampExtractor is an interface for extracting timestamp from log lines.
 type TimestampExtractor interface {
 	// ExtractTimestamp returns the timestamp (unix float), string representation, and success boolean.
-	ExtractTimestamp(line []byte) (float64, string, bool)
+	ExtractTimestamp(line []byte, now time.Time) (float64, string, bool)
 }

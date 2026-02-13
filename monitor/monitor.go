@@ -64,7 +64,7 @@ func extractSyslogPriority(line []byte) (int, int, int, bool) {
 	return pri, facility, severity, true
 }
 
-func extractTimestamp(line []byte) (float64, string) {
+func extractTimestamp(line []byte, now time.Time) (float64, string) {
 	if len(line) == 0 {
 		return 0, ""
 	}
@@ -92,7 +92,7 @@ func extractTimestamp(line []byte) (float64, string) {
 	// 3. Try Syslog (Oct 27 10:00:00)
 	// Starts with '<' or uppercase letter
 	if line[0] == '<' || (line[0] >= 'A' && line[0] <= 'Z') {
-		if ts, tsStr, ok := detectors.ParseSyslogTimestamp(line); ok {
+		if ts, tsStr, ok := detectors.ParseSyslogTimestamp(line, now); ok {
 			return ts, tsStr
 		}
 	}
@@ -443,11 +443,11 @@ func (m *Monitor) processMatch(line []byte) {
 	var ok bool
 
 	if extractor, isExtractor := m.Detector.(detectors.TimestampExtractor); isExtractor {
-		timestamp, tsStr, ok = extractor.ExtractTimestamp(line)
+		timestamp, tsStr, ok = extractor.ExtractTimestamp(line, m.lastActivityTime)
 	}
 
 	if !ok {
-		timestamp, tsStr = extractTimestamp(line)
+		timestamp, tsStr = extractTimestamp(line, m.lastActivityTime)
 	}
 
 	if transformer, ok := m.Detector.(detectors.MessageTransformer); ok {

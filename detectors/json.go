@@ -96,7 +96,7 @@ func (d *JsonDetector) GetContext(line []byte) map[string]interface{} {
 	return data
 }
 
-func (d *JsonDetector) ExtractTimestamp(line []byte) (float64, string, bool) {
+func (d *JsonDetector) ExtractTimestamp(line []byte, now time.Time) (float64, string, bool) {
 	var data map[string]interface{}
 
 	d.mu.Lock()
