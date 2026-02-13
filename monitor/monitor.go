@@ -172,6 +172,7 @@ type Monitor struct {
 	metricSentrySent     prometheus.Counter
 	metricSentryDropped  prometheus.Counter
 	metricLastActivity   prometheus.Gauge
+	metricMonitorLag     prometheus.Observer
 
 	// Buffering
 	buffer           strings.Builder
@@ -214,6 +215,7 @@ func New(ctx context.Context, source sources.LogSource, detector detectors.Detec
 	m.metricSentrySent = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "sent"})
 	m.metricSentryDropped = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "dropped"})
 	m.metricLastActivity = metrics.LastActivityTimestamp.With(prometheus.Labels{"source": source.Name()})
+	m.metricMonitorLag = metrics.MonitorLagSeconds.With(prometheus.Labels{"source": source.Name()})
 
 	// Initialize Sentry Hub
 	if opts.SentryDSN != "" {
@@ -448,6 +450,12 @@ func (m *Monitor) processMatch(line []byte) {
 
 	if !ok {
 		timestamp, tsStr = extractTimestamp(line)
+	}
+
+	if timestamp > 0 {
+		tsTime := time.Unix(int64(timestamp), int64((timestamp-float64(int64(timestamp)))*1e9))
+		lag := m.lastActivityTime.Sub(tsTime).Seconds()
+		m.metricMonitorLag.Observe(lag)
 	}
 
 	if transformer, ok := m.Detector.(detectors.MessageTransformer); ok {
