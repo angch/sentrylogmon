@@ -15,6 +15,7 @@ var sensitiveFlags = map[string]bool{
 	"--access-token":  true,
 	"--auth-token":    true,
 	"--session-id":    true,
+	"--dsn":           true,
 }
 
 var sensitiveSuffixes = []string{
@@ -28,6 +29,7 @@ var sensitiveSuffixes = []string{
 	"credential",
 	"cookie",
 	"session",
+	"dsn",
 }
 
 // SanitizeCommand joins command arguments into a string, redacting sensitive information.
