@@ -1,5 +1,7 @@
 package detectors
 
+import "time"
+
 // NginxDetector detects issues in Nginx error logs.
 // Default pattern: (?i)(error|critical|alert|emerg)
 // Note: "warn" is often just noise, but can be added if needed.
@@ -12,7 +14,7 @@ func NewNginxDetector() *NginxDetector {
 	return &NginxDetector{GenericDetector: d}
 }
 
-func (d *NginxDetector) ExtractTimestamp(line []byte) (float64, string, bool) {
+func (d *NginxDetector) ExtractTimestamp(line []byte, now time.Time) (float64, string, bool) {
 	if ts, tsStr, ok := ParseNginxError(line); ok {
 		return ts, tsStr, true
 	}
