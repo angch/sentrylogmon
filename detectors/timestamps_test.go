@@ -55,7 +55,7 @@ func TestParseSyslogTimestamp(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ts, tsStr, ok := ParseSyslogTimestamp([]byte(tt.line))
+			ts, tsStr, ok := ParseSyslogTimestampWithTime([]byte(tt.line), time.Now())
 			if ok != tt.wantOk {
 				t.Errorf("ParseSyslogTimestamp() ok = %v, want %v", ok, tt.wantOk)
 			}
