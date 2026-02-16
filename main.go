@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	_ "net/http/pprof" // Register pprof handlers
@@ -50,7 +51,7 @@ func main() {
 		}
 
 		if isTerminal {
-			printInstanceTable(instances)
+			printInstanceTable(os.Stdout, instances)
 		} else {
 			enc := json.NewEncoder(os.Stdout)
 			enc.SetIndent("", "  ")
@@ -383,18 +384,19 @@ func determineDetectorFormat(monCfg config.MonitorConfig) string {
 	return "custom"
 }
 
-func printInstanceTable(instances []ipc.StatusResponse) {
+func printInstanceTable(out io.Writer, instances []ipc.StatusResponse) {
 	if len(instances) == 0 {
-		fmt.Println("No running instances found.")
+		fmt.Fprintln(out, "No running instances found.")
 		return
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	fmt.Fprintln(w, "     PID\tSTARTED\t      UPTIME\t       MEM\tVERSION\tMONITORS")
+	w := tabwriter.NewWriter(out, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(w, "PID\tSTATUS\tUPTIME\tMEM\tVERSION\tMONITORS")
 	for _, inst := range instances {
 		uptime := time.Since(inst.StartTime).Round(time.Second)
 		uptimeStr := formatDuration(uptime)
 		memStr := formatBytes(inst.MemoryAlloc)
+		status := "🟢 Running"
 
 		var details string
 		if inst.Config != nil && len(inst.Config.Monitors) > 0 {
@@ -456,7 +458,7 @@ func printInstanceTable(instances []ipc.StatusResponse) {
 		if version == "" {
 			version = "-"
 		}
-		fmt.Fprintf(w, "%8d\t%s\t%12s\t%10s\t%s\t%s\n", inst.PID, inst.StartTime.Format("2006-01-02 15:04:05"), uptimeStr, memStr, version, details)
+		fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\t%s\n", inst.PID, status, uptimeStr, memStr, version, details)
 	}
 	w.Flush()
 }
@@ -476,23 +478,22 @@ func formatBytes(b uint64) string {
 
 func formatDuration(d time.Duration) string {
 	d = d.Round(time.Second)
-	day := d / (24 * time.Hour)
-	d -= day * 24 * time.Hour
-	h := d / time.Hour
-	d -= h * time.Hour
-	m := d / time.Minute
-	d -= m * time.Minute
-	s := d / time.Second
-	if day > 0 {
-		return fmt.Sprintf("%dd %dh %dm", day, h, m)
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Seconds()))
 	}
-	if h > 0 {
-		return fmt.Sprintf("%dh %dm %ds", h, m, s)
-	}
-	if m > 0 {
+	if d < time.Hour {
+		m := d / time.Minute
+		s := (d % time.Minute) / time.Second
 		return fmt.Sprintf("%dm %ds", m, s)
 	}
-	return fmt.Sprintf("%ds", s)
+	if d < 24*time.Hour {
+		h := d / time.Hour
+		m := (d % time.Hour) / time.Minute
+		return fmt.Sprintf("%dh %dm", h, m)
+	}
+	days := d / (24 * time.Hour)
+	h := (d % (24 * time.Hour)) / time.Hour
+	return fmt.Sprintf("%dd %dh", days, h)
 }
 
 func generateConfig(filename string) error {
