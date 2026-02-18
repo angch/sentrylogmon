@@ -4,7 +4,6 @@ This file tracks active work items.
 
 ## Wish List
 
-- [ ] **Prometheus Metrics for Monitor Lag**: Track time difference between log timestamp and processing time.
 - [ ] **Dynamic Configuration Reloading**: Support full config reload without restart (add/remove monitors).
 - [ ] **Structured Logging**: support JSON output for the agent's own logs.
 - [ ] **Health Check Endpoint**: Dedicated /healthz endpoint checking internal component status.
@@ -12,6 +11,10 @@ This file tracks active work items.
 
 ## Completed
 
+- [x] **Prometheus Metrics for Monitor Lag** (2026-02-18)
+  - Implemented `sentrylogmon_monitor_lag_seconds` Histogram metric.
+  - Added lag calculation in `Monitor.processMatch`.
+  - Added unit tests in `monitor/monitor_lag_test.go`.
 - [x] **Syslog Timestamp Optimization** (2026-02-06)
   - Implemented `ParseSyslogTimestamp` manual parser to replace regex.
   - Reduced allocations from 32B/op to 16B/op.
