@@ -253,7 +253,12 @@ func (c *Config) Redacted() *Config {
 			newC.Monitors[i].Sentry.DSN = "***"
 		}
 		if newC.Monitors[i].Args != "" {
-			parts := strings.Fields(newC.Monitors[i].Args)
+			parts, err := sysstat.SplitCommand(newC.Monitors[i].Args)
+			if err != nil {
+				// If split fails (e.g. unclosed quotes), fallback to simple split
+				// to ensure we at least try to redact something, although it might be imperfect.
+				parts = strings.Fields(newC.Monitors[i].Args)
+			}
 			newC.Monitors[i].Args = sysstat.SanitizeCommand(parts)
 		}
 	}
