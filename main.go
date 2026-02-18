@@ -390,7 +390,7 @@ func printInstanceTable(instances []ipc.StatusResponse) {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	fmt.Fprintln(w, "     PID\tSTARTED\t      UPTIME\t       MEM\tVERSION\tMONITORS")
+	fmt.Fprintln(w, "     PID\tSTATUS\tSTARTED\t      UPTIME\t       MEM\tVERSION\tMONITORS")
 	for _, inst := range instances {
 		uptime := time.Since(inst.StartTime).Round(time.Second)
 		uptimeStr := formatDuration(uptime)
@@ -456,7 +456,8 @@ func printInstanceTable(instances []ipc.StatusResponse) {
 		if version == "" {
 			version = "-"
 		}
-		fmt.Fprintf(w, "%8d\t%s\t%12s\t%10s\t%s\t%s\n", inst.PID, inst.StartTime.Format("2006-01-02 15:04:05"), uptimeStr, memStr, version, details)
+		status := "🔵 Running"
+		fmt.Fprintf(w, "%8d\t%s\t%s\t%12s\t%10s\t%s\t%s\n", inst.PID, status, inst.StartTime.Format("2006-01-02 15:04:05"), uptimeStr, memStr, version, details)
 	}
 	w.Flush()
 }
