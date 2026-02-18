@@ -67,3 +67,7 @@ A heap profile was captured under load (100,000 log lines) using `net/http/pprof
 
 - **Runtime Verification**: Execute the binaries and check for runtime errors as part of the tests before committing code.
 - **Documentation Sync**: Make sure README.md or linked document shows any updated or changed usage for this application after code update, and always strive to maintain documentation matching the code.
+- 2026-02-18: `Nginx Error Timestamp` optimized.
+  - **Key Decision**: Replaced `time.Parse` with manual byte parsing for Nginx error timestamps.
+  - **Performance**: ~3.6x speedup (67ns vs 246ns) by avoiding layout string parsing overhead.
+  - **Compatibility**: Supports standard Nginx error log timestamp format `YYYY/MM/DD HH:MM:SS` (UTC).
