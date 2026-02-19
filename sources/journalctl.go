@@ -1,15 +1,19 @@
 package sources
 
-import "strings"
+import (
+	"github.com/angch/sentrylogmon/sysstat"
+)
 
 type JournalctlSource struct {
 	*CommandSource
 }
 
-func NewJournalctlSource(name string, args string) *JournalctlSource {
-	// Simple splitting of args.
-	argsSlice := strings.Fields(args)
+func NewJournalctlSource(name string, args string) (*JournalctlSource, error) {
+	argsSlice, err := sysstat.SplitCommand(args)
+	if err != nil {
+		return nil, err
+	}
 	return &JournalctlSource{
 		CommandSource: NewCommandSource(name, "journalctl", argsSlice...),
-	}
+	}, nil
 }
