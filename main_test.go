@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/angch/sentrylogmon/config"
+	"github.com/angch/sentrylogmon/ipc"
 )
 
 var timestampRegex = regexp.MustCompile(`^\[\s*([0-9.]+)\]`)
@@ -294,5 +296,39 @@ func TestGenerateConfig(t *testing.T) {
 
 	if !strings.Contains(err.Error(), "already exists") {
 		t.Errorf("Unexpected error message: %v", err)
+	}
+}
+
+func TestPrintInstanceTable(t *testing.T) {
+	var buf bytes.Buffer
+	startTime, _ := time.Parse(time.RFC3339, "2023-10-27T10:00:00Z")
+
+	instances := []ipc.StatusResponse{
+		{
+			PID:         1234,
+			StartTime:   startTime,
+			Version:     "v1.0.0",
+			MemoryAlloc: 1024 * 1024,
+			Config: &config.Config{
+				Monitors: []config.MonitorConfig{
+					{Name: "test-monitor", Type: "file"},
+				},
+			},
+		},
+	}
+
+	printInstanceTable(&buf, instances)
+	output := buf.String()
+
+	if !strings.Contains(output, "STATUS") {
+		t.Error("Output should contain STATUS header")
+	}
+
+	if !strings.Contains(output, "🔵 Running") {
+		t.Error("Output should contain running status indicator")
+	}
+
+	if !strings.Contains(output, "1234") {
+		t.Error("Output should contain PID")
 	}
 }
