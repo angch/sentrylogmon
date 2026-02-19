@@ -5,6 +5,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/angch/sentrylogmon/detectors"
 	"github.com/getsentry/sentry-go"
@@ -67,11 +68,12 @@ func BenchmarkProcessMatch(b *testing.B) {
 	// Use a long line
 	line := "[100.0] " + strings.Repeat("a", 100)
 	lineBytes := []byte(line)
+	now := time.Now()
 
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		mon.processMatch(lineBytes)
+		mon.processMatch(lineBytes, now)
 	}
 }
 
@@ -93,11 +95,12 @@ func BenchmarkProcessMatchDmesg(b *testing.B) {
 	// Dmesg line
 	line := "[ 123.456] " + strings.Repeat("a", 100)
 	lineBytes := []byte(line)
+	now := time.Now()
 
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		mon.processMatch(lineBytes)
+		mon.processMatch(lineBytes, now)
 	}
 }
 
@@ -119,10 +122,11 @@ func BenchmarkProcessMatchNginx(b *testing.B) {
 	// Nginx Error line
 	line := "2023/10/27 10:00:00 [error] " + strings.Repeat("a", 100)
 	lineBytes := []byte(line)
+	now := time.Now()
 
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		mon.processMatch(lineBytes)
+		mon.processMatch(lineBytes, now)
 	}
 }
