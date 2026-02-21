@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-03-01 - Command Argument Redaction Gap for DSN
+**Vulnerability:** The command-line sanitizer failed to redact arguments ending in `dsn` (e.g., `--dsn`, `--sentry-dsn`), exposing sensitive Sentry DSNs in the process status output and potentially logs. This occurred because `dsn` was missing from the sensitive suffix list, even though other keys like `password` and `token` were present.
+**Learning:** When dealing with specific integrations (like Sentry), the integration-specific configuration keys (like `DSN`) must be explicitly treated as sensitive in all contexts, not just in configuration files. General purpose sanitizers often miss domain-specific secrets.
+**Prevention:**
+1. Explicitly add domain-specific secret keys (e.g., `dsn`) to the sanitizer's sensitive list.
+2. Review all arguments that can take sensitive values and ensure they are covered by the sanitizer.
