@@ -64,7 +64,7 @@ func extractSyslogPriority(line []byte) (int, int, int, bool) {
 	return pri, facility, severity, true
 }
 
-func extractTimestamp(line []byte) (float64, string) {
+func extractTimestamp(line []byte, now time.Time) (float64, string) {
 	if len(line) == 0 {
 		return 0, ""
 	}
@@ -92,7 +92,7 @@ func extractTimestamp(line []byte) (float64, string) {
 	// 3. Try Syslog (Oct 27 10:00:00)
 	// Starts with '<' or uppercase letter
 	if line[0] == '<' || (line[0] >= 'A' && line[0] <= 'Z') {
-		if ts, tsStr, ok := detectors.ParseSyslogTimestamp(line); ok {
+		if ts, tsStr, ok := detectors.ParseSyslogTimestampWithTime(line, now); ok {
 			return ts, tsStr
 		}
 	}
@@ -329,7 +329,7 @@ func (m *Monitor) Start() {
 				if m.Verbose {
 					log.Printf("[%s] Matched: %s", m.Source.Name(), string(lineBytes))
 				}
-				m.processMatch(lineBytes)
+				m.processMatch(lineBytes, now)
 			}
 		}
 
@@ -434,9 +434,9 @@ func (m *Monitor) extractMetadata(line []byte, tsStr string) BatchMetadata {
 	return meta
 }
 
-func (m *Monitor) processMatch(line []byte) {
+func (m *Monitor) processMatch(line []byte, now time.Time) {
 	m.bufferMutex.Lock()
-	m.lastActivityTime = time.Now()
+	m.lastActivityTime = now
 
 	var timestamp float64
 	var tsStr string
@@ -447,7 +447,7 @@ func (m *Monitor) processMatch(line []byte) {
 	}
 
 	if !ok {
-		timestamp, tsStr = extractTimestamp(line)
+		timestamp, tsStr = extractTimestamp(line, now)
 	}
 
 	if transformer, ok := m.Detector.(detectors.MessageTransformer); ok {
