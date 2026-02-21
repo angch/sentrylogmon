@@ -172,6 +172,7 @@ type Monitor struct {
 	metricSentrySent     prometheus.Counter
 	metricSentryDropped  prometheus.Counter
 	metricLastActivity   prometheus.Gauge
+	metricMonitorLag     prometheus.Observer
 
 	// Buffering
 	buffer           strings.Builder
@@ -214,6 +215,7 @@ func New(ctx context.Context, source sources.LogSource, detector detectors.Detec
 	m.metricSentrySent = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "sent"})
 	m.metricSentryDropped = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "dropped"})
 	m.metricLastActivity = metrics.LastActivityTimestamp.With(prometheus.Labels{"source": source.Name()})
+	m.metricMonitorLag = metrics.MonitorLagSeconds.With(prometheus.Labels{"source": source.Name()})
 
 	// Initialize Sentry Hub
 	if opts.SentryDSN != "" {
@@ -312,12 +314,20 @@ func (m *Monitor) Start() {
 			// Update lastReadTime for inactivity detection
 			atomic.StoreInt64(&m.lastReadTime, now.UnixNano())
 
+			lineBytes := scanner.Bytes()
+
 			if now.Sub(lastMetricUpdateTime) > 1*time.Second {
 				m.metricLastActivity.Set(float64(now.Unix()))
+				if ts, _, ok := m.tryExtractTimestamp(lineBytes); ok && ts > 0 {
+					lag := float64(now.UnixNano())/1e9 - ts
+					// Only record positive lag
+					if lag >= 0 {
+						m.metricMonitorLag.Observe(lag)
+					}
+				}
 				lastMetricUpdateTime = now
 			}
 
-			lineBytes := scanner.Bytes()
 			if m.Detector.Detect(lineBytes) {
 				if m.ExclusionDetector != nil && m.ExclusionDetector.Detect(lineBytes) {
 					if m.Verbose {
@@ -434,21 +444,26 @@ func (m *Monitor) extractMetadata(line []byte, tsStr string) BatchMetadata {
 	return meta
 }
 
+func (m *Monitor) tryExtractTimestamp(line []byte) (float64, string, bool) {
+	if extractor, isExtractor := m.Detector.(detectors.TimestampExtractor); isExtractor {
+		timestamp, tsStr, ok := extractor.ExtractTimestamp(line)
+		if ok {
+			return timestamp, tsStr, true
+		}
+	}
+	ts, tsStr := extractTimestamp(line)
+	// extractTimestamp returns 0 on failure
+	if ts != 0 {
+		return ts, tsStr, true
+	}
+	return 0, "", false
+}
+
 func (m *Monitor) processMatch(line []byte) {
 	m.bufferMutex.Lock()
 	m.lastActivityTime = time.Now()
 
-	var timestamp float64
-	var tsStr string
-	var ok bool
-
-	if extractor, isExtractor := m.Detector.(detectors.TimestampExtractor); isExtractor {
-		timestamp, tsStr, ok = extractor.ExtractTimestamp(line)
-	}
-
-	if !ok {
-		timestamp, tsStr = extractTimestamp(line)
-	}
+	timestamp, tsStr, _ := m.tryExtractTimestamp(line)
 
 	if transformer, ok := m.Detector.(detectors.MessageTransformer); ok {
 		line = transformer.TransformMessage(line)
