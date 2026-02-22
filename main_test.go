@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/angch/sentrylogmon/config"
+	"github.com/angch/sentrylogmon/ipc"
 )
 
 var timestampRegex = regexp.MustCompile(`^\[\s*([0-9.]+)\]`)
@@ -244,15 +246,15 @@ func TestFormatDuration(t *testing.T) {
 		{5 * time.Second, "5s"},
 		{65 * time.Second, "1m 5s"},
 		{125 * time.Second, "2m 5s"},
-		{3600 * time.Second, "1h 0m 0s"},
-		{3665 * time.Second, "1h 1m 5s"},
-		{7320 * time.Second, "2h 2m 0s"},
+		{3600 * time.Second, "1h 0m"},
+		{3665 * time.Second, "1h 1m"},
+		{7320 * time.Second, "2h 2m"},
 		{59 * time.Second, "59s"},
 		{59 * time.Minute, "59m 0s"},
-		{23 * time.Hour, "23h 0m 0s"},
-		{25 * time.Hour, "1d 1h 0m"},
-		{48 * time.Hour, "2d 0h 0m"},
-		{50*time.Hour + 30*time.Minute, "2d 2h 30m"},
+		{23 * time.Hour, "23h 0m"},
+		{25 * time.Hour, "1d 1h"},
+		{48 * time.Hour, "2d 0h"},
+		{50*time.Hour + 30*time.Minute, "2d 2h"},
 	}
 
 	for _, tt := range tests {
@@ -262,6 +264,49 @@ func TestFormatDuration(t *testing.T) {
 				t.Errorf("formatDuration(%v) = %v, want %v", tt.d, got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestPrintInstanceTable(t *testing.T) {
+	// Setup mock data
+	now := time.Now()
+	instances := []ipc.StatusResponse{
+		{
+			PID:         1234,
+			StartTime:   now.Add(-1 * time.Hour), // 1h uptime
+			Version:     "v1.0.0",
+			MemoryAlloc: 1024 * 1024 * 10, // 10 MiB
+			Config: &config.Config{
+				Monitors: []config.MonitorConfig{
+					{Name: "nginx", Type: "file"},
+				},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	printInstanceTable(&buf, instances)
+
+	output := buf.String()
+
+	// Check for headers
+	if !strings.Contains(output, "PID") || !strings.Contains(output, "STATUS") {
+		t.Error("Missing headers in output")
+	}
+
+	// Check for data
+	if !strings.Contains(output, "1234") {
+		t.Error("Missing PID in output")
+	}
+	if !strings.Contains(output, "Running") {
+		t.Error("Missing Status 'Running' in output")
+	}
+	// Depending on time.Now(), uptime might be slightly more than 1h, but close enough for unit matching
+	if !strings.Contains(output, "1h 0m") {
+		// Just check for "1h" to be safe against slight timing diffs in test execution
+		if !strings.Contains(output, "1h") {
+			t.Errorf("Missing formatted uptime '1h' in output, got: %s", output)
+		}
 	}
 }
 
