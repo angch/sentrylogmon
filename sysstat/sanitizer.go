@@ -28,6 +28,7 @@ var sensitiveSuffixes = []string{
 	"credential",
 	"cookie",
 	"session",
+	"dsn",
 }
 
 // SanitizeCommand joins command arguments into a string, redacting sensitive information.
