@@ -9,9 +9,11 @@ import (
 	"net/http"
 	_ "net/http/pprof" // Register pprof handlers
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -389,6 +391,9 @@ func printInstanceTable(instances []ipc.StatusResponse) {
 		return
 	}
 
+	// Calculate terminal width once for dynamic column sizing
+	termWidth := getTerminalWidth()
+
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 	fmt.Fprintln(w, "     PID\tSTARTED\t      UPTIME\t       MEM\tVERSION\tMONITORS")
 	for _, inst := range instances {
@@ -398,7 +403,13 @@ func printInstanceTable(instances []ipc.StatusResponse) {
 
 		var details string
 		if inst.Config != nil && len(inst.Config.Monitors) > 0 {
-			const limit = 60
+			// Estimate fixed width of other columns:
+			// PID(8) + STARTED(19) + UPTIME(12) + MEM(10) + VERSION(10) + tabs/padding(15) = ~75
+			// We subtract 80 to be safe and give some breathing room.
+			limit := termWidth - 80
+			if limit < 20 {
+				limit = 20
+			}
 			var buffer strings.Builder
 			monitors := inst.Config.Monitors
 
@@ -525,4 +536,26 @@ monitors:
   #   format: nginx
 `
 	return os.WriteFile(filename, []byte(content), 0644)
+}
+
+func getTerminalWidth() int {
+	// Default width
+	width := 80
+
+	if runtime.GOOS == "windows" {
+		return 120
+	}
+
+	// Use tput to get the number of columns
+	// This works on most Unix-like systems
+	cmd := exec.Command("tput", "cols")
+	cmd.Stdin = os.Stdin
+	out, err := cmd.Output()
+	if err == nil {
+		w, err := strconv.Atoi(strings.TrimSpace(string(out)))
+		if err == nil && w > 20 {
+			width = w
+		}
+	}
+	return width
 }
