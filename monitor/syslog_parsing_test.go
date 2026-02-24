@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"testing"
+	"time"
 )
 
 func TestExtractTimestamp_SyslogWithPRI(t *testing.T) {
@@ -11,7 +12,7 @@ func TestExtractTimestamp_SyslogWithPRI(t *testing.T) {
 
 	line := []byte("<34>Oct 11 22:14:15 mymachine su: 'su root' failed")
 
-	ts, tsStr := extractTimestamp(line)
+	ts, tsStr := extractTimestamp(line, time.Now())
 
 	if ts == 0 {
 		t.Errorf("Failed to extract timestamp from syslog message with PRI: %s", string(line))
@@ -21,7 +22,7 @@ func TestExtractTimestamp_SyslogWithPRI(t *testing.T) {
 
 	// Compare with without PRI
 	lineNoPri := []byte("Oct 11 22:14:15 mymachine su: 'su root' failed")
-	ts2, tsStr2 := extractTimestamp(lineNoPri)
+	ts2, tsStr2 := extractTimestamp(lineNoPri, time.Now())
 	if ts2 == 0 {
 		t.Errorf("Failed to extract timestamp from syslog message without PRI: %s", string(lineNoPri))
 	} else {
