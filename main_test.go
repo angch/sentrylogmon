@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/angch/sentrylogmon/config"
+	"github.com/angch/sentrylogmon/ipc"
 )
 
 var timestampRegex = regexp.MustCompile(`^\[\s*([0-9.]+)\]`)
@@ -294,5 +296,41 @@ func TestGenerateConfig(t *testing.T) {
 
 	if !strings.Contains(err.Error(), "already exists") {
 		t.Errorf("Unexpected error message: %v", err)
+	}
+}
+
+func TestPrintInstanceTable(t *testing.T) {
+	// Mock instances
+	instances := []ipc.StatusResponse{
+		{
+			PID:         12345,
+			StartTime:   time.Now().Add(-2*time.Hour - 30*time.Minute),
+			Version:     "v1.0.0",
+			MemoryAlloc: 10 * 1024 * 1024,
+			Config: &config.Config{
+				Monitors: []config.MonitorConfig{
+					{Name: "nginx-errors", Type: "file"},
+				},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	printInstanceTable(&buf, instances)
+	output := buf.String()
+
+	// Verify header
+	if !strings.Contains(output, "STATUS") {
+		t.Errorf("Output missing STATUS header")
+	}
+
+	// Verify status
+	if !strings.Contains(output, "Running") {
+		t.Errorf("Output missing Running status")
+	}
+
+	// Verify PID
+	if !strings.Contains(output, "12345") {
+		t.Errorf("Output missing PID 12345")
 	}
 }
