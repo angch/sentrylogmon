@@ -140,6 +140,21 @@ func TestSanitizeCommand(t *testing.T) {
 			input:    []string{"--Session-Id=secret123"},
 			expected: "--Session-Id=[REDACTED]",
 		},
+		{
+			name:     "DSN flag",
+			input:    []string{"--dsn=https://example.com"},
+			expected: "--dsn=[REDACTED]",
+		},
+		{
+			name:     "Sentry DSN flag",
+			input:    []string{"--sentry-dsn", "https://example.com"},
+			expected: "--sentry-dsn [REDACTED]",
+		},
+		{
+			name:     "Custom DSN suffix",
+			input:    []string{"--custom-dsn=https://example.com"},
+			expected: "--custom-dsn=[REDACTED]",
+		},
 	}
 
 	for _, tt := range tests {

@@ -15,12 +15,15 @@ var sensitiveFlags = map[string]bool{
 	"--access-token":  true,
 	"--auth-token":    true,
 	"--session-id":    true,
+	"--dsn":           true,
+	"--sentry-dsn":    true,
 }
 
 var sensitiveSuffixes = []string{
 	"password",
 	"token",
 	"secret",
+	"dsn",
 	"_key", // Matches api_key, access_key, but not keyboard
 	"-key", // Matches ssh-key, private-key
 	".key", // Matches file.key

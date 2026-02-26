@@ -16,6 +16,7 @@ import (
 	"github.com/angch/sentrylogmon/sysstat"
 	"github.com/getsentry/sentry-go"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/shirou/gopsutil/v3/host"
 )
 
 var severityKeys = []string{"level", "severity", "log_level", "type"}
@@ -172,6 +173,10 @@ type Monitor struct {
 	metricSentrySent     prometheus.Counter
 	metricSentryDropped  prometheus.Counter
 	metricLastActivity   prometheus.Gauge
+	metricMonitorLag     prometheus.Gauge
+
+	// System info
+	bootTime uint64
 
 	// Buffering
 	buffer           strings.Builder
@@ -214,6 +219,16 @@ func New(ctx context.Context, source sources.LogSource, detector detectors.Detec
 	m.metricSentrySent = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "sent"})
 	m.metricSentryDropped = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "dropped"})
 	m.metricLastActivity = metrics.LastActivityTimestamp.With(prometheus.Labels{"source": source.Name()})
+	m.metricMonitorLag = metrics.MonitorLagSeconds.With(prometheus.Labels{"source": source.Name()})
+
+	// Initialize boot time for relative timestamps
+	if b, err := host.BootTime(); err == nil {
+		m.bootTime = b
+	} else {
+		if opts.Verbose {
+			log.Printf("Failed to get boot time: %v", err)
+		}
+	}
 
 	// Initialize Sentry Hub
 	if opts.SentryDSN != "" {
@@ -448,6 +463,28 @@ func (m *Monitor) processMatch(line []byte) {
 
 	if !ok {
 		timestamp, tsStr = extractTimestamp(line)
+	}
+
+	// Calculate monitor lag
+	if timestamp > 0 {
+		var absTimestamp float64
+		// Heuristic: timestamps < 1e9 are likely relative (uptime)
+		// Current unix timestamp is ~1.7e9
+		if timestamp < 1_000_000_000 {
+			if m.bootTime > 0 {
+				absTimestamp = float64(m.bootTime) + timestamp
+			}
+		} else {
+			absTimestamp = timestamp
+		}
+
+		if absTimestamp > 0 {
+			lag := float64(time.Now().Unix()) - absTimestamp
+			// Sanity check: ignore negative lag (future timestamps)
+			if lag >= 0 {
+				m.metricMonitorLag.Set(lag)
+			}
+		}
 	}
 
 	if transformer, ok := m.Detector.(detectors.MessageTransformer); ok {
