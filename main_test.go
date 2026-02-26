@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/angch/sentrylogmon/config"
+	"github.com/angch/sentrylogmon/ipc"
 )
 
 var timestampRegex = regexp.MustCompile(`^\[\s*([0-9.]+)\]`)
@@ -294,5 +296,56 @@ func TestGenerateConfig(t *testing.T) {
 
 	if !strings.Contains(err.Error(), "already exists") {
 		t.Errorf("Unexpected error message: %v", err)
+	}
+}
+
+func TestPrintInstanceTable(t *testing.T) {
+	// 1. Setup mock data
+	now := time.Now()
+	startTime := now.Add(-1 * time.Hour) // Started 1 hour ago
+
+	inst := ipc.StatusResponse{
+		PID:         12345,
+		StartTime:   startTime,
+		Version:     "v1.0.0",
+		MemoryAlloc: 1024 * 1024 * 10, // 10 MiB
+		Config: &config.Config{
+			Monitors: []config.MonitorConfig{
+				{Name: "nginx-error", Type: "file"},
+			},
+		},
+	}
+
+	instances := []ipc.StatusResponse{inst}
+
+	// 2. Capture output
+	var buf bytes.Buffer
+	printInstanceTable(&buf, instances)
+	output := buf.String()
+
+	// 3. Verify Output
+	// Check headers
+	if !strings.Contains(output, "STATUS") {
+		t.Errorf("Output missing 'STATUS' header")
+	}
+	if !strings.Contains(output, "PID") {
+		t.Errorf("Output missing 'PID' header")
+	}
+	if !strings.Contains(output, "STARTED") {
+		t.Errorf("Output missing 'STARTED' header")
+	}
+
+	// Check data
+	if !strings.Contains(output, "Running") {
+		t.Errorf("Output missing status 'Running'")
+	}
+	if !strings.Contains(output, "12345") {
+		t.Errorf("Output missing PID 12345")
+	}
+	if !strings.Contains(output, "1h 0m 0s") { // Uptime should be approx 1h
+		t.Errorf("Output missing correct uptime")
+	}
+	if !strings.Contains(output, "nginx-error") {
+		t.Errorf("Output missing monitor name")
 	}
 }
