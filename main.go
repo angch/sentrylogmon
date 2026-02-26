@@ -230,7 +230,11 @@ func main() {
 			src := sources.NewDmesgSource(monCfg.Name)
 			addMonitor(src, monCfg)
 		case "command":
-			parts := strings.Fields(monCfg.Args)
+			parts, err := sysstat.SplitCommand(monCfg.Args)
+			if err != nil {
+				log.Printf("Skipping command monitor '%s': invalid command arguments: %v", monCfg.Name, err)
+				continue
+			}
 			if len(parts) > 0 {
 				src := sources.NewCommandSource(monCfg.Name, parts[0], parts[1:]...)
 				addMonitor(src, monCfg)
