@@ -3,6 +3,7 @@
 package ipc
 
 import (
+	"net"
 	"os"
 	"path/filepath"
 )
@@ -16,4 +17,10 @@ func EnsureSecureDirectory(path string) error {
 // GetSocketDir returns the secure socket directory.
 func GetSocketDir() string {
 	return filepath.Join(os.TempDir(), "sentrylogmon")
+}
+
+// ListenUnix creates a Unix domain socket listener. On Windows, we just
+// rely on standard net.Listen as Unix socket permissions via umask aren't directly applicable.
+func ListenUnix(socketPath string) (net.Listener, error) {
+	return net.Listen("unix", socketPath)
 }

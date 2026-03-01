@@ -4,8 +4,10 @@ package ipc
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
+	"sync"
 	"syscall"
 )
 
@@ -62,4 +64,19 @@ func EnsureSecureDirectory(path string) error {
 // GetSocketDir returns the secure socket directory for the current user.
 func GetSocketDir() string {
 	return filepath.Join(os.TempDir(), fmt.Sprintf("sentrylogmon-%d", os.Getuid()))
+}
+
+var umaskMutex sync.Mutex
+
+// ListenUnix creates a Unix domain socket listener with 0600 permissions
+// securely by temporarily setting the process umask.
+func ListenUnix(socketPath string) (net.Listener, error) {
+	umaskMutex.Lock()
+	defer umaskMutex.Unlock()
+
+	// Set umask to 0177 (so permissions will be 0600)
+	oldUmask := syscall.Umask(0177)
+	defer syscall.Umask(oldUmask)
+
+	return net.Listen("unix", socketPath)
 }
