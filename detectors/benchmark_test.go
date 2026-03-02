@@ -150,3 +150,18 @@ func BenchmarkJsonDetector_NoMatch(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkJsonDetector_NoMatch_MissingKey(b *testing.B) {
+	d, err := NewJsonDetector("level:error")
+	if err != nil {
+		b.Fatalf("Failed to create detector: %v", err)
+	}
+
+	line := []byte(`{"msg":"something happened","time":"2023-10-27T10:00:00Z"}`)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if d.Detect(line) {
+			b.Fatal("Expected no match")
+		}
+	}
+}
