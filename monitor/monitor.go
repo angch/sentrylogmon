@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/shirou/gopsutil/v3/host"
+
 	"github.com/angch/sentrylogmon/detectors"
 	"github.com/angch/sentrylogmon/metrics"
 	"github.com/angch/sentrylogmon/sources"
@@ -172,6 +174,10 @@ type Monitor struct {
 	metricSentrySent     prometheus.Counter
 	metricSentryDropped  prometheus.Counter
 	metricLastActivity   prometheus.Gauge
+	metricMonitorLag     prometheus.Gauge
+
+	// Lag calculation
+	bootTime float64
 
 	// Buffering
 	buffer           strings.Builder
@@ -214,6 +220,12 @@ func New(ctx context.Context, source sources.LogSource, detector detectors.Detec
 	m.metricSentrySent = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "sent"})
 	m.metricSentryDropped = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "dropped"})
 	m.metricLastActivity = metrics.LastActivityTimestamp.With(prometheus.Labels{"source": source.Name()})
+	m.metricMonitorLag = metrics.MonitorLagSeconds.With(prometheus.Labels{"source": source.Name()})
+
+	// Cache boot time for relative timestamp calculation
+	if bt, err := host.BootTime(); err == nil && bt > 0 {
+		m.bootTime = float64(bt)
+	}
 
 	// Initialize Sentry Hub
 	if opts.SentryDSN != "" {
@@ -329,7 +341,7 @@ func (m *Monitor) Start() {
 				if m.Verbose {
 					log.Printf("[%s] Matched: %s", m.Source.Name(), string(lineBytes))
 				}
-				m.processMatch(lineBytes)
+				m.processMatch(lineBytes, now)
 			}
 		}
 
@@ -434,9 +446,9 @@ func (m *Monitor) extractMetadata(line []byte, tsStr string) BatchMetadata {
 	return meta
 }
 
-func (m *Monitor) processMatch(line []byte) {
+func (m *Monitor) processMatch(line []byte, now time.Time) {
 	m.bufferMutex.Lock()
-	m.lastActivityTime = time.Now()
+	m.lastActivityTime = now
 
 	var timestamp float64
 	var tsStr string
@@ -452,6 +464,26 @@ func (m *Monitor) processMatch(line []byte) {
 
 	if transformer, ok := m.Detector.(detectors.MessageTransformer); ok {
 		line = transformer.TransformMessage(line)
+	}
+
+	if timestamp > 0 {
+		absTimestamp := timestamp
+		// Differentiate absolute Unix timestamps from relative uptime timestamps using 1e9 threshold
+		if timestamp < 1_000_000_000 {
+			if m.bootTime > 0 {
+				absTimestamp = m.bootTime + timestamp
+			} else {
+				// Skip if we couldn't get boot time
+				absTimestamp = 0
+			}
+		}
+
+		if absTimestamp > 0 {
+			lag := float64(now.UnixNano())/1e9 - absTimestamp
+			if lag >= 0 {
+				m.metricMonitorLag.Set(lag)
+			}
+		}
 	}
 
 	var msgToSend string
