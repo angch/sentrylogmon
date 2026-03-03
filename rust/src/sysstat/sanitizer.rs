@@ -12,11 +12,13 @@ static SENSITIVE_FLAGS: Lazy<HashMap<&'static str, bool>> = Lazy::new(|| {
     m.insert("--client-secret", true);
     m.insert("--access-token", true);
     m.insert("--auth-token", true);
+    m.insert("--dsn", true);
+    m.insert("--sentry-dsn", true);
     m
 });
 
 static SENSITIVE_SUFFIXES: Lazy<Vec<&'static str>> =
-    Lazy::new(|| vec!["password", "token", "secret", "_key"]);
+    Lazy::new(|| vec!["password", "token", "secret", "_key", "dsn"]);
 
 // sanitize_command reconstructs the command line string from arguments while redacting sensitive information.
 // It aims for parity with the Go implementation, handling both `--flag=value` and `--flag value` patterns.
@@ -78,7 +80,7 @@ fn is_sensitive_key(key: &str) -> bool {
     // Exact matches
     if matches!(
         lower_key.as_str(),
-        "password" | "token" | "secret" | "key" | "auth"
+        "password" | "token" | "secret" | "key" | "auth" | "dsn"
     ) {
         return true;
     }
@@ -127,6 +129,22 @@ mod tests {
             (
                 vec!["ssh", "-p", "2222"],
                 "ssh -p 2222", // -p is ambiguous, false in map
+            ),
+            (
+                vec!["app", "--dsn", "https://secret@sentry.io/123"],
+                "app --dsn [REDACTED]",
+            ),
+            (
+                vec!["app", "--dsn=https://secret@sentry.io/123"],
+                "app --dsn=[REDACTED]",
+            ),
+            (
+                vec!["app", "--sentry-dsn", "https://secret@sentry.io/123"],
+                "app --sentry-dsn [REDACTED]",
+            ),
+            (
+                vec!["app", "--sentry-dsn=https://secret@sentry.io/123"],
+                "app --sentry-dsn=[REDACTED]",
             ),
         ];
 
