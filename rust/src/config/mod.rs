@@ -119,6 +119,10 @@ pub struct Args {
     #[arg(long)]
     pub update: bool,
 
+    /// Generate a starter configuration file
+    #[arg(long)]
+    pub init: bool,
+
     /// Port to expose Prometheus metrics (0 to disable)
     #[arg(long)]
     pub metrics_port: Option<u16>,
@@ -134,6 +138,8 @@ pub struct Config {
     pub status: bool,
     #[serde(skip)]
     pub update: bool,
+    #[serde(skip)]
+    pub init: bool,
     #[serde(default)]
     pub metrics_port: u16,
 }
@@ -158,6 +164,7 @@ impl Config {
                 oneshot: args.oneshot,
                 status: args.status,
                 update: args.update,
+                init: args.init,
                 metrics_port: file_config.metrics_port,
             };
 
@@ -258,11 +265,12 @@ impl Config {
                 oneshot: args.oneshot,
                 status: args.status,
                 update: args.update,
+                init: args.init,
                 metrics_port: args.metrics_port.unwrap_or(0),
             }
         };
 
-        if config.status || config.update {
+        if config.status || config.update || config.init {
             return Ok(config);
         }
 
