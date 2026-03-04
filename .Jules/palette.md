@@ -1,3 +1,3 @@
-## 2026-02-07 - CLI Onboarding UX
-**Learning:** UX isn't just for GUIs. Adding an `--init` flag to generate a starter configuration file significantly reduces onboarding friction for CLI tools, acting as a "helpful empty state."
-**Action:** For CLI tools with complex configuration, always look for ways to scaffold the initial setup (e.g., `init` commands, interactive wizards).
+## 2026-03-04 - Graceful empty state for Zig CLI status
+**Learning:** The CLI status table lacked a friendly empty state when there were no instances, printing only the table header, which can be confusing for a user. In Go and Rust, 'No running instances found.' is printed instead.
+**Action:** Added a check for empty instances and printed a helpful user-facing message to provide a better UX in the Zig CLI implementation.
