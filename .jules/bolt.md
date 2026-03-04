@@ -5,3 +5,7 @@
 ## 2026-01-27 - Regexp Allocation Limits
 **Learning:** Go's `regexp.FindSubmatchIndex` still allocates the `[]int` result slice. While it reduces memory usage compared to `FindSubmatch` (which allocates `[][]byte`), it doesn't eliminate allocations entirely. Zero-alloc regex capturing requires different libraries or manual parsing.
 **Action:** For hot paths requiring zero allocations, prefer manual parsing (`bytes.Index`, etc.) over `regexp` if feasible, otherwise accept the reduced but non-zero allocation of `FindSubmatchIndex`.
+
+## 2026-03-04 - Reusing bufio.Scanner buffer across stream reconnects
+**Learning:** Allocating a large buffer (1MB) inside a reconnect loop creates unnecessary heap pressure, even if the reconnects are not extremely frequent. Go's bufio.Scanner can reuse an existing byte slice via scanner.Buffer().
+**Action:** Hoist the scanner buffer allocation outside of reconnect loops to reuse the memory and significantly reduce allocations (from 1MB/alloc down to 0).
