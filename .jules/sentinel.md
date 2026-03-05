@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-02-23 - TOCTOU in Directory Creation
+**Vulnerability:** The application used `os.Chmod` to fix directory permissions after checking `os.Lstat`. This is a Time-of-Check to Time-of-Use (TOCTOU) vulnerability where an attacker could replace the directory with a symlink between the check and the chmod, causing the application to change permissions of an arbitrary file. Additionally, ownership was checked after permissions were changed.
+**Learning:** Modifying file permissions or attributes based on a previous path-based check (like `os.Lstat`) is unsafe.
+**Prevention:**
+1. Always verify ownership *before* attempting to modify permissions.
+2. Use file descriptors (`os.OpenFile` with `syscall.O_NOFOLLOW`) to perform atomic checks and modifications (like `f.Chmod`).
