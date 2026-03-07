@@ -15,6 +15,8 @@ var sensitiveFlags = map[string]bool{
 	"--access-token":  true,
 	"--auth-token":    true,
 	"--session-id":    true,
+	"--dsn":           true,
+	"--sentry-dsn":    true,
 }
 
 var sensitiveSuffixes = []string{
@@ -28,6 +30,7 @@ var sensitiveSuffixes = []string{
 	"credential",
 	"cookie",
 	"session",
+	"dsn",
 }
 
 // SanitizeCommand joins command arguments into a string, redacting sensitive information.
@@ -106,7 +109,7 @@ func isSensitiveKey(key string) bool {
 	lowerKey := strings.ToLower(key)
 
 	// Exact matches
-	if lowerKey == "password" || lowerKey == "token" || lowerKey == "secret" || lowerKey == "key" || lowerKey == "auth" {
+	if lowerKey == "password" || lowerKey == "token" || lowerKey == "secret" || lowerKey == "key" || lowerKey == "auth" || lowerKey == "dsn" {
 		return true
 	}
 

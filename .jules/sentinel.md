@@ -44,3 +44,11 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-03-07 - Domain-Specific Credential Leakage in CLI Monitors
+**Vulnerability:** The application's CLI argument redactor correctly scrubbed generic secrets (`--password`, `--token`, `--key`) but failed to recognize domain-specific credentials like Sentry DSNs (`--dsn`, `--sentry-dsn`). Because DSNs contain embedded authentication keys, their exposure in system status outputs, logs, or error monitoring tools represents a critical credential leakage vulnerability.
+**Learning:** Generic credential regexes/heuristics are insufficient when an application uses domain-specific authentication strings. Any configuration parameter that embeds secrets (like DSNs, connection strings, or signed URLs) must be explicitly included in redaction logic alongside generic secret patterns.
+**Prevention:**
+1. Maintain explicit blocklists for domain-specific credentials used within the application's ecosystem.
+2. Regularly audit the application's configuration parameters and flags to ensure all secret-bearing inputs are covered by redaction mechanisms.
+3. Apply suffix-based heuristics to domain-specific secrets (e.g., `*dsn*`) to catch variations (like `--custom-dsn`).

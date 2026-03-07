@@ -537,10 +537,12 @@ fn sanitizeCommand(allocator: std.mem.Allocator, args: []const []const u8) ![]u8
         .{ "--client-secret", true },
         .{ "--access-token", true },
         .{ "--auth-token", true },
+        .{ "--dsn", true },
+        .{ "--sentry-dsn", true },
     });
 
     const sensitive_suffixes = [_][]const u8{
-        "password", "token", "secret", "_key",
+        "password", "token", "secret", "_key", "dsn",
     };
 
     for (args, 0..) |arg, i| {
@@ -567,13 +569,31 @@ fn sanitizeCommand(allocator: std.mem.Allocator, args: []const []const u8) ![]u8
                 std.mem.eql(u8, lower_key, "token") or
                 std.mem.eql(u8, lower_key, "secret") or
                 std.mem.eql(u8, lower_key, "key") or
-                std.mem.eql(u8, lower_key, "auth")) {
+                std.mem.eql(u8, lower_key, "auth") or
+                std.mem.eql(u8, lower_key, "dsn")) {
                 sensitive = true;
             } else {
                  for (sensitive_suffixes) |suffix| {
                      if (std.mem.endsWith(u8, lower_key, suffix)) {
-                         sensitive = true;
-                         break;
+                         // Verify boundary
+                         if (lower_key.len == suffix.len) {
+                             sensitive = true;
+                             break;
+                         }
+
+                         if (suffix[0] == '-' or suffix[0] == '_' or suffix[0] == '.') {
+                             sensitive = true;
+                             break;
+                         }
+
+                         const match_idx = lower_key.len - suffix.len;
+                         if (match_idx > 0) {
+                             const char_before = lower_key[match_idx - 1];
+                             if (char_before == '-' or char_before == '_' or char_before == '.') {
+                                 sensitive = true;
+                                 break;
+                             }
+                         }
                      }
                  }
             }
@@ -587,7 +607,57 @@ fn sanitizeCommand(allocator: std.mem.Allocator, args: []const []const u8) ![]u8
 
         if (sensitive_flags.has(arg)) {
             try out.appendSlice(allocator, arg);
+            // In Zig string map we don't store true/false yet easily for skip next or not.
+            // -p is not in our sensitive flags.
             skip_next = true;
+            continue;
+        }
+
+        // Check heuristics (suffix matching)
+        const clean_arg = std.mem.trimLeft(u8, arg, "-");
+
+        var sensitive = false;
+        const lower_arg = try std.ascii.allocLowerString(allocator, clean_arg);
+        defer allocator.free(lower_arg);
+
+        if (std.mem.eql(u8, lower_arg, "password") or
+            std.mem.eql(u8, lower_arg, "token") or
+            std.mem.eql(u8, lower_arg, "secret") or
+            std.mem.eql(u8, lower_arg, "key") or
+            std.mem.eql(u8, lower_arg, "auth") or
+            std.mem.eql(u8, lower_arg, "dsn")) {
+            sensitive = true;
+        } else {
+             for (sensitive_suffixes) |suffix| {
+                 if (std.mem.endsWith(u8, lower_arg, suffix)) {
+                     // Verify boundary
+                     if (lower_arg.len == suffix.len) {
+                         sensitive = true;
+                         break;
+                     }
+
+                     if (suffix[0] == '-' or suffix[0] == '_' or suffix[0] == '.') {
+                         sensitive = true;
+                         break;
+                     }
+
+                     const match_idx = lower_arg.len - suffix.len;
+                     if (match_idx > 0) {
+                         const char_before = lower_arg[match_idx - 1];
+                         if (char_before == '-' or char_before == '_' or char_before == '.') {
+                             sensitive = true;
+                             break;
+                         }
+                     }
+                 }
+             }
+        }
+
+        if (sensitive) {
+            try out.appendSlice(allocator, arg);
+            if (i + 1 < args.len and !std.mem.startsWith(u8, args[i+1], "-")) {
+                skip_next = true;
+            }
             continue;
         }
 
@@ -600,14 +670,12 @@ fn sanitizeCommand(allocator: std.mem.Allocator, args: []const []const u8) ![]u8
 test "sanitizeCommand" {
     const allocator = std.testing.allocator;
     const args = [_][]const u8{ "curl", "--user", "user:pass", "--token", "123", "--url=http://example.com?key=secret" };
-    // Note: our logic redacts next arg for --token, but key=value for --url (if key is sensitive).
-    // wait, --url=... key is --url. --url is not sensitive.
-    // user:pass is not flagged by simple logic unless it matches something.
-    // The current Go implementation handles --flag=value.
 
     const res = try sanitizeCommand(allocator, &args);
     defer allocator.free(res);
 
-    // std.debug.print("Sanitized: {s}\n", .{res});
-    // Expected: curl --user user:pass --token [REDACTED] --url=http://example.com?key=secret
+    const dsn_args = [_][]const u8{ "myapp", "--dsn", "https://secret@sentry.io/123", "--custom-dsn", "https://secret@sentry.io/123", "--sentry-dsn=https://secret@sentry.io/123" };
+    const res2 = try sanitizeCommand(allocator, &dsn_args);
+    defer allocator.free(res2);
+    try std.testing.expectEqualStrings("myapp --dsn [REDACTED] --custom-dsn [REDACTED] --sentry-dsn=[REDACTED]", res2);
 }
