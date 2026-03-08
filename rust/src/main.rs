@@ -36,6 +36,11 @@ async fn main() -> Result<()> {
     if cfg.update {
         let socket_dir = PathBuf::from("/tmp/sentrylogmon");
         let instances = ipc::list_instances(&socket_dir)?;
+
+        if instances.is_empty() {
+            println!("No running instances found.");
+        }
+
         for inst in instances {
             let socket_path = socket_dir.join(format!("sentrylogmon.{}.sock", inst.pid));
             println!("Requesting update for PID {}...", inst.pid);
