@@ -12,11 +12,12 @@ static SENSITIVE_FLAGS: Lazy<HashMap<&'static str, bool>> = Lazy::new(|| {
     m.insert("--client-secret", true);
     m.insert("--access-token", true);
     m.insert("--auth-token", true);
+    m.insert("--session-id", true);
     m
 });
 
 static SENSITIVE_SUFFIXES: Lazy<Vec<&'static str>> =
-    Lazy::new(|| vec!["password", "token", "secret", "_key"]);
+    Lazy::new(|| vec!["password", "token", "secret", "_key", "-key", ".key", "signature", "credential", "cookie", "session"]);
 
 // sanitize_command reconstructs the command line string from arguments while redacting sensitive information.
 // It aims for parity with the Go implementation, handling both `--flag=value` and `--flag value` patterns.
@@ -48,7 +49,7 @@ pub fn sanitize_command(args: &[String]) -> String {
             }
 
             // Check if key matches a sensitive flag explicitly
-            if SENSITIVE_FLAGS.contains_key(key) {
+            if SENSITIVE_FLAGS.contains_key(key.to_lowercase().as_str()) {
                 sanitized.push(format!("{}=[REDACTED]", key));
                 continue;
             }
@@ -58,9 +59,22 @@ pub fn sanitize_command(args: &[String]) -> String {
         }
 
         // Check for sensitive flags that take the next argument
-        if let Some(&should_skip) = SENSITIVE_FLAGS.get(arg.as_str()) {
+        // 1. Check strict list (case-insensitive)
+        let lower_arg = arg.to_lowercase();
+        if let Some(&should_skip) = SENSITIVE_FLAGS.get(lower_arg.as_str()) {
             sanitized.push(arg.clone());
             if should_skip && i + 1 < args.len() {
+                skip_next = true;
+            }
+            continue;
+        }
+
+        // 2. Check heuristics (suffix matching)
+        let clean_arg = arg.trim_start_matches('-');
+        if is_sensitive_key(clean_arg) {
+            sanitized.push(arg.clone());
+            // Only redact next if it doesn't look like another flag
+            if i + 1 < args.len() && !args[i + 1].starts_with('-') {
                 skip_next = true;
             }
             continue;
@@ -86,7 +100,21 @@ fn is_sensitive_key(key: &str) -> bool {
     // Suffix matches
     for suffix in SENSITIVE_SUFFIXES.iter() {
         if lower_key.ends_with(suffix) {
-            return true;
+            if lower_key.len() == suffix.len() {
+                return true;
+            }
+
+            if suffix.starts_with('-') || suffix.starts_with('_') || suffix.starts_with('.') {
+                return true;
+            }
+
+            let match_index = lower_key.len() - suffix.len();
+            if match_index > 0 {
+                let char_before = lower_key.as_bytes()[match_index - 1] as char;
+                if char_before == '-' || char_before == '_' || char_before == '.' {
+                    return true;
+                }
+            }
         }
     }
 
@@ -127,6 +155,62 @@ mod tests {
             (
                 vec!["ssh", "-p", "2222"],
                 "ssh -p 2222", // -p is ambiguous, false in map
+            ),
+            (
+                vec!["app", "--PASSWORD", "supersecret"],
+                "app --PASSWORD [REDACTED]",
+            ),
+            (
+                vec!["app", "--API-KEY", "12345"],
+                "app --API-KEY [REDACTED]",
+            ),
+            (
+                vec!["app", "--db-password", "supersecret"],
+                "app --db-password [REDACTED]",
+            ),
+            (
+                vec!["app", "--use-password", "--verbose"],
+                "app --use-password --verbose",
+            ),
+            (
+                vec!["mysql", "-pSecret", "production_db"],
+                "mysql -pSecret production_db",
+            ),
+            (
+                vec!["app", "--session-id", "sess_123"],
+                "app --session-id [REDACTED]",
+            ),
+            (
+                vec!["ssh-agent", "--ssh-key=PRIVATE_KEY"],
+                "ssh-agent --ssh-key=[REDACTED]",
+            ),
+            (
+                vec!["app", "--private-key=SECRET"],
+                "app --private-key=[REDACTED]",
+            ),
+            (
+                vec!["app", "--app.key=SECRET"],
+                "app --app.key=[REDACTED]",
+            ),
+            (
+                vec!["verify", "--signature=SIG123"],
+                "verify --signature=[REDACTED]",
+            ),
+            (
+                vec!["login", "--aws-credential=XYZ"],
+                "login --aws-credential=[REDACTED]",
+            ),
+            (
+                vec!["curl", "--cookie", "session=123"],
+                "curl --cookie [REDACTED]",
+            ),
+            (
+                vec!["--ApiKey=secret123"],
+                "--ApiKey=[REDACTED]",
+            ),
+            (
+                vec!["--Session-Id=secret123"],
+                "--Session-Id=[REDACTED]",
             ),
         ];
 
