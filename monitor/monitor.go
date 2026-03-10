@@ -16,6 +16,7 @@ import (
 	"github.com/angch/sentrylogmon/sysstat"
 	"github.com/getsentry/sentry-go"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/shirou/gopsutil/v3/host"
 )
 
 var severityKeys = []string{"level", "severity", "log_level", "type"}
@@ -172,6 +173,7 @@ type Monitor struct {
 	metricSentrySent     prometheus.Counter
 	metricSentryDropped  prometheus.Counter
 	metricLastActivity   prometheus.Gauge
+	metricMonitorLag     prometheus.Gauge
 
 	// Buffering
 	buffer           strings.Builder
@@ -214,6 +216,7 @@ func New(ctx context.Context, source sources.LogSource, detector detectors.Detec
 	m.metricSentrySent = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "sent"})
 	m.metricSentryDropped = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "dropped"})
 	m.metricLastActivity = metrics.LastActivityTimestamp.With(prometheus.Labels{"source": source.Name()})
+	m.metricMonitorLag = metrics.MonitorLagSeconds.With(prometheus.Labels{"source": source.Name()})
 
 	// Initialize Sentry Hub
 	if opts.SentryDSN != "" {
@@ -448,6 +451,24 @@ func (m *Monitor) processMatch(line []byte) {
 
 	if !ok {
 		timestamp, tsStr = extractTimestamp(line)
+	}
+
+	if timestamp > 0 {
+		var lag float64
+		// Heuristic: relative timestamps (like dmesg) are usually very small (e.g. < 10 years in seconds).
+		// 315360000 is approx 10 years in seconds.
+		if timestamp < 315360000 {
+			bootTime, err := host.BootTime()
+			if err == nil {
+				lag = float64(m.lastActivityTime.UnixNano())/1e9 - (float64(bootTime) + timestamp)
+			}
+		} else {
+			lag = float64(m.lastActivityTime.UnixNano())/1e9 - timestamp
+		}
+
+		if lag >= 0 {
+			m.metricMonitorLag.Set(lag)
+		}
 	}
 
 	if transformer, ok := m.Detector.(detectors.MessageTransformer); ok {
