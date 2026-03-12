@@ -16,6 +16,7 @@ import (
 	"github.com/angch/sentrylogmon/sysstat"
 	"github.com/getsentry/sentry-go"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/shirou/gopsutil/v3/host"
 )
 
 var severityKeys = []string{"level", "severity", "log_level", "type"}
@@ -172,6 +173,10 @@ type Monitor struct {
 	metricSentrySent     prometheus.Counter
 	metricSentryDropped  prometheus.Counter
 	metricLastActivity   prometheus.Gauge
+	metricMonitorLag     prometheus.Gauge
+
+	// Cached host info for performance
+	bootTime float64
 
 	// Buffering
 	buffer           strings.Builder
@@ -214,6 +219,7 @@ func New(ctx context.Context, source sources.LogSource, detector detectors.Detec
 	m.metricSentrySent = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "sent"})
 	m.metricSentryDropped = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "dropped"})
 	m.metricLastActivity = metrics.LastActivityTimestamp.With(prometheus.Labels{"source": source.Name()})
+	m.metricMonitorLag = metrics.MonitorLagSeconds.With(prometheus.Labels{"source": source.Name()})
 
 	// Initialize Sentry Hub
 	if opts.SentryDSN != "" {
@@ -270,6 +276,11 @@ func New(ctx context.Context, source sources.LogSource, detector detectors.Detec
 		} else {
 			log.Printf("Invalid max inactivity duration '%s': %v", opts.MaxInactivity, err)
 		}
+	}
+
+	// Cache boot time once to avoid reading /proc/stat on every dmesg line
+	if bt, err := host.BootTime(); err == nil {
+		m.bootTime = float64(bt)
 	}
 
 	// Initialize timer as stopped
@@ -448,6 +459,26 @@ func (m *Monitor) processMatch(line []byte) {
 
 	if !ok {
 		timestamp, tsStr = extractTimestamp(line)
+	}
+
+	if timestamp > 0 {
+		var logTimestamp float64
+		// Heuristic: If timestamp is < 10 years, it's likely a relative dmesg timestamp
+		if timestamp < 315360000 {
+			if m.bootTime > 0 {
+				logTimestamp = m.bootTime + timestamp
+			} else {
+				logTimestamp = timestamp
+			}
+		} else {
+			logTimestamp = timestamp
+		}
+
+		processingTime := float64(m.lastActivityTime.UnixNano()) / 1e9
+		lag := processingTime - logTimestamp
+		if lag >= 0 {
+			m.metricMonitorLag.Set(lag)
+		}
 	}
 
 	if transformer, ok := m.Detector.(detectors.MessageTransformer); ok {
