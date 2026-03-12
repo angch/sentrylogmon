@@ -19,6 +19,22 @@ func BenchmarkGenericDetector_Literal(b *testing.B) {
 	}
 }
 
+func BenchmarkJsonDetector_FastPathRejection(b *testing.B) {
+	d, err := NewJsonDetector("level:error")
+	if err != nil {
+		b.Fatalf("Failed to create detector: %v", err)
+	}
+
+	// Line doesn't contain the "level" key at all
+	line := []byte(`{"message":"everything is fine","time":"2023-10-27T10:00:00Z"}`)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if d.Detect(line) {
+			b.Fatal("Expected no match")
+		}
+	}
+}
+
 func BenchmarkGenericDetector_Regex(b *testing.B) {
 	pattern := "err[or]+"
 	detector, _ := NewGenericDetector(pattern)

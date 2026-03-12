@@ -11,8 +11,9 @@ import (
 )
 
 type JsonDetector struct {
-	Field    string
-	Pattern  *regexp.Regexp
+	Field       string
+	Pattern     *regexp.Regexp
+	searchBytes []byte
 
 	mu       sync.Mutex
 	lastData map[string]interface{}
@@ -32,13 +33,33 @@ func NewJsonDetector(pattern string) (*JsonDetector, error) {
 		return nil, fmt.Errorf("invalid regex for json detector: %v", err)
 	}
 
+	// Pre-calculate the exact JSON key byte sequence (e.g., `"level"`) to use as a fast-path rejection filter.
+	// We avoid appending the colon manually to allow for spaces between the key and colon in the raw JSON.
+	// Using json.Marshal handles basic escaping, though it does escape HTML characters (<, >, &).
+	keyBytes, err := json.Marshal(field)
+	if err != nil {
+		return nil, fmt.Errorf("invalid json field name for detector: %v", err)
+	}
+
+	// We replace \u003c etc with the actual character since typical log json doesn't HTML-escape keys
+	keyBytes = bytes.ReplaceAll(keyBytes, []byte(`\u003c`), []byte("<"))
+	keyBytes = bytes.ReplaceAll(keyBytes, []byte(`\u003e`), []byte(">"))
+	keyBytes = bytes.ReplaceAll(keyBytes, []byte(`\u0026`), []byte("&"))
+
 	return &JsonDetector{
-		Field:   field,
-		Pattern: re,
+		Field:       field,
+		Pattern:     re,
+		searchBytes: keyBytes,
 	}, nil
 }
 
 func (d *JsonDetector) Detect(line []byte) bool {
+	// Fast-path rejection: if the line doesn't even contain the JSON key we're looking for,
+	// we can skip the expensive json.Unmarshal entirely.
+	if !bytes.Contains(line, d.searchBytes) {
+		return false
+	}
+
 	// We do not lock initially because Unmarshal is heavy and we don't want to block readers if possible.
 	// However, usually Detect is called before readers.
 
