@@ -172,6 +172,7 @@ type Monitor struct {
 	metricSentrySent     prometheus.Counter
 	metricSentryDropped  prometheus.Counter
 	metricLastActivity   prometheus.Gauge
+	metricMonitorLag     prometheus.Gauge
 
 	// Buffering
 	buffer           strings.Builder
@@ -214,6 +215,7 @@ func New(ctx context.Context, source sources.LogSource, detector detectors.Detec
 	m.metricSentrySent = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "sent"})
 	m.metricSentryDropped = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "dropped"})
 	m.metricLastActivity = metrics.LastActivityTimestamp.With(prometheus.Labels{"source": source.Name()})
+	m.metricMonitorLag = metrics.MonitorLagSeconds.With(prometheus.Labels{"source": source.Name()})
 
 	// Initialize Sentry Hub
 	if opts.SentryDSN != "" {
@@ -437,6 +439,8 @@ func (m *Monitor) extractMetadata(line []byte, tsStr string) BatchMetadata {
 func (m *Monitor) processMatch(line []byte) {
 	m.bufferMutex.Lock()
 	m.lastActivityTime = time.Now()
+	// Evaluate UnixNano once so we can use it to calculate lag accurately
+	nowNano := m.lastActivityTime.UnixNano()
 
 	var timestamp float64
 	var tsStr string
@@ -448,6 +452,13 @@ func (m *Monitor) processMatch(line []byte) {
 
 	if !ok {
 		timestamp, tsStr = extractTimestamp(line)
+	}
+
+	if timestamp > 0 {
+		lag := float64(nowNano)/1e9 - timestamp
+		if lag >= 0 {
+			m.metricMonitorLag.Set(lag)
+		}
 	}
 
 	if transformer, ok := m.Detector.(detectors.MessageTransformer); ok {
