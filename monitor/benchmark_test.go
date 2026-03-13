@@ -31,11 +31,14 @@ func BenchmarkMonitorLoop(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
+	// Pre-allocate buffer outside the loop to accurately benchmark the processing speed
+	// without the overhead of 1MB allocations on every reconnect.
+	buf := make([]byte, 0, MaxScanTokenSize)
+
 	for i := 0; i < b.N; i++ {
 		r := strings.NewReader(content)
 		scanner := bufio.NewScanner(r)
-		// Use the same buffer size logic as in monitor.go
-		buf := make([]byte, 0, MaxScanTokenSize)
+		// Use the same buffer size logic as in monitor.go, reusing the pre-allocated buffer
 		scanner.Buffer(buf, MaxScanTokenSize)
 
 		for scanner.Scan() {
