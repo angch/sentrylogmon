@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-03-13 - TOCTOU Symlink Vulnerability in Permission Fixing
+**Vulnerability:** The `EnsureSecureDirectory` function checked for symlinks and directory existence using `os.Lstat`, but then relied on `os.Chmod` to fix permissions if they were incorrect. Because `os.Chmod` resolves symlinks, a local attacker could replace the directory with a symlink after the `os.Lstat` check but before `os.Chmod` (TOCTOU race condition), causing `sentrylogmon` to change permissions on the target of the symlink (e.g. escalating privileges of another file).
+**Learning:** Checking properties sequentially on paths leaves a Time-Of-Check to Time-Of-Use window open to race conditions. Functions like `os.Chmod` follow symlinks by default.
+**Prevention:**
+1. Check ownership before fixing permissions, to avoid modifying a file unexpectedly owned by an attacker.
+2. When attempting to fix permissions, do so securely using `os.OpenFile` with the `syscall.O_NOFOLLOW` flag to prevent following symlinks, and then invoke `f.Chmod` on the resulting file descriptor.
