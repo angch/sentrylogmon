@@ -450,6 +450,13 @@ func (m *Monitor) processMatch(line []byte) {
 		timestamp, tsStr = extractTimestamp(line)
 	}
 
+	if timestamp > 0 {
+		lag := (float64(m.lastActivityTime.UnixNano()) / 1e9) - timestamp
+		if lag >= 0 {
+			metrics.MonitorLag.WithLabelValues(m.Source.Name()).Set(lag)
+		}
+	}
+
 	if transformer, ok := m.Detector.(detectors.MessageTransformer); ok {
 		line = transformer.TransformMessage(line)
 	}
