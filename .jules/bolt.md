@@ -5,3 +5,7 @@
 ## 2026-01-27 - Regexp Allocation Limits
 **Learning:** Go's `regexp.FindSubmatchIndex` still allocates the `[]int` result slice. While it reduces memory usage compared to `FindSubmatch` (which allocates `[][]byte`), it doesn't eliminate allocations entirely. Zero-alloc regex capturing requires different libraries or manual parsing.
 **Action:** For hot paths requiring zero allocations, prefer manual parsing (`bytes.Index`, etc.) over `regexp` if feasible, otherwise accept the reduced but non-zero allocation of `FindSubmatchIndex`.
+
+## 2026-03-15 - Fast-Path Rejection for Expensive Operations
+**Learning:** `json.Unmarshal` is extremely expensive, taking ~2200ns and causing multiple allocations even when the log line ultimately doesn't match the target pattern or field.
+**Action:** When searching for specific fields in structured logs, always use a fast-path rejection (e.g., `bytes.Contains` with pre-calculated `json.Marshal(field)`) before attempting the expensive parse. This reduced non-matching line processing from ~2200ns/19 allocs to ~80ns/0 allocs.
