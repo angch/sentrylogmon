@@ -2,8 +2,8 @@ use crate::config::Config;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::os::unix::fs::MetadataExt;
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsExt};
+use std::os::unix::io::AsRawFd;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -22,32 +22,51 @@ pub struct StatusResponse {
 }
 
 pub fn ensure_secure_directory(path: &Path) -> Result<()> {
-    if !path.exists() {
-        fs::create_dir_all(path)
-            .with_context(|| format!("Failed to create directory {:?}", path))?;
-    }
+    // 1. Check if path exists and is a symlink using symlink_metadata
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(m) => m,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // Directory doesn't exist, create it with 0700
+            let mut builder = fs::DirBuilder::new();
+            builder.mode(0o700);
+            builder.recursive(true);
+            builder.create(path)
+                .with_context(|| format!("Failed to create directory {:?}", path))?;
 
-    let metadata = fs::symlink_metadata(path)
-        .with_context(|| format!("Failed to get metadata for {:?}", path))?;
+            // Verify creation by re-fetching metadata
+            fs::symlink_metadata(path)
+                .with_context(|| format!("Failed to get metadata for {:?}", path))?
+        }
+        Err(e) => return Err(e.into()),
+    };
 
-    // Check if it is a directory
-    if !metadata.is_dir() {
-        anyhow::bail!("{:?} is not a directory", path);
-    }
-
-    // Check if it is a symlink
+    // 2. Reject Symlinks
     if metadata.file_type().is_symlink() {
         anyhow::bail!("{:?} is a symlink", path);
     }
 
-    // Check permissions (0700)
-    let mode = metadata.permissions().mode() & 0o777;
-    if mode != 0o700 {
-        fs::set_permissions(path, fs::Permissions::from_mode(0o700))
-            .with_context(|| format!("Failed to set permissions 0700 on {:?}", path))?;
+    if !metadata.is_dir() {
+        anyhow::bail!("{:?} is not a directory", path);
     }
 
-    // Check ownership
+    // 3. Check permissions
+    let mode = metadata.permissions().mode() & 0o777;
+    if mode != 0o700 {
+        // Attempt to fix permissions securely using O_NOFOLLOW
+        let file = fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_DIRECTORY)
+            .open(path)
+            .with_context(|| format!("Failed to open directory {:?}", path))?;
+
+        let fd = file.as_raw_fd();
+        let res = unsafe { libc::fchmod(fd, 0o700) };
+        if res != 0 {
+            anyhow::bail!("Failed to set permissions 0700 on {:?}", path);
+        }
+    }
+
+    // 4. Check ownership
     let uid = unsafe { libc::getuid() };
     if metadata.uid() != uid {
         anyhow::bail!(

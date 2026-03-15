@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-03-15 - TOCTOU Vulnerability in Rust Directory Creation
+**Vulnerability:** The `ensure_secure_directory` function in the Rust implementation was vulnerable to a Time-of-Check to Time-of-Use (TOCTOU) symlink attack. It verified metadata, then later corrected permissions using `fs::set_permissions(path, ...)`. An attacker could swap the directory for a symlink to an arbitrary file between the check and the chmod, causing the application to change permissions on unauthorized targets (like `/etc/shadow`).
+**Learning:** `fs::set_permissions` resolves symlinks based on the path string. Security validations on file attributes must either be performed on a raw file descriptor (to lock the file identity) or immediately after an atomic operation without intermediate operations that use path strings. Also, checking `path.exists()` follows symlinks and gives a false sense of security.
+**Prevention:**
+1. Always use `fs::symlink_metadata` to verify directory existence and type, avoiding `path.exists()`.
+2. Apply permissions using raw file descriptors opened with `libc::O_NOFOLLOW | libc::O_DIRECTORY` combined with `libc::fchmod` to ensure the operation acts on the validated file object without traversing newly injected symlinks.
