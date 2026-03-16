@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2025-03-16 - TOCTOU via fs::set_permissions in Rust
+**Vulnerability:** The Rust implementation's `ensure_secure_directory` checked for symlinks using `fs::symlink_metadata` but subsequently used `fs::set_permissions` to apply 0700 permissions. Because `fs::set_permissions` implicitly follows symlinks, a local attacker could swap the directory for a symlink in the split second between the check and the chmod, resulting in a Time-of-Check to Time-of-Use (TOCTOU) vulnerability where arbitrary files' permissions could be changed.
+**Learning:** In Rust, `fs::set_permissions` does not have a "no-follow" flag and will always follow symlinks. Standard library file path operations are prone to TOCTOU.
+**Prevention:**
+1. To safely change file/directory permissions without following symlinks in Rust, you must open a file descriptor using `fs::OpenOptions::new()` with `libc::O_NOFOLLOW` (via `custom_flags`), and then use the `libc::fchmod` syscall on the raw file descriptor.
+2. Ensure existence checks use `fs::symlink_metadata` rather than `path.exists()` to avoid implicitly following symlinks before checking their type.

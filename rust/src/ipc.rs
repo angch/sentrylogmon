@@ -21,8 +21,11 @@ pub struct StatusResponse {
     pub memory_alloc: u64,
 }
 
+use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::io::AsRawFd;
+
 pub fn ensure_secure_directory(path: &Path) -> Result<()> {
-    if !path.exists() {
+    if fs::symlink_metadata(path).is_err() {
         fs::create_dir_all(path)
             .with_context(|| format!("Failed to create directory {:?}", path))?;
     }
@@ -40,13 +43,6 @@ pub fn ensure_secure_directory(path: &Path) -> Result<()> {
         anyhow::bail!("{:?} is a symlink", path);
     }
 
-    // Check permissions (0700)
-    let mode = metadata.permissions().mode() & 0o777;
-    if mode != 0o700 {
-        fs::set_permissions(path, fs::Permissions::from_mode(0o700))
-            .with_context(|| format!("Failed to set permissions 0700 on {:?}", path))?;
-    }
-
     // Check ownership
     let uid = unsafe { libc::getuid() };
     if metadata.uid() != uid {
@@ -56,6 +52,23 @@ pub fn ensure_secure_directory(path: &Path) -> Result<()> {
             uid,
             metadata.uid()
         );
+    }
+
+    // Check permissions (0700)
+    let mode = metadata.permissions().mode() & 0o777;
+    if mode != 0o700 {
+        let file = fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_DIRECTORY)
+            .open(path)
+            .with_context(|| format!("Failed to open directory securely {:?}", path))?;
+
+        let fd = file.as_raw_fd();
+        let ret = unsafe { libc::fchmod(fd, 0o700) };
+        if ret != 0 {
+            let err = std::io::Error::last_os_error();
+            anyhow::bail!("Failed to set permissions 0700 on {:?}: {}", path, err);
+        }
     }
 
     Ok(())
