@@ -44,3 +44,11 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-03-18 - TOCTOU Symlink Attack in Rust IPC Directory Creation
+**Vulnerability:** The Rust implementation's `ensure_secure_directory` checked `path.exists()` before calling `fs::create_dir_all()`. This creates a Time-of-Check to Time-of-Use (TOCTOU) vulnerability where an attacker could create a symlink pointing to a sensitive file (like `/etc/shadow`) between the check and the use. `fs::set_permissions` follows symlinks, so it would change the permissions of the target file to `0700`, potentially locking out users or allowing unauthorized access.
+**Learning:** `fs::set_permissions` implicitly follows symlinks. When operating on directories in shared locations (like `/tmp`), you must assume an attacker could swap the directory for a symlink at any moment. You cannot rely on sequential checks (`exists` -> `create` -> `chmod`).
+**Prevention:**
+1. Never check for existence before creating (`fs::create_dir_all` handles existing directories safely).
+2. Never use `fs::set_permissions` for secure directories in shared paths.
+3. Use raw file descriptors with `libc::open` and `O_NOFOLLOW | O_DIRECTORY`, then apply `libc::fchmod` to the open file descriptor. This guarantees the operations apply only to an actual directory and not a symlink.
