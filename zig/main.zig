@@ -302,6 +302,11 @@ pub fn main() !void {
         };
         defer instances.deinit(allocator);
 
+        if (instances.items.len == 0) {
+            std.fs.File.stdout().writeAll("No running instances found.\n") catch {};
+            std.process.exit(0);
+        }
+
         for (instances.items) |inst| {
             const socket_path = try std.fmt.allocPrint(allocator, "{s}/sentrylogmon.{d}.sock", .{ socket_dir, inst.pid });
             defer allocator.free(socket_path);
