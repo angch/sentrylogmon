@@ -2,6 +2,7 @@ use crate::config::Config;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::os::unix::fs::DirBuilderExt;
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::CommandExt;
@@ -22,9 +23,15 @@ pub struct StatusResponse {
 }
 
 pub fn ensure_secure_directory(path: &Path) -> Result<()> {
-    if !path.exists() {
-        fs::create_dir_all(path)
-            .with_context(|| format!("Failed to create directory {:?}", path))?;
+    // Avoid TOCTOU: try creating directly with secure permissions
+    if let Err(e) = fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(path)
+    {
+        if e.kind() != std::io::ErrorKind::AlreadyExists {
+            return Err(e).with_context(|| format!("Failed to create directory {:?}", path));
+        }
     }
 
     let metadata = fs::symlink_metadata(path)
@@ -43,7 +50,16 @@ pub fn ensure_secure_directory(path: &Path) -> Result<()> {
     // Check permissions (0700)
     let mode = metadata.permissions().mode() & 0o777;
     if mode != 0o700 {
-        fs::set_permissions(path, fs::Permissions::from_mode(0o700))
+        // Securely change permissions on a file descriptor opened with O_NOFOLLOW | O_DIRECTORY
+        use std::os::unix::fs::OpenOptionsExt;
+
+        let file = fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_DIRECTORY)
+            .open(path)
+            .with_context(|| format!("Failed to securely open directory {:?}", path))?;
+
+        file.set_permissions(fs::Permissions::from_mode(0o700))
             .with_context(|| format!("Failed to set permissions 0700 on {:?}", path))?;
     }
 

@@ -44,3 +44,8 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-03-21 - [HIGH] Fix TOCTOU vulnerability in secure directory creation
+**Vulnerability:** The Rust `ensure_secure_directory` implementation used an initial `path.exists()` check, followed by creation (`create_dir_all`), and then a metadata check before finally calling `fs::set_permissions`. This opened a Time-Of-Check to Time-Of-Use (TOCTOU) vulnerability where an attacker could replace the verified directory with a symlink immediately prior to the permission alteration, potentially escalating privileges or modifying unintended files.
+**Learning:** Checking if a path exists and validating it before applying subsequent modifications directly using path names on the filesystem causes inherent TOCTOU vulnerabilities due to asynchronous file manipulations by other processes. Modifying metadata through path names without securely pinning to a specific inode or file descriptor undermines verification.
+**Prevention:** Avoid `exists` followed by creation—simply call `DirBuilder::new().mode(0o700).create()` directly (handling `AlreadyExists`). For secure permissions adjustment in Rust, open a raw file descriptor to the targeted directory utilizing `libc::O_NOFOLLOW | libc::O_DIRECTORY` combined with `file.set_permissions()`.
