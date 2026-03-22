@@ -1,2 +1,8 @@
-BenchmarkParseISO8601-4          	 8289093	       142.3 ns/op	      32 B/op	       1 allocs/op
-BenchmarkParseISO8601_Simple-4   	 4391434	       270.7 ns/op	      24 B/op	       1 allocs/op
+goos: linux
+goarch: amd64
+pkg: github.com/angch/sentrylogmon/detectors
+cpu: Intel(R) Xeon(R) Processor @ 2.30GHz
+BenchmarkJsonDetector-4           	  354759	      3514 ns/op	     773 B/op	      20 allocs/op
+BenchmarkJsonDetector_NoMatch-4   	  409652	      2895 ns/op	     680 B/op	      19 allocs/op
+PASS
+ok  	github.com/angch/sentrylogmon/detectors	3.303s
