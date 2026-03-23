@@ -4,7 +4,6 @@ This file tracks active work items.
 
 ## Wish List
 
-- [ ] **Prometheus Metrics for Monitor Lag**: Track time difference between log timestamp and processing time.
 - [ ] **Dynamic Configuration Reloading**: Support full config reload without restart (add/remove monitors).
 - [ ] **Structured Logging**: support JSON output for the agent's own logs.
 - [ ] **Health Check Endpoint**: Dedicated /healthz endpoint checking internal component status.
@@ -12,6 +11,11 @@ This file tracks active work items.
 
 ## Completed
 
+- [x] **Prometheus Metrics for Monitor Lag** (2026-03-23)
+  - Implemented `MonitorLagSeconds` histogram metric in `metrics/metrics.go`.
+  - Calculated lag by comparing log timestamp (extracted from messages) against current processing time in `monitor/monitor.go`.
+  - Added support for both absolute (Unix, ISO8601) and relative (dmesg) timestamps by fetching system boot time via `gopsutil`.
+  - Included a robust unit test (`TestMonitorLagMetric`) to verify the sample count and lag sum.
 - [x] **Syslog Timestamp Optimization** (2026-02-06)
   - Implemented `ParseSyslogTimestamp` manual parser to replace regex.
   - Reduced allocations from 32B/op to 16B/op.

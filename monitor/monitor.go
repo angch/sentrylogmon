@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/shirou/gopsutil/v3/host"
+
 	"github.com/angch/sentrylogmon/detectors"
 	"github.com/angch/sentrylogmon/metrics"
 	"github.com/angch/sentrylogmon/sources"
@@ -19,6 +21,14 @@ import (
 )
 
 var severityKeys = []string{"level", "severity", "log_level", "type"}
+
+var cachedBootTime uint64
+
+func init() {
+	if bt, err := host.BootTime(); err == nil {
+		cachedBootTime = bt
+	}
+}
 
 func extractSyslogPriority(line []byte) (int, int, int, bool) {
 	// Fast path: must start with '<'
@@ -172,6 +182,7 @@ type Monitor struct {
 	metricSentrySent     prometheus.Counter
 	metricSentryDropped  prometheus.Counter
 	metricLastActivity   prometheus.Gauge
+	metricMonitorLag     prometheus.Observer
 
 	// Buffering
 	buffer           strings.Builder
@@ -214,6 +225,7 @@ func New(ctx context.Context, source sources.LogSource, detector detectors.Detec
 	m.metricSentrySent = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "sent"})
 	m.metricSentryDropped = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "dropped"})
 	m.metricLastActivity = metrics.LastActivityTimestamp.With(prometheus.Labels{"source": source.Name()})
+	m.metricMonitorLag = metrics.MonitorLagSeconds.With(prometheus.Labels{"source": source.Name()})
 
 	// Initialize Sentry Hub
 	if opts.SentryDSN != "" {
@@ -448,6 +460,28 @@ func (m *Monitor) processMatch(line []byte) {
 
 	if !ok {
 		timestamp, tsStr = extractTimestamp(line)
+	}
+
+	if timestamp > 0 {
+		var logTimestamp float64
+		// Heuristic: if timestamp < 10 years, it's likely a relative timestamp from boot
+		if timestamp < 315360000 {
+			if cachedBootTime > 0 {
+				logTimestamp = float64(cachedBootTime) + timestamp
+			} else {
+				// We don't have a valid boot time, skip lag metric for relative timestamps
+				logTimestamp = 0
+			}
+		} else {
+			logTimestamp = timestamp
+		}
+
+		if logTimestamp > 0 {
+			lag := float64(time.Now().UnixNano())/1e9 - logTimestamp
+			if lag >= 0 && m.metricMonitorLag != nil {
+				m.metricMonitorLag.Observe(lag)
+			}
+		}
 	}
 
 	if transformer, ok := m.Detector.(detectors.MessageTransformer); ok {
