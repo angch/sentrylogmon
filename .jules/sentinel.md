@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-03-24 - Case-Sensitive CLI Redaction Failure in Rust
+**Vulnerability:** The Rust command line sanitizer relied on case-sensitive maps and failed to correctly enforce boundaries in heuristic matching, leaking secrets via case variations or false positive heuristics.
+**Learning:** Security parity must be manually enforced across language ports. Case-insensitive string matching and boundary checks are essential for robust redaction heuristics.
+**Prevention:**
+1. Normalize inputs before applying heuristics or maps.
+2. Verify word boundaries for suffix matching.
