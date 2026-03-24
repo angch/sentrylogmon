@@ -11,11 +11,12 @@ import (
 )
 
 type JsonDetector struct {
-	Field    string
-	Pattern  *regexp.Regexp
+	Field       string
+	Pattern     *regexp.Regexp
+	searchBytes []byte
 
 	mu       sync.Mutex
-	lastData map[string]interface{}
+	lastData map[string]any
 	lastLine []byte
 }
 
@@ -32,17 +33,28 @@ func NewJsonDetector(pattern string) (*JsonDetector, error) {
 		return nil, fmt.Errorf("invalid regex for json detector: %v", err)
 	}
 
+	searchBytes, err := json.Marshal(field)
+	if err != nil {
+		return nil, fmt.Errorf("invalid field name for json detector: %v", err)
+	}
+
 	return &JsonDetector{
-		Field:   field,
-		Pattern: re,
+		Field:       field,
+		Pattern:     re,
+		searchBytes: searchBytes,
 	}, nil
 }
 
 func (d *JsonDetector) Detect(line []byte) bool {
+	// Fast-path rejection: if the JSON field is not present at all in the line, don't Unmarshal.
+	if !bytes.Contains(line, d.searchBytes) {
+		return false
+	}
+
 	// We do not lock initially because Unmarshal is heavy and we don't want to block readers if possible.
 	// However, usually Detect is called before readers.
 
-	var data map[string]interface{}
+	var data map[string]any
 	if err := json.Unmarshal(line, &data); err != nil {
 		d.mu.Lock()
 		d.lastData = nil
@@ -61,7 +73,13 @@ func (d *JsonDetector) Detect(line []byte) bool {
 	}
 
 	// Convert value to string for regex matching
-	valStr := fmt.Sprintf("%v", val)
+	var valStr string
+	if s, ok := val.(string); ok {
+		valStr = s
+	} else {
+		valStr = fmt.Sprintf("%v", val)
+	}
+
 	if d.Pattern.MatchString(valStr) {
 		d.mu.Lock()
 		d.lastData = data
@@ -79,7 +97,7 @@ func (d *JsonDetector) Detect(line []byte) bool {
 	return false
 }
 
-func (d *JsonDetector) GetContext(line []byte) map[string]interface{} {
+func (d *JsonDetector) GetContext(line []byte) map[string]any {
 	d.mu.Lock()
 	// Verify cache validity by checking content equality
 	if d.lastData != nil && bytes.Equal(d.lastLine, line) {
@@ -89,7 +107,7 @@ func (d *JsonDetector) GetContext(line []byte) map[string]interface{} {
 	}
 	d.mu.Unlock()
 
-	var data map[string]interface{}
+	var data map[string]any
 	if err := json.Unmarshal(line, &data); err != nil {
 		return nil
 	}
@@ -97,7 +115,7 @@ func (d *JsonDetector) GetContext(line []byte) map[string]interface{} {
 }
 
 func (d *JsonDetector) ExtractTimestamp(line []byte) (float64, string, bool) {
-	var data map[string]interface{}
+	var data map[string]any
 
 	d.mu.Lock()
 	if d.lastData != nil && bytes.Equal(d.lastLine, line) {
