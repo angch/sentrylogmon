@@ -44,3 +44,7 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+## 2025-05-20 - [Fix directory creation and symlink TOCTOU vulnerabilities]
+**Vulnerability:** `ensure_secure_directory` had a Time-Of-Check to Time-Of-Use (TOCTOU) vulnerability where `fs::create_dir_all` creates a directory with default permissions before changing it. It also suffered from symlink TOCTOU during ownership/permissions adjustments via `fs::set_permissions`.
+**Learning:** `fs::create_dir_all` creates intermediate and final directories with potentially unsafe permissions. `fs::set_permissions` resolves symlinks by default or can fall victim to race conditions.
+**Prevention:** Use `fs::DirBuilder::new().recursive(true).mode(0o700).create(path)` with `DirBuilderExt` to create secure directories safely. Use `libc::fchmod` on a raw file descriptor opened with `libc::O_NOFOLLOW | libc::O_DIRECTORY` to securely update file permissions to prevent TOCTOU symlink attacks.
