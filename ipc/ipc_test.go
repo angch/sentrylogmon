@@ -61,13 +61,19 @@ func TestEnsureSecureDirectory(t *testing.T) {
 			t.Fatalf("Failed to create dir3: %v", err)
 		}
 		// Verify it's wrong first
-		info, _ = os.Stat(dir3)
+		info, err = os.Stat(dir3)
+		if err != nil || info == nil {
+			t.Fatalf("Failed to stat dir3: %v", err)
+		}
 		t.Logf("Case 3 initial permissions: %o", info.Mode().Perm())
 
 		if err := EnsureSecureDirectory(dir3); err != nil {
 			t.Fatalf("Case 3 failed: %v", err)
 		}
-		info, _ = os.Stat(dir3)
+		info, err = os.Stat(dir3)
+		if err != nil || info == nil {
+			t.Fatalf("Failed to stat dir3 after fix: %v", err)
+		}
 		if info.Mode().Perm() != 0700 {
 			t.Errorf("Case 3: expected 0700 after fix, got %o", info.Mode().Perm())
 		}

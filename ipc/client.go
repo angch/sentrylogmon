@@ -59,6 +59,9 @@ func RequestUpdate(socketPath string) error {
 	if err != nil {
 		return err
 	}
+	if resp == nil {
+		return fmt.Errorf("unexpected nil response")
+	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {

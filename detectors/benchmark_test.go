@@ -8,7 +8,10 @@ import (
 
 func BenchmarkGenericDetector_Literal(b *testing.B) {
 	pattern := "error"
-	detector, _ := NewGenericDetector(pattern)
+	detector, err := NewGenericDetector(pattern)
+	if err != nil {
+		b.Fatalf("Failed to create detector: %v", err)
+	}
 	line := []byte("This is a log line containing an error message.")
 
 	b.ResetTimer()
@@ -21,7 +24,10 @@ func BenchmarkGenericDetector_Literal(b *testing.B) {
 
 func BenchmarkGenericDetector_Regex(b *testing.B) {
 	pattern := "err[or]+"
-	detector, _ := NewGenericDetector(pattern)
+	detector, err := NewGenericDetector(pattern)
+	if err != nil {
+		b.Fatalf("Failed to create detector: %v", err)
+	}
 	line := []byte("This is a log line containing an error message.")
 
 	b.ResetTimer()

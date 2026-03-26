@@ -49,6 +49,10 @@ func SanitizeCommand(args []string) string {
 		// Check for --flag=value
 		if strings.Contains(arg, "=") {
 			parts := strings.SplitN(arg, "=", 2)
+			if len(parts) < 2 {
+				sanitized = append(sanitized, arg)
+				continue
+			}
 			key := parts[0]
 			// val := parts[1] // unused
 

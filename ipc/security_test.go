@@ -69,6 +69,9 @@ func TestStatusRedaction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get status: %v", err)
 	}
+	if resp == nil {
+		t.Fatal("Unexpected nil response")
+	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {

@@ -53,7 +53,10 @@ func TestJsonDetector_Detect(t *testing.T) {
 }
 
 func TestJsonDetector_GetContext(t *testing.T) {
-	d, _ := NewJsonDetector("level:error")
+	d, err := NewJsonDetector("level:error")
+	if err != nil {
+		t.Fatalf("Failed to create detector: %v", err)
+	}
 	input := []byte(`{"level":"error", "foo":"bar"}`)
 
 	// 1. Without Detect (Should parse fresh)
@@ -79,7 +82,10 @@ func TestJsonDetector_GetContext(t *testing.T) {
 }
 
 func TestJsonDetector_ExtractTimestamp(t *testing.T) {
-	d, _ := NewJsonDetector("level:error")
+	d, err := NewJsonDetector("level:error")
+	if err != nil {
+		t.Fatalf("Failed to create detector: %v", err)
+	}
 
 	tests := []struct {
 		name       string
@@ -136,7 +142,10 @@ func TestJsonDetector_ExtractTimestamp(t *testing.T) {
 }
 
 func TestJsonDetector_CacheConsistency(t *testing.T) {
-	d, _ := NewJsonDetector("level:error")
+	d, err := NewJsonDetector("level:error")
+	if err != nil {
+		t.Fatalf("Failed to create detector: %v", err)
+	}
 
 	line1 := []byte(`{"level":"error", "id":1}`)
 	line2 := []byte(`{"level":"error", "id":2}`)
