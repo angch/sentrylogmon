@@ -2,21 +2,31 @@ package monitor
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/angch/sentrylogmon/metrics"
 	"github.com/getsentry/sentry-go"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 )
 
 // MockSource implements sources.LogSource
 type MockSource struct {
 	content string
+	name    string
 }
 
-func (s *MockSource) Name() string { return "mock" }
+func (s *MockSource) Name() string {
+	if s.name != "" {
+		return s.name
+	}
+	return "mock"
+}
 func (s *MockSource) Stream() (io.Reader, error) {
 	return strings.NewReader(s.content), nil
 }
@@ -391,5 +401,49 @@ func TestMonitorMultiTenancy(t *testing.T) {
 	// Verify mon2 DSN
 	if mon2.Hub.Client().Options().Dsn != customDSN {
 		t.Errorf("mon2 DSN mismatch. Expected %s, got %s", customDSN, mon2.Hub.Client().Options().Dsn)
+	}
+}
+
+func TestMonitorLag(t *testing.T) {
+	// 2 seconds ago
+	ts := float64(time.Now().UnixNano())/1e9 - 2.0
+	input := fmt.Sprintf("[%f] Line with 2s lag\n", ts)
+
+	// mock_lag source to avoid metric leakage across subtests
+	source := &MockSource{content: input}
+	source.name = "mock_lag"
+
+	detector := &MockDetector{}
+
+	mon, err := New(context.Background(), source, detector, nil, Options{})
+	if err != nil {
+		t.Fatalf("Failed to create monitor: %v", err)
+	}
+	mon.StopOnEOF = true
+
+	mon.Start()
+
+	// Collect metric
+	m, err := metrics.MonitorLag.GetMetricWith(prometheus.Labels{"source": "mock_lag"})
+	if err != nil {
+		t.Fatalf("Failed to get metric: %v", err)
+	}
+
+	var dtoMetric dto.Metric
+	if err := m.(prometheus.Metric).Write(&dtoMetric); err != nil {
+		t.Fatalf("Failed to write metric: %v", err)
+	}
+
+	if dtoMetric.Histogram == nil {
+		t.Fatalf("Histogram is nil")
+	}
+
+	if dtoMetric.Histogram.SampleCount == nil {
+		t.Fatalf("SampleCount is nil")
+	}
+
+	count := *dtoMetric.Histogram.SampleCount
+	if count != 1 {
+		t.Errorf("Expected SampleCount 1, got %d", count)
 	}
 }
