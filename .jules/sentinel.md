@@ -44,3 +44,11 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-02-11 - TOCTOU Vulnerability in Unix Socket Creation
+**Vulnerability:** The application used `net.Listen("unix", ...)` followed by `os.Chmod` to secure the IPC socket. This created a race condition (TOCTOU) where the socket was briefly accessible with default permissions (often `0755`) before `os.Chmod` could restrict it to `0600`.
+**Learning:** `net.Listen` creates the socket file immediately. Relying on a subsequent `os.Chmod` leaves a window of vulnerability. The only way to securely create a Unix domain socket with restricted permissions in Go is to set the process umask (`syscall.Umask(0077)`) *before* calling `net.Listen` and restore it afterwards.
+**Prevention:**
+1. Wrap `net.Listen` in a helper function that sets `syscall.Umask(0077)` before creation.
+2. Ensure the helper restores the original umask using `defer`.
+3. Use build constraints to handle OS-specific syscalls (Windows doesn't support umask in the same way).
