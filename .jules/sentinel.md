@@ -44,3 +44,11 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-02-25 - DSN Leakage via Incomplete Redaction
+**Vulnerability:** The application's configuration sanitization (`Redacted()`) relied on `SanitizeCommand`, which used a heuristic allowlist/blocklist. This list failed to include "dsn" as a sensitive suffix, causing Sentry DSNs (which contain credentials) to be exposed in the IPC `/status` endpoint and potentially in logs.
+**Learning:** Generic credential scanners often miss domain-specific secrets like "DSN" unless explicitly trained. Security allowlists must be comprehensive and include all sensitive configuration keys specific to the application's domain (e.g., Sentry, Database).
+**Prevention:**
+1. Explicitly audit all configuration keys for sensitivity.
+2. Add "dsn" (and other domain-specific secret keys) to the sensitive suffixes list.
+3. Add regression tests that specifically target known sensitive keys to prevent future regressions.

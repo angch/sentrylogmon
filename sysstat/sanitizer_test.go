@@ -140,6 +140,31 @@ func TestSanitizeCommand(t *testing.T) {
 			input:    []string{"--Session-Id=secret123"},
 			expected: "--Session-Id=[REDACTED]",
 		},
+		{
+			name:     "DSN Flag",
+			input:    []string{"app", "--dsn", "https://key@sentry.io/1"},
+			expected: "app --dsn [REDACTED]",
+		},
+		{
+			name:     "Sentry DSN Flag",
+			input:    []string{"app", "--sentry-dsn", "https://key@sentry.io/1"},
+			expected: "app --sentry-dsn [REDACTED]",
+		},
+		{
+			name:     "DSN Flag with equals",
+			input:    []string{"app", "--dsn=https://key@sentry.io/1"},
+			expected: "app --dsn=[REDACTED]",
+		},
+		{
+			name:     "Sentry DSN Flag with equals",
+			input:    []string{"app", "--sentry-dsn=https://key@sentry.io/1"},
+			expected: "app --sentry-dsn=[REDACTED]",
+		},
+		{
+			name:     "Env var style DSN",
+			input:    []string{"env", "SENTRY_DSN=https://key@sentry.io/1"},
+			expected: "env SENTRY_DSN=[REDACTED]",
+		},
 	}
 
 	for _, tt := range tests {
