@@ -28,8 +28,9 @@ func BenchmarkSyslogTimestamp_Manual(b *testing.B) {
 
 	b.ResetTimer()
 	b.ReportAllocs()
+	now := time.Now()
 	for i := 0; i < b.N; i++ {
-		if _, _, ok := ParseSyslogTimestamp(line); !ok {
+		if _, _, ok := ParseSyslogTimestamp(line, now); !ok {
 			b.Fatal("should match")
 		}
 	}

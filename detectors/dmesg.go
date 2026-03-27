@@ -3,6 +3,7 @@ package detectors
 import (
 	"bytes"
 	"strings"
+	"time"
 )
 
 // DmesgDetector detects issues in kernel logs.
@@ -112,7 +113,7 @@ func (d *DmesgDetector) TransformMessage(line []byte) []byte {
 }
 
 // ExtractTimestamp extracts timestamp from dmesg line.
-func (d *DmesgDetector) ExtractTimestamp(line []byte) (float64, string, bool) {
+func (d *DmesgDetector) ExtractTimestamp(line []byte, now time.Time) (float64, string, bool) {
 	return ParseDmesgTimestamp(line)
 }
 

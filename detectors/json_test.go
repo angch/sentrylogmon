@@ -3,6 +3,7 @@ package detectors
 import (
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestJsonDetector_Detect(t *testing.T) {
@@ -128,7 +129,7 @@ func TestJsonDetector_ExtractTimestamp(t *testing.T) {
 			// Pre-populate cache via Detect if possible, or just call ExtractTimestamp directly
 			// ExtractTimestamp handles both cached and non-cached.
 			// Let's test non-cached first
-			ts, _, ok := d.ExtractTimestamp([]byte(tt.input))
+			ts, _, ok := d.ExtractTimestamp([]byte(tt.input), time.Now())
 			if ok != tt.expectedOK {
 				t.Errorf("ExtractTimestamp() ok = %v, want %v", ok, tt.expectedOK)
 			}
