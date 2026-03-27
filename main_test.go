@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/angch/sentrylogmon/config"
+	"github.com/angch/sentrylogmon/ipc"
 )
 
 var timestampRegex = regexp.MustCompile(`^\[\s*([0-9.]+)\]`)
@@ -294,5 +296,46 @@ func TestGenerateConfig(t *testing.T) {
 
 	if !strings.Contains(err.Error(), "already exists") {
 		t.Errorf("Unexpected error message: %v", err)
+	}
+}
+
+func TestPrintInstanceTable(t *testing.T) {
+	// Setup
+	startTime := time.Now().Add(-1 * time.Hour)
+	instances := []ipc.StatusResponse{
+		{
+			PID:         1234,
+			StartTime:   startTime,
+			Version:     "v1.0.0",
+			MemoryAlloc: 1024 * 1024 * 5, // 5 MiB
+			Config: &config.Config{
+				Monitors: []config.MonitorConfig{
+					{Name: "nginx", Type: "file"},
+				},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	printInstanceTable(&buf, instances)
+
+	output := buf.String()
+
+	// Expectations
+	// Note: We check for substrings because tabs are used for alignment
+	if !strings.Contains(output, "PID") || !strings.Contains(output, "STATUS") || !strings.Contains(output, "STARTED") {
+		t.Errorf("Output missing headers. Got:\n%s", output)
+	}
+
+	if !strings.Contains(output, "Running") {
+		t.Errorf("Output missing status 'Running'. Got:\n%s", output)
+	}
+
+	if !strings.Contains(output, "1234") {
+		t.Errorf("Output missing PID '1234'. Got:\n%s", output)
+	}
+
+	if !strings.Contains(output, "nginx(file)") {
+		t.Errorf("Output missing monitor details. Got:\n%s", output)
 	}
 }
