@@ -190,6 +190,7 @@ const Args = struct {
     verbose: bool = false,
     oneshot: bool = false,
     config: ?[]const u8 = null,
+    init: bool = false,
     status: bool = false,
     update: bool = false,
     metrics_port: ?u16 = null,
@@ -211,6 +212,63 @@ pub fn main() !void {
 
     // IPC Commands
     const socket_dir = "/tmp/sentrylogmon";
+
+    if (args.init) {
+        const filename = "sentrylogmon.yaml";
+        const cwd = std.fs.cwd();
+
+        // Check if file exists
+        if (cwd.access(filename, .{})) |_| {
+            std.debug.print("{s} already exists. Will not overwrite\n", .{filename});
+            std.process.exit(1);
+        } else |err| {
+            if (err != error.FileNotFound) {
+                std.debug.print("Error checking {s}: {}\n", .{ filename, err });
+                std.process.exit(1);
+            }
+        }
+
+        const content =
+            \\# sentrylogmon.yaml - Configuration for Sentry Log Monitor
+            \\
+            \\# Global Sentry Configuration
+            \\sentry:
+            \\  # Your Sentry DSN (Data Source Name)
+            \\  # Example: https://examplePublicKey@o0.ingest.sentry.io/0
+            \\  dsn: ""
+            \\  environment: production
+            \\  release: v1.0.0
+            \\
+            \\monitors:
+            \\  # Example: Monitor a log file for errors
+            \\  - name: system-logs
+            \\    type: file
+            \\    path: /var/log/syslog
+            \\    # Regex pattern to match (case-insensitive)
+            \\    pattern: "(?i)(error|fatal|panic)"
+            \\
+            \\  # Example: Monitor Nginx error logs with built-in format
+            \\  # - name: nginx-errors
+            \\  #   type: file
+            \\  #   path: /var/log/nginx/error.log
+            \\  #   format: nginx
+            \\
+        ;
+
+        var file = cwd.createFile(filename, .{}) catch |create_err| {
+            std.debug.print("Error creating {s}: {}\n", .{ filename, create_err });
+            std.process.exit(1);
+        };
+        defer file.close();
+        file.writeAll(content) catch |write_err| {
+             std.debug.print("Error writing to {s}: {}\n", .{ filename, write_err });
+             std.process.exit(1);
+        };
+
+        std.debug.print("Generated {s}\n", .{filename});
+        std.process.exit(0);
+    }
+
     if (args.status) {
         var instances = ipc.listInstances(allocator, socket_dir) catch |err| {
             std.debug.print("Error listing instances: {}\n", .{err});
@@ -616,6 +674,8 @@ fn printUsage() void {
         \\        Enable verbose logging
         \\  --oneshot
         \\        Process existing logs and exit (do not follow)
+        \\  --init
+        \\        Generate a starter configuration file
         \\  --metrics-port int
         \\        Port to expose Prometheus metrics
         \\  --help
@@ -692,6 +752,8 @@ fn parseArgs(allocator: std.mem.Allocator) !Args {
             if (arg_iter.next()) |cfg| {
                 args.config = try allocator.dupe(u8, cfg);
             }
+        } else if (std.mem.eql(u8, arg, "--init")) {
+            args.init = true;
         } else if (std.mem.eql(u8, arg, "--status")) {
             args.status = true;
         } else if (std.mem.eql(u8, arg, "--update")) {
