@@ -8,7 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/angch/sentrylogmon/metrics"
 	"github.com/getsentry/sentry-go"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 )
 
 // MockSource implements sources.LogSource
@@ -391,5 +394,62 @@ func TestMonitorMultiTenancy(t *testing.T) {
 	// Verify mon2 DSN
 	if mon2.Hub.Client().Options().Dsn != customDSN {
 		t.Errorf("mon2 DSN mismatch. Expected %s, got %s", customDSN, mon2.Hub.Client().Options().Dsn)
+	}
+}
+
+func TestMonitorLag(t *testing.T) {
+	// Reset metrics
+	metrics.MonitorLagSeconds.Reset()
+
+	// Use a fixed timestamp far in the past (2009-02-13 23:31:30 UTC)
+	input := "[1234567890.0] Log line"
+	source := &MockSource{content: input}
+	detector := &MockDetector{}
+
+	mon, err := New(context.Background(), source, detector, nil, Options{})
+	if err != nil {
+		t.Fatalf("Failed to create monitor: %v", err)
+	}
+	mon.StopOnEOF = true
+
+	mon.Start()
+
+	// Gather metrics
+	mfs, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		t.Fatalf("Failed to gather metrics: %v", err)
+	}
+
+	var lagMetric *dto.MetricFamily
+	for _, mf := range mfs {
+		if mf.GetName() == "sentrylogmon_monitor_lag_seconds" {
+			lagMetric = mf
+			break
+		}
+	}
+
+	if lagMetric == nil {
+		t.Fatal("Monitor lag metric not found")
+	}
+
+	var found bool
+	for _, m := range lagMetric.GetMetric() {
+		for _, label := range m.GetLabel() {
+			if label.GetName() == "source" && label.GetValue() == "mock" {
+				found = true
+				hist := m.GetHistogram()
+				if hist.GetSampleCount() != 1 {
+					t.Errorf("Expected sample count 1, got %d", hist.GetSampleCount())
+				}
+				// Lag should be huge (~years), so definitely > 0
+				if hist.GetSampleSum() <= 0 {
+					t.Errorf("Expected positive lag, got %f", hist.GetSampleSum())
+				}
+			}
+		}
+	}
+
+	if !found {
+		t.Error("Metric for source=mock not found")
 	}
 }
