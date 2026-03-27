@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-03-13 - Rust TOCTOU Vulnerability in IPC Directory Creation
+**Vulnerability:** The Rust implementation used fs::create_dir_all and fs::set_permissions to create and secure the IPC directory. This created a Time-of-Check to Time-of-Use (TOCTOU) vulnerability where an attacker could replace the directory with a symlink before permissions were set, allowing arbitrary file permission changes.
+**Learning:** Standard library functions like fs::set_permissions follow symlinks and do not provide race-free guarantees when securing shared directories like /tmp.
+**Prevention:**
+1. Use DirBuilderExt to set the mode to 0700 atomically during creation.
+2. When adjusting permissions on existing directories, open a raw file descriptor with O_NOFOLLOW | O_DIRECTORY and use libc::fchmod instead of fs::set_permissions.
