@@ -65,10 +65,10 @@ func ParseFlags() {
 	if !flag.Parsed() {
 		flag.Usage = func() {
 			out := flag.CommandLine.Output()
-			fmt.Fprintf(out, "Sentry Log Monitor\n")
+			fmt.Fprintf(out, "🛡️  Sentry Log Monitor\n")
 			fmt.Fprintf(out, "A lightweight tool to monitor logs and report errors to Sentry.\n\n")
 			fmt.Fprintf(out, "Usage:\n  sentrylogmon [flags]\n\n")
-			fmt.Fprintf(out, "Examples:\n")
+			fmt.Fprintf(out, "📋 Examples:\n")
 			fmt.Fprintf(out, "  # Monitor a file for errors\n")
 			fmt.Fprintf(out, "  sentrylogmon --dsn=https://... --file=/var/log/syslog\n\n")
 			fmt.Fprintf(out, "  # Monitor with config file\n")
@@ -77,7 +77,7 @@ func ParseFlags() {
 			fmt.Fprintf(out, "  sentrylogmon --dsn=... --journalctl=\"--unit=nginx -f\"\n\n")
 			fmt.Fprintf(out, "  # Monitor syslog\n")
 			fmt.Fprintf(out, "  sentrylogmon --dsn=... --syslog=:5514\n\n")
-			fmt.Fprintf(out, "Flags:\n")
+			fmt.Fprintf(out, "🚩 Flags:\n")
 			flag.PrintDefaults()
 		}
 		flag.Parse()
