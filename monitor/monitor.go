@@ -16,6 +16,7 @@ import (
 	"github.com/angch/sentrylogmon/sysstat"
 	"github.com/getsentry/sentry-go"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/shirou/gopsutil/v3/host"
 )
 
 var severityKeys = []string{"level", "severity", "log_level", "type"}
@@ -172,6 +173,7 @@ type Monitor struct {
 	metricSentrySent     prometheus.Counter
 	metricSentryDropped  prometheus.Counter
 	metricLastActivity   prometheus.Gauge
+	metricMonitorLag     prometheus.Gauge
 
 	// Buffering
 	buffer           strings.Builder
@@ -186,6 +188,8 @@ type Monitor struct {
 	maxInactivity     time.Duration
 	lastReadTime      int64 // atomic unix nano
 	inactivityAlerted int32 // atomic boolean
+
+	bootTime float64
 }
 
 type Options struct {
@@ -214,6 +218,12 @@ func New(ctx context.Context, source sources.LogSource, detector detectors.Detec
 	m.metricSentrySent = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "sent"})
 	m.metricSentryDropped = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "dropped"})
 	m.metricLastActivity = metrics.LastActivityTimestamp.With(prometheus.Labels{"source": source.Name()})
+	m.metricMonitorLag = metrics.MonitorLagSeconds.With(prometheus.Labels{"source": source.Name()})
+
+	// Initialize boot time
+	if bt, err := host.BootTime(); err == nil {
+		m.bootTime = float64(bt)
+	}
 
 	// Initialize Sentry Hub
 	if opts.SentryDSN != "" {
@@ -452,6 +462,19 @@ func (m *Monitor) processMatch(line []byte) {
 
 	if transformer, ok := m.Detector.(detectors.MessageTransformer); ok {
 		line = transformer.TransformMessage(line)
+	}
+
+	if timestamp > 0 {
+		absTimestamp := timestamp
+		// Relative timestamp check based on heuristics (e.g. less than year 2000 in seconds)
+		if timestamp < 946684800 && m.bootTime > 0 {
+			absTimestamp = timestamp + m.bootTime
+		}
+
+		lag := float64(m.lastActivityTime.UnixNano())/1e9 - absTimestamp
+		if lag >= 0 {
+			m.metricMonitorLag.Set(lag)
+		}
 	}
 
 	var msgToSend string
