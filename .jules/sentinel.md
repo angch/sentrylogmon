@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-03-05 - Insecure Command Splitting Leaking Secrets
+**Vulnerability:** The application used `strings.Fields` to parse command arguments for redaction in status reports. This splitting method ignored quotes, causing multi-word arguments (e.g., `--password "My Secret 123"`) to be split incorrectly. The sanitizer redacted only the first part (`"My`), leaking subsequent parts (`Secret`, `123"`) in the output.
+**Learning:** Simple string splitting (like `strings.Fields` or `strings.Split`) is fundamentally insecure for parsing command lines because it does not respect quoting or escaping rules. This leads to a divergence between how the shell interprets arguments (as one token) and how the security control interprets them (as multiple tokens).
+**Prevention:**
+1. Always use a dedicated command-line parser (like `shlex`) that respects quoting and escaping when processing shell commands.
+2. Ensure that the parser used for security controls (redaction, validation) is the same as, or strictly compatible with, the parser used for execution.

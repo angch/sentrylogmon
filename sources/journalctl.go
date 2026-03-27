@@ -1,15 +1,11 @@
 package sources
 
-import "strings"
-
 type JournalctlSource struct {
 	*CommandSource
 }
 
-func NewJournalctlSource(name string, args string) *JournalctlSource {
-	// Simple splitting of args.
-	argsSlice := strings.Fields(args)
+func NewJournalctlSource(name string, args ...string) *JournalctlSource {
 	return &JournalctlSource{
-		CommandSource: NewCommandSource(name, "journalctl", argsSlice...),
+		CommandSource: NewCommandSource(name, "journalctl", args...),
 	}
 }
