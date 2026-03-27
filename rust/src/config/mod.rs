@@ -111,6 +111,10 @@ pub struct Args {
     #[arg(long)]
     pub oneshot: bool,
 
+    /// Generate a starter configuration file
+    #[arg(long)]
+    pub init: bool,
+
     /// List running instances
     #[arg(long)]
     pub status: bool,
@@ -130,6 +134,8 @@ pub struct Config {
     pub monitors: Vec<MonitorConfig>,
     pub verbose: bool,
     pub oneshot: bool,
+    #[serde(skip)]
+    pub init: bool,
     #[serde(skip)]
     pub status: bool,
     #[serde(skip)]
@@ -156,6 +162,7 @@ impl Config {
                 monitors: file_config.monitors,
                 verbose: args.verbose,
                 oneshot: args.oneshot,
+                init: args.init,
                 status: args.status,
                 update: args.update,
                 metrics_port: file_config.metrics_port,
@@ -256,13 +263,14 @@ impl Config {
                 monitors,
                 verbose: args.verbose,
                 oneshot: args.oneshot,
+                init: args.init,
                 status: args.status,
                 update: args.update,
                 metrics_port: args.metrics_port.unwrap_or(0),
             }
         };
 
-        if config.status || config.update {
+        if config.init || config.status || config.update {
             return Ok(config);
         }
 
