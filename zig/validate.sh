@@ -118,7 +118,7 @@ echo ""
 echo "Verifying functional parity with Go implementation..."
 
 # Check that all command-line flags are supported
-FLAGS=("dsn" "file" "dmesg" "pattern" "environment" "release" "verbose" "oneshot" "command" "journalctl" "help")
+FLAGS=("dsn" "file" "dmesg" "pattern" "environment" "release" "verbose" "oneshot" "command" "journalctl" "help" "init")
 for flag in "${FLAGS[@]}"; do
     if grep -q "$flag" main.zig; then
         echo "✓ Flag --$flag is supported"

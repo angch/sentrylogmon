@@ -192,6 +192,7 @@ const Args = struct {
     config: ?[]const u8 = null,
     status: bool = false,
     update: bool = false,
+    init: bool = false,
     metrics_port: ?u16 = null,
 };
 
@@ -313,6 +314,53 @@ pub fn main() !void {
             };
             std.debug.print("Update requested for PID {d}\n", .{inst.pid});
         }
+        std.process.exit(0);
+    }
+
+    if (args.init) {
+        const content =
+            \\# sentrylogmon.yaml - Configuration for Sentry Log Monitor
+            \\
+            \\# Global Sentry Configuration
+            \\sentry:
+            \\  # Your Sentry DSN (Data Source Name)
+            \\  # Example: https://examplePublicKey@o0.ingest.sentry.io/0
+            \\  dsn: ""
+            \\  environment: production
+            \\  release: v1.0.0
+            \\
+            \\monitors:
+            \\  # Example: Monitor a log file for errors
+            \\  - name: system-logs
+            \\    type: file
+            \\    path: /var/log/syslog
+            \\    # Regex pattern to match (case-insensitive)
+            \\    pattern: "(?i)(error|fatal|panic)"
+            \\
+            \\  # Example: Monitor Nginx error logs with built-in format
+            \\  # - name: nginx-errors
+            \\  #   type: file
+            \\  #   path: /var/log/nginx/error.log
+            \\  #   format: nginx
+            \\
+        ;
+
+        const file = std.fs.cwd().createFile("sentrylogmon.yaml", .{ .exclusive = true }) catch |err| {
+            if (err == error.PathAlreadyExists) {
+                std.debug.print("sentrylogmon.yaml already exists. Will not overwrite\n", .{});
+                std.process.exit(1);
+            }
+            std.debug.print("Error generating config: {}\n", .{err});
+            std.process.exit(1);
+        };
+        defer file.close();
+
+        file.writeAll(content) catch |err| {
+            std.debug.print("Error writing to file: {}\n", .{err});
+            std.process.exit(1);
+        };
+
+        std.debug.print("Generated sentrylogmon.yaml\n", .{});
         std.process.exit(0);
     }
 
@@ -696,6 +744,8 @@ fn parseArgs(allocator: std.mem.Allocator) !Args {
             args.status = true;
         } else if (std.mem.eql(u8, arg, "--update")) {
             args.update = true;
+        } else if (std.mem.eql(u8, arg, "--init")) {
+            args.init = true;
         } else if (std.mem.eql(u8, arg, "--metrics-port")) {
             if (arg_iter.next()) |port_str| {
                 args.metrics_port = try std.fmt.parseInt(u16, port_str, 10);
