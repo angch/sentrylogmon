@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/angch/sentrylogmon/config"
+	"github.com/angch/sentrylogmon/ipc"
 )
 
 var timestampRegex = regexp.MustCompile(`^\[\s*([0-9.]+)\]`)
@@ -244,15 +246,15 @@ func TestFormatDuration(t *testing.T) {
 		{5 * time.Second, "5s"},
 		{65 * time.Second, "1m 5s"},
 		{125 * time.Second, "2m 5s"},
-		{3600 * time.Second, "1h 0m 0s"},
-		{3665 * time.Second, "1h 1m 5s"},
-		{7320 * time.Second, "2h 2m 0s"},
+		{3600 * time.Second, "1h 0m"},
+		{3665 * time.Second, "1h 1m"},
+		{7320 * time.Second, "2h 2m"},
 		{59 * time.Second, "59s"},
 		{59 * time.Minute, "59m 0s"},
-		{23 * time.Hour, "23h 0m 0s"},
-		{25 * time.Hour, "1d 1h 0m"},
-		{48 * time.Hour, "2d 0h 0m"},
-		{50*time.Hour + 30*time.Minute, "2d 2h 30m"},
+		{23 * time.Hour, "23h 0m"},
+		{25 * time.Hour, "1d 1h"},
+		{48 * time.Hour, "2d 0h"},
+		{50*time.Hour + 30*time.Minute, "2d 2h"},
 	}
 
 	for _, tt := range tests {
@@ -294,5 +296,56 @@ func TestGenerateConfig(t *testing.T) {
 
 	if !strings.Contains(err.Error(), "already exists") {
 		t.Errorf("Unexpected error message: %v", err)
+	}
+}
+
+func TestPrintInstanceTable(t *testing.T) {
+	instances := []ipc.StatusResponse{
+		{
+			PID:         12345,
+			StartTime:   time.Now().Add(-1 * time.Hour),
+			Version:     "v1.0.0",
+			MemoryAlloc: 10485760, // 10 MiB
+			Config: &config.Config{
+				Monitors: []config.MonitorConfig{
+					{Name: "nginx", Type: "file"},
+				},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	printInstanceTable(&buf, instances)
+
+	output := buf.String()
+
+	// Check for summary
+	if !strings.Contains(output, "Found 1 active monitors") {
+		t.Errorf("Expected summary line, got:\n%s", output)
+	}
+
+	// Check headers
+	expectedHeaders := []string{"PID", "Started", "Uptime", "Memory", "Version", "Monitors"}
+	for _, h := range expectedHeaders {
+		if !strings.Contains(output, h) {
+			t.Errorf("Expected header %q, got:\n%s", h, output)
+		}
+	}
+
+	// Check data
+	if !strings.Contains(output, "12345") {
+		t.Errorf("Expected PID 12345, got:\n%s", output)
+	}
+	if !strings.Contains(output, "1h 0m") {
+		t.Errorf("Expected uptime '1h 0m', got:\n%s", output)
+	}
+	if !strings.Contains(output, "10.0 MiB") {
+		t.Errorf("Expected memory '10.0 MiB', got:\n%s", output)
+	}
+	if !strings.Contains(output, "v1.0.0") {
+		t.Errorf("Expected version 'v1.0.0', got:\n%s", output)
+	}
+	if !strings.Contains(output, "nginx(file)") {
+		t.Errorf("Expected monitor details 'nginx(file)', got:\n%s", output)
 	}
 }
