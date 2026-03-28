@@ -537,10 +537,11 @@ fn sanitizeCommand(allocator: std.mem.Allocator, args: []const []const u8) ![]u8
         .{ "--client-secret", true },
         .{ "--access-token", true },
         .{ "--auth-token", true },
+        .{ "--session-id", true },
     });
 
     const sensitive_suffixes = [_][]const u8{
-        "password", "token", "secret", "_key",
+        "password", "token", "secret", "_key", "-key", ".key", "signature", "credential", "cookie", "session",
     };
 
     for (args, 0..) |arg, i| {
@@ -572,22 +573,92 @@ fn sanitizeCommand(allocator: std.mem.Allocator, args: []const []const u8) ![]u8
             } else {
                  for (sensitive_suffixes) |suffix| {
                      if (std.mem.endsWith(u8, lower_key, suffix)) {
-                         sensitive = true;
-                         break;
+                         if (lower_key.len == suffix.len) {
+                             sensitive = true;
+                             break;
+                         }
+                         if (std.mem.startsWith(u8, suffix, "-") or
+                             std.mem.startsWith(u8, suffix, "_") or
+                             std.mem.startsWith(u8, suffix, ".")) {
+                             sensitive = true;
+                             break;
+                         }
+                         const match_idx = lower_key.len - suffix.len;
+                         if (match_idx > 0) {
+                             const char_before = lower_key[match_idx - 1];
+                             if (char_before == '-' or char_before == '_' or char_before == '.') {
+                                 sensitive = true;
+                                 break;
+                             }
+                         }
                      }
                  }
             }
 
-            if (sensitive or sensitive_flags.has(key)) {
+            const lower_key_full = try std.ascii.allocLowerString(allocator, key);
+            defer allocator.free(lower_key_full);
+
+            if (sensitive or sensitive_flags.has(lower_key_full)) {
                 try out.appendSlice(allocator, key);
                 try out.appendSlice(allocator, "=[REDACTED]");
                 continue;
             }
         }
 
-        if (sensitive_flags.has(arg)) {
+        const lower_arg = try std.ascii.allocLowerString(allocator, arg);
+        defer allocator.free(lower_arg);
+
+        if (sensitive_flags.has(lower_arg)) {
             try out.appendSlice(allocator, arg);
-            skip_next = true;
+            if (sensitive_flags.get(lower_arg).?) {
+                if (i + 1 < args.len) {
+                    skip_next = true;
+                }
+            }
+            continue;
+        }
+
+        const clean_arg = std.mem.trimLeft(u8, arg, "-");
+        var sensitive_heuristic = false;
+        const lower_clean_arg = try std.ascii.allocLowerString(allocator, clean_arg);
+        defer allocator.free(lower_clean_arg);
+
+        if (std.mem.eql(u8, lower_clean_arg, "password") or
+            std.mem.eql(u8, lower_clean_arg, "token") or
+            std.mem.eql(u8, lower_clean_arg, "secret") or
+            std.mem.eql(u8, lower_clean_arg, "key") or
+            std.mem.eql(u8, lower_clean_arg, "auth")) {
+            sensitive_heuristic = true;
+        } else {
+             for (sensitive_suffixes) |suffix| {
+                 if (std.mem.endsWith(u8, lower_clean_arg, suffix)) {
+                     if (lower_clean_arg.len == suffix.len) {
+                         sensitive_heuristic = true;
+                         break;
+                     }
+                     if (std.mem.startsWith(u8, suffix, "-") or
+                         std.mem.startsWith(u8, suffix, "_") or
+                         std.mem.startsWith(u8, suffix, ".")) {
+                         sensitive_heuristic = true;
+                         break;
+                     }
+                     const match_idx = lower_clean_arg.len - suffix.len;
+                     if (match_idx > 0) {
+                         const char_before = lower_clean_arg[match_idx - 1];
+                         if (char_before == '-' or char_before == '_' or char_before == '.') {
+                             sensitive_heuristic = true;
+                             break;
+                         }
+                     }
+                 }
+             }
+        }
+
+        if (sensitive_heuristic) {
+            try out.appendSlice(allocator, arg);
+            if (i + 1 < args.len and !std.mem.startsWith(u8, args[i + 1], "-")) {
+                skip_next = true;
+            }
             continue;
         }
 

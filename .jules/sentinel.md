@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-03-01 - Incomplete Suffix Matching and Missing Boundary Checks in CLI Redaction
+**Vulnerability:** The Rust and Zig implementations of the CLI sanitizer had incomplete lists of sensitive suffixes (missing '-key', '.key', 'signature', etc.) and lacked word boundary checks during suffix matching, potentially allowing secrets like '--session-id' or '-key' variants to be leaked, and causing false positives.
+**Learning:** Security allowlists and pattern matching logic must be kept in strict parity across all language ports (Go, Rust, Zig). Heuristic suffix matching requires boundary checks (e.g., checking for separators like '-', '_', '.') to prevent false positives and correctly identify flags.
+**Prevention:**
+1. Ensure all sensitive flag lists and suffixes are perfectly synchronized across language ports.
+2. Always implement boundary checks for heuristic string matching to avoid partial matches.
