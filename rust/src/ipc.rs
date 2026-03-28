@@ -2,8 +2,11 @@ use crate::config::Config;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::os::unix::fs::DirBuilderExt;
 use std::os::unix::fs::MetadataExt;
+use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::fs::PermissionsExt;
+use std::os::unix::io::AsRawFd;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -23,7 +26,10 @@ pub struct StatusResponse {
 
 pub fn ensure_secure_directory(path: &Path) -> Result<()> {
     if !path.exists() {
-        fs::create_dir_all(path)
+        fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(path)
             .with_context(|| format!("Failed to create directory {:?}", path))?;
     }
 
@@ -43,8 +49,18 @@ pub fn ensure_secure_directory(path: &Path) -> Result<()> {
     // Check permissions (0700)
     let mode = metadata.permissions().mode() & 0o777;
     if mode != 0o700 {
-        fs::set_permissions(path, fs::Permissions::from_mode(0o700))
-            .with_context(|| format!("Failed to set permissions 0700 on {:?}", path))?;
+        // Securely set permissions avoiding TOCTOU symlink attacks
+        let file = fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_DIRECTORY)
+            .open(path)
+            .with_context(|| format!("Failed to safely open {:?}", path))?;
+
+        unsafe {
+            if libc::fchmod(file.as_raw_fd(), 0o700) != 0 {
+                anyhow::bail!("Failed to set permissions 0700 on {:?}", path);
+            }
+        }
     }
 
     // Check ownership
