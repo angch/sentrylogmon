@@ -44,3 +44,11 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-03-08 - Rust CLI Sanitizer Enhancements
+**Vulnerability:** The Rust implementation of `sentrylogmon` had an incomplete and case-sensitive command-line sanitizer in `rust/src/sysstat/sanitizer.rs`. It missed several critical flags (like `--session-id`) and failed to redact flags provided in varying cases (e.g. `--PASSWORD`). Additionally, heuristic suffix matching suffered from false positives by matching substrings without verifying word boundaries (e.g. `-pSecret` redacted the following argument incorrectly).
+**Learning:** Security parity across multiple languages requires careful attention to detail. When porting string matching logic from Go to Rust, assumptions about case-sensitivity and suffix boundaries must be explicitly handled. String manipulation for security features (like redaction) should rely on strict boundary checks (`-`, `_`, `.`) to prevent over-redaction (false positives) or under-redaction (false negatives).
+**Prevention:**
+1. Maintain consistent security keyword lists across all implementations.
+2. Ensure case-insensitive flag matching.
+3. Validate word boundaries during heuristic suffix matching to avoid collateral damage to legitimate arguments.
