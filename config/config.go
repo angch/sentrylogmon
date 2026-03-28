@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/angch/sentrylogmon/sysstat"
@@ -253,8 +252,14 @@ func (c *Config) Redacted() *Config {
 			newC.Monitors[i].Sentry.DSN = "***"
 		}
 		if newC.Monitors[i].Args != "" {
-			parts := strings.Fields(newC.Monitors[i].Args)
-			newC.Monitors[i].Args = sysstat.SanitizeCommand(parts)
+			// Use secure splitter to correctly identify quoted secrets
+			parts, err := sysstat.SplitCommand(newC.Monitors[i].Args)
+			if err == nil {
+				newC.Monitors[i].Args = sysstat.SanitizeCommand(parts)
+			} else {
+				// If parsing fails, we can't safely sanitize parts, so we redact the whole thing or show error
+				newC.Monitors[i].Args = "[ERROR PARSING ARGS: " + err.Error() + "]"
+			}
 		}
 	}
 
