@@ -42,7 +42,7 @@ func ParseISO8601(line []byte) (float64, string, bool) {
 	min := atoi2(line[14:16])
 	s := atoi2(line[17:19])
 
-	if y < 0 || m < 1 || m > 12 || d < 1 || d > 31 || h > 23 || min > 59 || s > 60 {
+	if y < 0 || m < 1 || m > 12 || d < 1 || d > 31 || h < 0 || h > 23 || min < 0 || min > 59 || s < 0 || s > 60 {
 		return 0, "", false
 	}
 
@@ -155,12 +155,20 @@ func ParseNginxError(line []byte) (float64, string, bool) {
 		return 0, "", false
 	}
 
-	tsStr := string(line[:19])
-	t, err := time.Parse("2006/01/02 15:04:05", tsStr)
-	if err == nil {
-		return float64(t.Unix()) + float64(t.Nanosecond())/1e9, tsStr, true
+	y := atoi4(line[0:4])
+	m := atoi2(line[5:7])
+	d := atoi2(line[8:10])
+	h := atoi2(line[11:13])
+	min := atoi2(line[14:16])
+	s := atoi2(line[17:19])
+
+	if y < 0 || m < 1 || m > 12 || d < 1 || d > 31 || h < 0 || h > 23 || min < 0 || min > 59 || s < 0 || s > 60 {
+		return 0, "", false
 	}
-	return 0, "", false
+
+	t := time.Date(y, time.Month(m), d, h, min, s, 0, time.UTC)
+	tsStr := string(line[:19])
+	return float64(t.Unix()) + float64(t.Nanosecond())/1e9, tsStr, true
 }
 
 func ParseDmesgTimestamp(line []byte) (float64, string, bool) {
