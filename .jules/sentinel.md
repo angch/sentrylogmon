@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-03-02 - Command Argument Redaction Gap for DSN
+**Vulnerability:** The application exposed Sentry DSN credentials in the IPC `/status` command output because the `dsn` key was missing from the sensitive suffixes list.
+**Learning:** Security allowlists/blocklists for partial matching (suffixes/prefixes) must be exhaustive for known sensitive keys in the domain. In a Sentry-focused tool, `dsn` is a critical secret that was overlooked in the general-purpose sanitizer.
+**Prevention:**
+1. Maintain a domain-specific list of sensitive keys (e.g., `dsn`, `auth-token`) alongside generic ones (`password`, `secret`).
+2. Regularly audit configuration flags for new sensitive inputs.
