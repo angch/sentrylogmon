@@ -172,6 +172,7 @@ type Monitor struct {
 	metricSentrySent     prometheus.Counter
 	metricSentryDropped  prometheus.Counter
 	metricLastActivity   prometheus.Gauge
+	metricMonitorLag     prometheus.Observer
 
 	// Buffering
 	buffer           strings.Builder
@@ -214,6 +215,7 @@ func New(ctx context.Context, source sources.LogSource, detector detectors.Detec
 	m.metricSentrySent = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "sent"})
 	m.metricSentryDropped = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "dropped"})
 	m.metricLastActivity = metrics.LastActivityTimestamp.With(prometheus.Labels{"source": source.Name()})
+	m.metricMonitorLag = metrics.MonitorLagSeconds.With(prometheus.Labels{"source": source.Name()})
 
 	// Initialize Sentry Hub
 	if opts.SentryDSN != "" {
@@ -312,12 +314,22 @@ func (m *Monitor) Start() {
 			// Update lastReadTime for inactivity detection
 			atomic.StoreInt64(&m.lastReadTime, now.UnixNano())
 
+			lineBytes := scanner.Bytes()
+
 			if now.Sub(lastMetricUpdateTime) > 1*time.Second {
 				m.metricLastActivity.Set(float64(now.Unix()))
 				lastMetricUpdateTime = now
-			}
 
-			lineBytes := scanner.Bytes()
+				// Calculate monitor lag
+				if ts, ok := m.tryExtractTimestamp(lineBytes); ok {
+					// ts is in seconds (float64)
+					// lag = current time - log timestamp
+					lag := float64(now.UnixNano())/1e9 - ts
+					if lag >= 0 {
+						m.metricMonitorLag.Observe(lag)
+					}
+				}
+			}
 			if m.Detector.Detect(lineBytes) {
 				if m.ExclusionDetector != nil && m.ExclusionDetector.Detect(lineBytes) {
 					if m.Verbose {
@@ -410,6 +422,20 @@ func (m *Monitor) watchdog() {
 			}
 		}
 	}
+}
+
+func (m *Monitor) tryExtractTimestamp(line []byte) (float64, bool) {
+	if extractor, ok := m.Detector.(detectors.TimestampExtractor); ok {
+		ts, _, ok := extractor.ExtractTimestamp(line)
+		if ok {
+			return ts, true
+		}
+	}
+	ts, _ := extractTimestamp(line)
+	if ts != 0 {
+		return ts, true
+	}
+	return 0, false
 }
 
 func (m *Monitor) extractMetadata(line []byte, tsStr string) BatchMetadata {
