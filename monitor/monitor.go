@@ -16,6 +16,7 @@ import (
 	"github.com/angch/sentrylogmon/sysstat"
 	"github.com/getsentry/sentry-go"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/shirou/gopsutil/v3/host"
 )
 
 var severityKeys = []string{"level", "severity", "log_level", "type"}
@@ -165,6 +166,7 @@ type Monitor struct {
 	StopOnEOF         bool
 	RateLimiter       *RateLimiter
 	Hub               *sentry.Hub
+	bootTime          uint64
 
 	// Cached metrics
 	metricProcessedLines prometheus.Counter
@@ -172,6 +174,7 @@ type Monitor struct {
 	metricSentrySent     prometheus.Counter
 	metricSentryDropped  prometheus.Counter
 	metricLastActivity   prometheus.Gauge
+	metricMonitorLag     prometheus.Gauge
 
 	// Buffering
 	buffer           strings.Builder
@@ -207,6 +210,10 @@ func New(ctx context.Context, source sources.LogSource, detector detectors.Detec
 		Collector: collector,
 		Verbose:   opts.Verbose,
 	}
+	bt, err := host.BootTime()
+	if err == nil {
+		m.bootTime = bt
+	}
 
 	// Initialize cached metrics
 	m.metricProcessedLines = metrics.ProcessedLinesTotal.With(prometheus.Labels{"source": source.Name()})
@@ -214,6 +221,7 @@ func New(ctx context.Context, source sources.LogSource, detector detectors.Detec
 	m.metricSentrySent = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "sent"})
 	m.metricSentryDropped = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "dropped"})
 	m.metricLastActivity = metrics.LastActivityTimestamp.With(prometheus.Labels{"source": source.Name()})
+	m.metricMonitorLag = metrics.MonitorLagSeconds.With(prometheus.Labels{"source": source.Name()})
 
 	// Initialize Sentry Hub
 	if opts.SentryDSN != "" {
@@ -448,6 +456,25 @@ func (m *Monitor) processMatch(line []byte) {
 
 	if !ok {
 		timestamp, tsStr = extractTimestamp(line)
+	}
+
+	if timestamp > 0 {
+		nowUnix := float64(m.lastActivityTime.UnixNano()) / 1e9
+		if timestamp < 1e9 {
+			// dmesg/uptime-based log timestamps
+			if m.bootTime > 0 {
+				absTimestamp := float64(m.bootTime) + timestamp
+				lag := nowUnix - absTimestamp
+				if lag >= 0 {
+					m.metricMonitorLag.Set(lag)
+				}
+			}
+		} else {
+			lag := nowUnix - timestamp
+			if lag >= 0 {
+				m.metricMonitorLag.Set(lag)
+			}
+		}
 	}
 
 	if transformer, ok := m.Detector.(detectors.MessageTransformer); ok {
