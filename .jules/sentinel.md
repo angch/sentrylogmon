@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-03-03 - Sentry DSN Exposed in CLI Status
+**Vulnerability:** The `--dsn` and `--sentry-dsn` command-line flags were not included in the sanitizer's redaction list. Because the full configuration (including parsed command-line arguments) is returned by the IPC `/status` endpoint, the sensitive Sentry DSN could be exposed to other local users viewing the process status.
+**Learning:** Security redaction tools often focus on generic secrets (e.g. passwords, tokens) but can miss application-specific secrets if they don't match common suffixes. The Sentry DSN is equivalent to an API key but uses the specific term "dsn".
+**Prevention:**
+1. Maintain application-specific secrets in redaction logic alongside generic secret terms.
+2. Add explicit `dsn` suffix and exact match cases to command line sanitizers.

@@ -537,10 +537,12 @@ fn sanitizeCommand(allocator: std.mem.Allocator, args: []const []const u8) ![]u8
         .{ "--client-secret", true },
         .{ "--access-token", true },
         .{ "--auth-token", true },
+        .{ "--dsn", true },
+        .{ "--sentry-dsn", true },
     });
 
     const sensitive_suffixes = [_][]const u8{
-        "password", "token", "secret", "_key",
+        "password", "token", "secret", "_key", "dsn",
     };
 
     for (args, 0..) |arg, i| {
@@ -567,6 +569,7 @@ fn sanitizeCommand(allocator: std.mem.Allocator, args: []const []const u8) ![]u8
                 std.mem.eql(u8, lower_key, "token") or
                 std.mem.eql(u8, lower_key, "secret") or
                 std.mem.eql(u8, lower_key, "key") or
+                std.mem.eql(u8, lower_key, "dsn") or
                 std.mem.eql(u8, lower_key, "auth")) {
                 sensitive = true;
             } else {
@@ -610,4 +613,22 @@ test "sanitizeCommand" {
 
     // std.debug.print("Sanitized: {s}\n", .{res});
     // Expected: curl --user user:pass --token [REDACTED] --url=http://example.com?key=secret
+}
+
+test "sanitizeCommand DSN" {
+    const allocator = std.testing.allocator;
+    const args_dsn = [_][]const u8{ "app", "--dsn", "https://secret@sentry.io/123" };
+    const res_dsn = try sanitizeCommand(allocator, &args_dsn);
+    defer allocator.free(res_dsn);
+    try std.testing.expectEqualStrings("app --dsn [REDACTED]", res_dsn);
+
+    const args_dsn_eq = [_][]const u8{ "app", "--dsn=https://secret@sentry.io/123" };
+    const res_dsn_eq = try sanitizeCommand(allocator, &args_dsn_eq);
+    defer allocator.free(res_dsn_eq);
+    try std.testing.expectEqualStrings("app --dsn=[REDACTED]", res_dsn_eq);
+
+    const args_sentry_dsn = [_][]const u8{ "app", "--sentry-dsn", "https://secret@sentry.io/123" };
+    const res_sentry_dsn = try sanitizeCommand(allocator, &args_sentry_dsn);
+    defer allocator.free(res_sentry_dsn);
+    try std.testing.expectEqualStrings("app --sentry-dsn [REDACTED]", res_sentry_dsn);
 }
