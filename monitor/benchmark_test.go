@@ -5,6 +5,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/angch/sentrylogmon/detectors"
 	"github.com/getsentry/sentry-go"
@@ -70,8 +71,9 @@ func BenchmarkProcessMatch(b *testing.B) {
 
 	b.ResetTimer()
 	b.ReportAllocs()
+	now := time.Now()
 	for i := 0; i < b.N; i++ {
-		mon.processMatch(lineBytes)
+		mon.processMatch(lineBytes, now)
 	}
 }
 
@@ -96,8 +98,9 @@ func BenchmarkProcessMatchDmesg(b *testing.B) {
 
 	b.ResetTimer()
 	b.ReportAllocs()
+	now := time.Now()
 	for i := 0; i < b.N; i++ {
-		mon.processMatch(lineBytes)
+		mon.processMatch(lineBytes, now)
 	}
 }
 
@@ -122,7 +125,8 @@ func BenchmarkProcessMatchNginx(b *testing.B) {
 
 	b.ResetTimer()
 	b.ReportAllocs()
+	now := time.Now()
 	for i := 0; i < b.N; i++ {
-		mon.processMatch(lineBytes)
+		mon.processMatch(lineBytes, now)
 	}
 }
