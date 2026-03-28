@@ -7,9 +7,9 @@ import (
 
 func TestConfigValidate(t *testing.T) {
 	tests := []struct {
-		name      string
-		config    Config
-		expectErr bool
+		name        string
+		config      Config
+		expectErr   bool
 		errContains string
 	}{
 		{
@@ -42,7 +42,7 @@ func TestConfigValidate(t *testing.T) {
 					},
 				},
 			},
-			expectErr: true,
+			expectErr:   true,
 			errContains: "Sentry DSN is required",
 		},
 		{
@@ -53,7 +53,7 @@ func TestConfigValidate(t *testing.T) {
 				},
 				Monitors: []MonitorConfig{},
 			},
-			expectErr: true,
+			expectErr:   true,
 			errContains: "no monitors configured",
 		},
 		{
@@ -70,7 +70,7 @@ func TestConfigValidate(t *testing.T) {
 					},
 				},
 			},
-			expectErr: true,
+			expectErr:   true,
 			errContains: "monitor name is required",
 		},
 		{
@@ -86,7 +86,7 @@ func TestConfigValidate(t *testing.T) {
 					},
 				},
 			},
-			expectErr: true,
+			expectErr:   true,
 			errContains: "unknown monitor type",
 		},
 		{
@@ -103,7 +103,7 @@ func TestConfigValidate(t *testing.T) {
 					},
 				},
 			},
-			expectErr: true,
+			expectErr:   true,
 			errContains: "path is required",
 		},
 		{
@@ -120,7 +120,7 @@ func TestConfigValidate(t *testing.T) {
 					},
 				},
 			},
-			expectErr: true,
+			expectErr:   true,
 			errContains: "command args are required",
 		},
 		{
@@ -137,7 +137,7 @@ func TestConfigValidate(t *testing.T) {
 					},
 				},
 			},
-			expectErr: true,
+			expectErr:   true,
 			errContains: "invalid pattern regex",
 		},
 		{
@@ -154,7 +154,7 @@ func TestConfigValidate(t *testing.T) {
 					},
 				},
 			},
-			expectErr: true,
+			expectErr:   true,
 			errContains: "invalid exclude_pattern regex",
 		},
 		{
@@ -171,7 +171,7 @@ func TestConfigValidate(t *testing.T) {
 					},
 				},
 			},
-			expectErr: true,
+			expectErr:   true,
 			errContains: "invalid max_inactivity",
 		},
 		{
@@ -191,7 +191,7 @@ func TestConfigValidate(t *testing.T) {
 			// Wait, "2days" is indeed invalid for ParseDuration (supports h, m, s, ms, us, ns).
 			// If it was valid, I should use something like "invalid".
 			// "2days" is definitely invalid.
-			expectErr: true,
+			expectErr:   true,
 			errContains: "invalid rate_limit_window",
 		},
 	}
