@@ -291,6 +291,10 @@ func (m *Monitor) Start() {
 		go m.watchdog()
 	}
 
+	// ⚡ Bolt: Pre-allocate scanner buffer outside the reconnect loop to reuse
+	// memory and eliminate a 1MB allocation on every stream restart/rotation.
+	buf := make([]byte, 0, MaxScanTokenSize)
+
 	for {
 		reader, err := m.Source.Stream()
 		if err != nil {
@@ -301,7 +305,6 @@ func (m *Monitor) Start() {
 
 		scanner := bufio.NewScanner(reader)
 		// Increase buffer size to handle long lines
-		buf := make([]byte, 0, MaxScanTokenSize)
 		scanner.Buffer(buf, MaxScanTokenSize)
 
 		var lastMetricUpdateTime time.Time
