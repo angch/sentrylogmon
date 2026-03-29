@@ -234,7 +234,9 @@ pub fn requestUpdate(allocator: std.mem.Allocator, socket_path: []const u8) !voi
 
 test "IPC server and client" {
     const allocator = std.testing.allocator;
-    const socket_path = "/tmp/test_sentrylogmon.sock";
+    const my_uid = if (@import("builtin").os.tag == .windows) 0 else std.posix.getuid();
+    const socket_path = try std.fmt.allocPrint(allocator, "/tmp/test_sentrylogmon_{d}.sock", .{my_uid});
+    defer allocator.free(socket_path);
 
     const args = &[_][]const u8{"program", "arg1"};
 
