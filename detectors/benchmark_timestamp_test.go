@@ -35,6 +35,19 @@ func BenchmarkSyslogTimestamp_Manual(b *testing.B) {
 	}
 }
 
+func BenchmarkSyslogTimestamp_ManualWithTime(b *testing.B) {
+	line := []byte("<34>Oct 27 10:00:00 myhost myprogram[123]: message")
+	now := time.Now()
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if _, _, ok := ParseSyslogTimestampWithTime(line, now); !ok {
+			b.Fatal("should match")
+		}
+	}
+}
+
 func BenchmarkNginxAccessTimestamp_Regex(b *testing.B) {
 	line := []byte(`127.0.0.1 - - [27/Oct/2023:10:00:00 +0000] "GET / HTTP/1.1" 200 1234`)
 
