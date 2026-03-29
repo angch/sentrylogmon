@@ -390,7 +390,7 @@ func printInstanceTable(instances []ipc.StatusResponse) {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	fmt.Fprintln(w, "     PID\tSTARTED\t      UPTIME\t       MEM\tVERSION\tMONITORS")
+	fmt.Fprintln(w, "     PID\tStatus\tStarted\t      Uptime\t       Mem\tVersion\tMonitors")
 	for _, inst := range instances {
 		uptime := time.Since(inst.StartTime).Round(time.Second)
 		uptimeStr := formatDuration(uptime)
@@ -456,7 +456,9 @@ func printInstanceTable(instances []ipc.StatusResponse) {
 		if version == "" {
 			version = "-"
 		}
-		fmt.Fprintf(w, "%8d\t%s\t%12s\t%10s\t%s\t%s\n", inst.PID, inst.StartTime.Format("2006-01-02 15:04:05"), uptimeStr, memStr, version, details)
+		// Status is always running if it's in the list
+		status := "🟢 Running"
+		fmt.Fprintf(w, "%8d\t%s\t%s\t%12s\t%10s\t%s\t%s\n", inst.PID, status, inst.StartTime.Format("2006-01-02 15:04:05"), uptimeStr, memStr, version, details)
 	}
 	w.Flush()
 }
@@ -484,13 +486,22 @@ func formatDuration(d time.Duration) string {
 	d -= m * time.Minute
 	s := d / time.Second
 	if day > 0 {
-		return fmt.Sprintf("%dd %dh %dm", day, h, m)
+		if h > 0 {
+			return fmt.Sprintf("%dd %dh", day, h)
+		}
+		return fmt.Sprintf("%dd", day)
 	}
 	if h > 0 {
-		return fmt.Sprintf("%dh %dm %ds", h, m, s)
+		if m > 0 {
+			return fmt.Sprintf("%dh %dm", h, m)
+		}
+		return fmt.Sprintf("%dh", h)
 	}
 	if m > 0 {
-		return fmt.Sprintf("%dm %ds", m, s)
+		if s > 0 {
+			return fmt.Sprintf("%dm %ds", m, s)
+		}
+		return fmt.Sprintf("%dm", m)
 	}
 	return fmt.Sprintf("%ds", s)
 }
