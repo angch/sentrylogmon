@@ -93,16 +93,14 @@ fn formatDate(allocator: std.mem.Allocator, timestamp: i64) ![]u8 {
 
 fn getDetails(allocator: std.mem.Allocator, inst: ipc.StatusResponse) ![]u8 {
     if (inst.config) |cfg| {
+        if (cfg.monitors.items.len == 0) return allocator.dupe(u8, "-");
+
         var details = std.ArrayList(u8).empty;
         defer details.deinit(allocator);
 
-        const count = cfg.monitors.items.len;
-        try details.writer(allocator).print("{d} monitors: ", .{count});
+        const limit: usize = 60;
 
         for (cfg.monitors.items, 0..) |m, i| {
-            if (i > 0) try details.writer(allocator).writeAll(", ");
-            try details.writer(allocator).print("{s}", .{m.name});
-
             const type_str = switch (m.type) {
                 .file => "file",
                 .journalctl => "journalctl",
@@ -111,13 +109,43 @@ fn getDetails(allocator: std.mem.Allocator, inst: ipc.StatusResponse) ![]u8 {
                 .syslog => "syslog",
                 .unknown => "unknown",
             };
-            try details.writer(allocator).print("({s})", .{type_str});
 
-            if (details.items.len > 100) {
-                try details.writer(allocator).writeAll("...");
+            const part = try std.fmt.allocPrint(allocator, "{s}({s})", .{ m.name, type_str });
+            defer allocator.free(part);
+
+            const sep = if (i > 0) ", " else "";
+
+            if (i == 0) {
+                const remaining = cfg.monitors.items.len - 1;
+                const suffix_len: usize = if (remaining > 0) 12 else 0;
+
+                if (part.len + suffix_len > limit) {
+                    var avail = if (limit > suffix_len + 3) limit - suffix_len - 3 else 0;
+                    if (avail < 10) avail = 10;
+                    const safe_len = if (part.len > avail) avail else part.len;
+                    try details.writer(allocator).print("{s}...", .{part[0..safe_len]});
+                } else {
+                    try details.writer(allocator).writeAll(part);
+                }
+                continue;
+            }
+
+            const reserved: usize = if (i == cfg.monitors.items.len - 1) 0 else 12;
+
+            if (details.items.len + sep.len + part.len + reserved <= limit) {
+                try details.writer(allocator).writeAll(sep);
+                try details.writer(allocator).writeAll(part);
+            } else {
+                const remaining = cfg.monitors.items.len - i;
+                try details.writer(allocator).print(" (+{d} more)", .{remaining});
                 break;
             }
         }
+
+        if (details.items.len == 0) {
+            return allocator.dupe(u8, "-");
+        }
+
         return details.toOwnedSlice(allocator);
     } else {
         if (inst.command_line.len > 0) {
