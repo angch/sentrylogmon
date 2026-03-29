@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/angch/sentrylogmon/sysstat"
@@ -253,8 +252,12 @@ func (c *Config) Redacted() *Config {
 			newC.Monitors[i].Sentry.DSN = "***"
 		}
 		if newC.Monitors[i].Args != "" {
-			parts := strings.Fields(newC.Monitors[i].Args)
-			newC.Monitors[i].Args = sysstat.SanitizeCommand(parts)
+			parts, err := sysstat.SplitCommand(newC.Monitors[i].Args)
+			if err != nil {
+				newC.Monitors[i].Args = "[INVALID ARGS: " + err.Error() + "]"
+			} else {
+				newC.Monitors[i].Args = sysstat.SanitizeCommand(parts)
+			}
 		}
 	}
 

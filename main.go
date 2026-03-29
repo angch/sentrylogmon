@@ -224,13 +224,21 @@ func main() {
 				addMonitor(src, monCfg)
 			}
 		case "journalctl":
-			src := sources.NewJournalctlSource(monCfg.Name, monCfg.Args)
+			src, err := sources.NewJournalctlSource(monCfg.Name, monCfg.Args)
+			if err != nil {
+				log.Printf("Error parsing args for journalctl monitor '%s': %v", monCfg.Name, err)
+				continue
+			}
 			addMonitor(src, monCfg)
 		case "dmesg":
 			src := sources.NewDmesgSource(monCfg.Name)
 			addMonitor(src, monCfg)
 		case "command":
-			parts := strings.Fields(monCfg.Args)
+			parts, err := sysstat.SplitCommand(monCfg.Args)
+			if err != nil {
+				log.Printf("Error parsing args for command monitor '%s': %v", monCfg.Name, err)
+				continue
+			}
 			if len(parts) > 0 {
 				src := sources.NewCommandSource(monCfg.Name, parts[0], parts[1:]...)
 				addMonitor(src, monCfg)
