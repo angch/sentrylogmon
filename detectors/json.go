@@ -11,8 +11,8 @@ import (
 )
 
 type JsonDetector struct {
-	Field    string
-	Pattern  *regexp.Regexp
+	Field   string
+	Pattern *regexp.Regexp
 
 	mu       sync.Mutex
 	lastData map[string]interface{}
