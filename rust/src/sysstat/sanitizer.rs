@@ -12,11 +12,13 @@ static SENSITIVE_FLAGS: Lazy<HashMap<&'static str, bool>> = Lazy::new(|| {
     m.insert("--client-secret", true);
     m.insert("--access-token", true);
     m.insert("--auth-token", true);
+    m.insert("--dsn", true);
+    m.insert("--sentry-dsn", true);
     m
 });
 
 static SENSITIVE_SUFFIXES: Lazy<Vec<&'static str>> =
-    Lazy::new(|| vec!["password", "token", "secret", "_key"]);
+    Lazy::new(|| vec!["password", "token", "secret", "_key", "dsn"]);
 
 // sanitize_command reconstructs the command line string from arguments while redacting sensitive information.
 // It aims for parity with the Go implementation, handling both `--flag=value` and `--flag value` patterns.
@@ -66,6 +68,16 @@ pub fn sanitize_command(args: &[String]) -> String {
             continue;
         }
 
+        // Check heuristics (suffix matching)
+        let clean_arg = arg.trim_start_matches('-');
+        if is_sensitive_key(clean_arg) {
+            sanitized.push(arg.clone());
+            if i + 1 < args.len() && !args[i + 1].starts_with('-') {
+                skip_next = true;
+            }
+            continue;
+        }
+
         sanitized.push(arg.clone());
     }
 
@@ -78,7 +90,7 @@ fn is_sensitive_key(key: &str) -> bool {
     // Exact matches
     if matches!(
         lower_key.as_str(),
-        "password" | "token" | "secret" | "key" | "auth"
+        "password" | "token" | "secret" | "key" | "auth" | "dsn"
     ) {
         return true;
     }
@@ -86,7 +98,24 @@ fn is_sensitive_key(key: &str) -> bool {
     // Suffix matches
     for suffix in SENSITIVE_SUFFIXES.iter() {
         if lower_key.ends_with(suffix) {
-            return true;
+            // If the match is the entire string, it's a match
+            if lower_key.len() == suffix.len() {
+                return true;
+            }
+
+            // If the suffix itself starts with a separator, it implies a boundary
+            if suffix.starts_with('-') || suffix.starts_with('_') || suffix.starts_with('.') {
+                return true;
+            }
+
+            // Otherwise, check if the suffix is preceded by a separator
+            let match_index = lower_key.len() - suffix.len();
+            if match_index > 0 {
+                let char_before = lower_key.as_bytes()[match_index - 1] as char;
+                if char_before == '-' || char_before == '_' || char_before == '.' {
+                    return true;
+                }
+            }
         }
     }
 
@@ -103,6 +132,18 @@ mod tests {
             (
                 vec!["curl", "-u", "user:password", "http://example.com"],
                 "curl -u user:password http://example.com", // -u is not in sensitive list
+            ),
+            (
+                vec!["myapp", "--dsn", "https://secret@sentry.io/123"],
+                "myapp --dsn [REDACTED]",
+            ),
+            (
+                vec!["myapp", "--sentry-dsn=https://secret@sentry.io/123"],
+                "myapp --sentry-dsn=[REDACTED]",
+            ),
+            (
+                vec!["myapp", "--custom-dsn", "https://secret@sentry.io/123"],
+                "myapp --custom-dsn [REDACTED]",
             ),
             (
                 vec!["myapp", "--password", "secret123"],
