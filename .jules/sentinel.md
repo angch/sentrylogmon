@@ -44,3 +44,8 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-03-29 - Prevent TOCTOU Symlink Attacks in Rust IPC Directory Creation
+**Vulnerability:** The application used `fs::create_dir_all` which creates directories with default permissions, and then later used `fs::set_permissions`. This is vulnerable to TOCTOU and symlink attacks where an attacker could replace the directory with a symlink before permissions are locked down.
+**Learning:** In Rust, mitigating TOCTOU symlink attacks when creating directories requires using `std::os::unix::fs::DirBuilderExt` to set the mode to `0o700` upon creation. When adjusting permissions of an existing directory, you must open it with `O_NOFOLLOW | O_DIRECTORY` and use `libc::fchmod` on the raw file descriptor.
+**Prevention:** 1. Always use `DirBuilder::new().mode(0o700).create(path)` instead of `fs::create_dir_all` in secure contexts. 2. Use `O_NOFOLLOW | O_DIRECTORY` when opening a directory to change its permissions via `fchmod`.
