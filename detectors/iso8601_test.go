@@ -44,24 +44,24 @@ func TestParseISO8601(t *testing.T) {
 			wantTsStr: "2023-10-27 10:00:00.999-05:00",
 		},
 		{
-			name:      "Invalid separator",
-			line:      "2023/10/27 10:00:00 message",
-			wantOk:    false,
+			name:   "Invalid separator",
+			line:   "2023/10/27 10:00:00 message",
+			wantOk: false,
 		},
 		{
-			name:      "Invalid time separator",
-			line:      "2023-10-27 10-00-00 message",
-			wantOk:    false,
+			name:   "Invalid time separator",
+			line:   "2023-10-27 10-00-00 message",
+			wantOk: false,
 		},
 		{
-			name:      "Short string",
-			line:      "2023-10-27",
-			wantOk:    false,
+			name:   "Short string",
+			line:   "2023-10-27",
+			wantOk: false,
 		},
 		{
-			name:      "Bad month",
-			line:      "2023-13-27T10:00:00Z",
-			wantOk:    false, // time.Parse would catch this
+			name:   "Bad month",
+			line:   "2023-13-27T10:00:00Z",
+			wantOk: false, // time.Parse would catch this
 		},
 	}
 
