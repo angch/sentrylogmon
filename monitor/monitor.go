@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/shirou/gopsutil/v3/host"
+
 	"github.com/angch/sentrylogmon/detectors"
 	"github.com/angch/sentrylogmon/metrics"
 	"github.com/angch/sentrylogmon/sources"
@@ -172,6 +174,7 @@ type Monitor struct {
 	metricSentrySent     prometheus.Counter
 	metricSentryDropped  prometheus.Counter
 	metricLastActivity   prometheus.Gauge
+	metricMonitorLag     prometheus.Gauge
 
 	// Buffering
 	buffer           strings.Builder
@@ -186,6 +189,8 @@ type Monitor struct {
 	maxInactivity     time.Duration
 	lastReadTime      int64 // atomic unix nano
 	inactivityAlerted int32 // atomic boolean
+
+	bootTime float64
 }
 
 type Options struct {
@@ -214,6 +219,7 @@ func New(ctx context.Context, source sources.LogSource, detector detectors.Detec
 	m.metricSentrySent = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "sent"})
 	m.metricSentryDropped = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "dropped"})
 	m.metricLastActivity = metrics.LastActivityTimestamp.With(prometheus.Labels{"source": source.Name()})
+	m.metricMonitorLag = metrics.MonitorLagSeconds.With(prometheus.Labels{"source": source.Name()})
 
 	// Initialize Sentry Hub
 	if opts.SentryDSN != "" {
@@ -270,6 +276,11 @@ func New(ctx context.Context, source sources.LogSource, detector detectors.Detec
 		} else {
 			log.Printf("Invalid max inactivity duration '%s': %v", opts.MaxInactivity, err)
 		}
+	}
+
+	// Initialize boot time for relative timestamp conversion
+	if bt, err := host.BootTime(); err == nil && bt > 0 {
+		m.bootTime = float64(bt)
 	}
 
 	// Initialize timer as stopped
@@ -448,6 +459,20 @@ func (m *Monitor) processMatch(line []byte) {
 
 	if !ok {
 		timestamp, tsStr = extractTimestamp(line)
+	}
+
+	// Calculate and record monitor lag
+	if timestamp > 0 {
+		absTimestamp := timestamp
+		// Heuristic: If timestamp is relative (e.g. dmesg uptime) and we have boot time
+		if m.bootTime > 0 && timestamp < 1000000000.0 {
+			absTimestamp = m.bootTime + timestamp
+		}
+
+		lag := (float64(m.lastActivityTime.UnixNano()) / 1e9) - absTimestamp
+		if lag >= 0 {
+			m.metricMonitorLag.Set(lag)
+		}
 	}
 
 	if transformer, ok := m.Detector.(detectors.MessageTransformer); ok {
