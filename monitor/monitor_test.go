@@ -2,21 +2,31 @@ package monitor
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/angch/sentrylogmon/metrics"
 	"github.com/getsentry/sentry-go"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 )
 
 // MockSource implements sources.LogSource
 type MockSource struct {
 	content string
+	name    string
 }
 
-func (s *MockSource) Name() string { return "mock" }
+func (s *MockSource) Name() string {
+	if s.name != "" {
+		return s.name
+	}
+	return "mock"
+}
 func (s *MockSource) Stream() (io.Reader, error) {
 	return strings.NewReader(s.content), nil
 }
@@ -342,6 +352,94 @@ func TestMessageTransformation(t *testing.T) {
 			t.Errorf("Event content mismatch.\nExpected:\n%s\nGot:\n%s", expected, msg)
 		}
 	}
+}
+
+func TestMonitorLagMetric(t *testing.T) {
+	// Need to initialize sentry for the test monitor to not panic
+	transport := &MockTransport{}
+	err := sentry.Init(sentry.ClientOptions{
+		Transport: transport,
+	})
+	if err != nil {
+		t.Fatalf("Failed to init sentry: %v", err)
+	}
+
+	t.Run("LagRecorded", func(t *testing.T) {
+		// Use a timestamp slightly in the past
+		pastTime := float64(time.Now().UnixNano())/1e9 - 1.5
+		input := fmt.Sprintf("[%f] Test log with past timestamp\n", pastTime)
+
+		sourceName := "test_lag_source_1"
+		source := &MockSource{content: input, name: sourceName}
+		detector := &MockDetector{}
+
+		mon, err := New(context.Background(), source, detector, nil, Options{})
+		if err != nil {
+			t.Fatalf("Failed to create monitor: %v", err)
+		}
+		mon.StopOnEOF = true
+		go mon.Start()
+
+		// Wait for processing
+		time.Sleep(100 * time.Millisecond)
+
+		metric := metrics.MonitorLagSeconds.With(prometheus.Labels{"source": sourceName})
+		dtoMetric := &dto.Metric{}
+		if err := metric.(prometheus.Metric).Write(dtoMetric); err != nil {
+			t.Fatalf("Failed to write metric: %v", err)
+		}
+
+		if dtoMetric.Histogram == nil {
+			t.Fatal("Expected Histogram, got nil")
+		}
+
+		if dtoMetric.Histogram.SampleCount == nil {
+			t.Fatal("Expected SampleCount, got nil")
+		}
+
+		if *dtoMetric.Histogram.SampleCount != 1 {
+			t.Errorf("Expected 1 observation, got %d", *dtoMetric.Histogram.SampleCount)
+		}
+	})
+
+	t.Run("NoLagForFutureTimestamp", func(t *testing.T) {
+		// Use a timestamp in the future to trigger negative lag check
+		futureTime := float64(time.Now().UnixNano())/1e9 + 10.0
+		input := fmt.Sprintf("[%f] Test log with future timestamp\n", futureTime)
+
+		sourceName := "test_lag_source_2"
+		source := &MockSource{content: input, name: sourceName}
+		detector := &MockDetector{}
+
+		mon, err := New(context.Background(), source, detector, nil, Options{})
+		if err != nil {
+			t.Fatalf("Failed to create monitor: %v", err)
+		}
+		mon.StopOnEOF = true
+		go mon.Start()
+
+		// Wait for processing
+		time.Sleep(100 * time.Millisecond)
+
+		metric := metrics.MonitorLagSeconds.With(prometheus.Labels{"source": sourceName})
+		dtoMetric := &dto.Metric{}
+		if err := metric.(prometheus.Metric).Write(dtoMetric); err != nil {
+			t.Fatalf("Failed to write metric: %v", err)
+		}
+
+		if dtoMetric.Histogram == nil {
+			t.Fatal("Expected Histogram, got nil")
+		}
+
+		if dtoMetric.Histogram.SampleCount == nil {
+			t.Fatal("Expected SampleCount, got nil")
+		}
+
+		// Because the lag is negative, the observer shouldn't have recorded anything
+		if *dtoMetric.Histogram.SampleCount != 0 {
+			t.Errorf("Expected 0 observations for negative lag, got %d", *dtoMetric.Histogram.SampleCount)
+		}
+	})
 }
 
 func TestMonitorMultiTenancy(t *testing.T) {
