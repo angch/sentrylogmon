@@ -44,3 +44,7 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+## 2026-03-30 - Fix TOCTOU and directory permissions issue in Rust IPC
+**Vulnerability:** `ensure_secure_directory` used `fs::create_dir_all` which creates directories with default permissions, and later modified permissions via `fs::set_permissions`, leading to a race condition (TOCTOU).
+**Learning:** The default Rust directory creation and permission modification APIs are not secure against symlink or race condition attacks in multi-tenant environments.
+**Prevention:** Use `fs::DirBuilder` with explicit permission mode during creation, and use `libc::fchmod` on a raw file descriptor opened with `O_NOFOLLOW | O_DIRECTORY` for permission adjustment.
