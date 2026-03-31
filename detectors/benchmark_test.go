@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"regexp"
 	"testing"
+	"time"
 )
 
 func BenchmarkGenericDetector_Literal(b *testing.B) {
@@ -98,7 +99,7 @@ func BenchmarkDmesgDetector_FullLifecycle(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		if detector.Detect(line) {
-			detector.ExtractTimestamp(line)
+			detector.ExtractTimestamp(line, time.Time{})
 		}
 	}
 }
@@ -118,7 +119,7 @@ func BenchmarkDmesgDetector_ContextLine(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		// Detect should return true (context)
 		if detector.Detect(contextLine) {
-			detector.ExtractTimestamp(contextLine)
+			detector.ExtractTimestamp(contextLine, time.Time{})
 		} else {
 			b.Fatal("Should be detected as context")
 		}

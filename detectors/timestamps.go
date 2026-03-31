@@ -238,7 +238,7 @@ func parseFloatFromBytes(b []byte) (float64, error) {
 	return float64(integerPart) + float64(fractionalPart)/divisor, nil
 }
 
-func ParseSyslogTimestamp(line []byte) (float64, string, bool) {
+func ParseSyslogTimestamp(line []byte, now time.Time) (float64, string, bool) {
 	if len(line) < 15 {
 		return 0, "", false
 	}
@@ -380,7 +380,6 @@ func ParseSyslogTimestamp(line []byte) (float64, string, bool) {
 	}
 
 	// Year Inference
-	now := time.Now()
 	// Use UTC to match time.Parse(time.Stamp) behavior which defaults to UTC
 	currentYear := now.Year()
 	t := time.Date(currentYear, month, day, hour, minute, sec, 0, time.UTC)

@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"testing"
+	"time"
 )
 
 func TestExtractTimestamp(t *testing.T) {
@@ -57,7 +58,7 @@ func TestExtractTimestamp(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ts, text := extractTimestamp([]byte(tt.line))
+			ts, text := extractTimestamp([]byte(tt.line), time.Now())
 			if tt.wantTS && ts <= 0 {
 				t.Errorf("extractTimestamp() timestamp = %v, want > 0", ts)
 			}
@@ -80,13 +81,14 @@ func BenchmarkExtractTimestamp(b *testing.B) {
 		[]byte("127.0.0.1 - - [27/Oct/2023:10:00:00 +0000] \"GET / HTTP/1.1\""),
 		[]byte("Just a random log line"),
 	}
+	now := time.Now()
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
 		for _, line := range lines {
-			_, _ = extractTimestamp(line)
+			_, _ = extractTimestamp(line, now)
 		}
 	}
 }
