@@ -3,9 +3,15 @@
 package ipc
 
 import (
+	"net"
 	"os"
 	"path/filepath"
 )
+
+// listenSecure creates a listener. On Windows, this relies on default permissions.
+func listenSecure(network, address string) (net.Listener, error) {
+	return net.Listen(network, address)
+}
 
 // EnsureSecureDirectory ensures that the directory at path exists.
 // Security checks are simplified for Windows.
