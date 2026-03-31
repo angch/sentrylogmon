@@ -44,3 +44,7 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+## 2026-03-31 - Secure Directory Creation
+**Vulnerability:** TOCTOU vulnerability due to fs::create_dir_all creating directories with default permissions before they can be restricted, and path-based set_permissions which is vulnerable to symlink attacks.
+**Learning:** In Rust, fs::create_dir_all does not take permission mode, which opens a window where directories are created world-readable. Furthermore, fs::set_permissions operates on paths, allowing a malicious actor to swap the directory with a symlink before permissions are applied.
+**Prevention:** Use fs::DirBuilder::new().recursive(true).mode(0o700).create(path) with std::os::unix::fs::DirBuilderExt to securely create directories with restrictive permissions atomically. Securely adjust permissions by opening the directory with fs::OpenOptions using O_NOFOLLOW | O_DIRECTORY and calling set_permissions on the resulting File handle.
