@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	_ "net/http/pprof" // Register pprof handlers
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -135,12 +134,13 @@ func main() {
 			if cfg.Verbose {
 				log.Printf("Starting Prometheus metrics server on %s/metrics", addr)
 			}
-			http.Handle("/metrics", promhttp.Handler())
-			http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+			mux := http.NewServeMux()
+			mux.Handle("/metrics", promhttp.Handler())
+			mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
 				w.Write([]byte("OK"))
 			})
-			if err := http.ListenAndServe(addr, nil); err != nil {
+			if err := http.ListenAndServe(addr, mux); err != nil {
 				log.Printf("Failed to start metrics server: %v", err)
 			}
 		}()
