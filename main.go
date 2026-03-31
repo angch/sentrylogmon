@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	_ "net/http/pprof" // Register pprof handlers
@@ -50,7 +51,7 @@ func main() {
 		}
 
 		if isTerminal {
-			printInstanceTable(instances)
+			printInstanceTable(os.Stdout, instances)
 		} else {
 			enc := json.NewEncoder(os.Stdout)
 			enc.SetIndent("", "  ")
@@ -80,7 +81,9 @@ func main() {
 		if err := generateConfig("sentrylogmon.yaml"); err != nil {
 			log.Fatalf("Error generating config: %v", err)
 		}
-		fmt.Println("Generated sentrylogmon.yaml")
+		fmt.Println("Generated sentrylogmon.yaml.")
+		fmt.Println("Edit this file to add your Sentry DSN and configure monitors, then run:")
+		fmt.Println("  sentrylogmon --config=sentrylogmon.yaml")
 		return
 	}
 
@@ -383,14 +386,14 @@ func determineDetectorFormat(monCfg config.MonitorConfig) string {
 	return "custom"
 }
 
-func printInstanceTable(instances []ipc.StatusResponse) {
+func printInstanceTable(w io.Writer, instances []ipc.StatusResponse) {
 	if len(instances) == 0 {
-		fmt.Println("No running instances found.")
+		fmt.Fprintln(w, "No running instances found.")
 		return
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	fmt.Fprintln(w, "     PID\tSTARTED\t      UPTIME\t       MEM\tVERSION\tMONITORS")
+	tw := tabwriter.NewWriter(w, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(tw, "     PID\tSTARTED\t      UPTIME\t       MEM\tVERSION\tMONITORS")
 	for _, inst := range instances {
 		uptime := time.Since(inst.StartTime).Round(time.Second)
 		uptimeStr := formatDuration(uptime)
@@ -403,7 +406,11 @@ func printInstanceTable(instances []ipc.StatusResponse) {
 			monitors := inst.Config.Monitors
 
 			for i, m := range monitors {
-				part := fmt.Sprintf("%s(%s)", m.Name, m.Type)
+				part := m.Name
+				if m.Name != m.Type {
+					part = fmt.Sprintf("%s [%s]", m.Name, m.Type)
+				}
+
 				sep := ""
 				if i > 0 {
 					sep = ", "
@@ -456,9 +463,10 @@ func printInstanceTable(instances []ipc.StatusResponse) {
 		if version == "" {
 			version = "-"
 		}
-		fmt.Fprintf(w, "%8d\t%s\t%12s\t%10s\t%s\t%s\n", inst.PID, inst.StartTime.Format("2006-01-02 15:04:05"), uptimeStr, memStr, version, details)
+		fmt.Fprintf(tw, "%8d\t%s\t%12s\t%10s\t%s\t%s\n", inst.PID, inst.StartTime.Format("2006-01-02 15:04"), uptimeStr, memStr, version, details)
 	}
-	w.Flush()
+	tw.Flush()
+	fmt.Fprintf(w, "\nTotal instances: %d\n", len(instances))
 }
 
 func formatBytes(b uint64) string {
