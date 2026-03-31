@@ -226,7 +226,12 @@ pub fn main() !void {
         const stdout = std.fs.File.stdout();
         if (stdout.isTty()) {
             var buf: [4096]u8 = undefined;
-            const w = stdout.writer(&buf);
+            var w = stdout.writer(&buf);
+
+            if (instances.items.len == 0) {
+                try w.interface.print("No running instances found.\n", .{});
+                return;
+            }
             var tw = tabwriter.TabWriter(@TypeOf(w.interface)).init(allocator, w.interface);
             defer tw.deinit();
 
