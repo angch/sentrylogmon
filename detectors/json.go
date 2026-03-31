@@ -7,7 +7,6 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"time"
 )
 
 type JsonDetector struct {
@@ -121,18 +120,11 @@ func (d *JsonDetector) ExtractTimestamp(line []byte) (float64, string, bool) {
 		switch v := val.(type) {
 		case string:
 			// Try parsing as ISO8601/RFC3339
-			// Add more layouts if needed
-			layouts := []string{
-				time.RFC3339,
-				time.RFC3339Nano,
-				"2006-01-02 15:04:05",
-				"2006-01-02T15:04:05",
-				"2006-01-02T15:04:05Z07:00",
-			}
-			for _, layout := range layouts {
-				if t, err := time.Parse(layout, v); err == nil {
-					return float64(t.Unix()) + float64(t.Nanosecond())/1e9, v, true
-				}
+			// We use ParseISO8601 for optimized, zero-alloc (mostly) parsing
+			// that handles multiple formats (RFC3339, space separator, etc.)
+			// without the overhead of time.Parse layout parsing.
+			if ts, _, ok := ParseISO8601([]byte(v)); ok {
+				return ts, v, true
 			}
 		case float64:
 			// Assume unix timestamp (seconds or milliseconds)
