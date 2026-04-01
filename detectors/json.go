@@ -14,6 +14,8 @@ type JsonDetector struct {
 	Field    string
 	Pattern  *regexp.Regexp
 
+	searchBytes []byte
+
 	mu       sync.Mutex
 	lastData map[string]interface{}
 	lastLine []byte
@@ -32,13 +34,20 @@ func NewJsonDetector(pattern string) (*JsonDetector, error) {
 		return nil, fmt.Errorf("invalid regex for json detector: %v", err)
 	}
 
+	searchBytes, _ := json.Marshal(field)
+
 	return &JsonDetector{
-		Field:   field,
-		Pattern: re,
+		Field:       field,
+		Pattern:     re,
+		searchBytes: searchBytes,
 	}, nil
 }
 
 func (d *JsonDetector) Detect(line []byte) bool {
+	if len(d.searchBytes) > 0 && !bytes.Contains(line, d.searchBytes) {
+		return false
+	}
+
 	// We do not lock initially because Unmarshal is heavy and we don't want to block readers if possible.
 	// However, usually Detect is called before readers.
 
@@ -97,6 +106,11 @@ func (d *JsonDetector) GetContext(line []byte) map[string]interface{} {
 }
 
 func (d *JsonDetector) ExtractTimestamp(line []byte) (float64, string, bool) {
+	// If the line definitely doesn't contain our field, it might not be a log line we care about at all,
+	// but extracting timestamps is a different operation. However, since we're just extracting timestamps,
+	// we still need to parse.
+	// We might optimize this later if needed.
+
 	var data map[string]interface{}
 
 	d.mu.Lock()
