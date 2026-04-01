@@ -55,3 +55,44 @@ func TestLastActivityMetric(t *testing.T) {
 		t.Errorf("Metric value in future. Got %v, expected ~%v", val, now)
 	}
 }
+
+func TestMonitorLagMetric(t *testing.T) {
+	// Reset metrics
+	metrics.MonitorLagSeconds.Reset()
+
+	// Provide a timestamp from 10 seconds ago
+	now := time.Now()
+	timestamp10sAgo := now.Add(-10 * time.Second)
+	// Example ISO8601: 2023-10-27T10:00:00Z
+	// Make sure this matches the detector being used.
+	timeStr := timestamp10sAgo.Format(time.RFC3339)
+	input := timeStr + " error occurred\n"
+
+	// mock source in monitor_test.go only returns "mock",
+	// so we use a different mock or just rely on "mock" label.
+	source := &MockSource{content: input}
+	detector := &MockDetector{}
+
+	mon, err := New(context.Background(), source, detector, nil, Options{})
+	if err != nil {
+		t.Fatalf("Failed to create monitor: %v", err)
+	}
+	mon.StopOnEOF = true
+
+	mon.Start()
+
+	m := metrics.MonitorLagSeconds.With(prometheus.Labels{"source": "mock"})
+
+	var metric dto.Metric
+	err = m.Write(&metric)
+	if err != nil {
+		t.Fatalf("Failed to read metric: %v", err)
+	}
+
+	val := metric.GetGauge().GetValue()
+
+	// Value should be ~10 seconds
+	if val < 9.0 || val > 11.0 {
+		t.Errorf("Expected lag ~10s, got %vs", val)
+	}
+}
