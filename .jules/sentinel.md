@@ -44,3 +44,11 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-02-28 - Improper Parsing of Quoted Command Arguments
+**Vulnerability:** The application used `strings.Fields` to split command arguments, which ignores shell quoting rules (e.g., `--password "my secret"` became `["--password", "\"my", "secret\""]`). This caused the sensitive argument redaction logic to fail, exposing parts of secrets (e.g., `secret"`) in status reports, and also caused command execution failures for monitors using quoted arguments.
+**Learning:** `strings.Fields` is never safe for parsing shell-like command strings. It splits exclusively on whitespace and destroys the semantic grouping provided by quotes. Security controls (like redaction) that rely on token position (e.g., "redact the token *after* --password") will fail if the tokenizer is broken.
+**Prevention:**
+1. Use a proper shell tokenizer (like `SplitCommand` implemented here, or `google/shlex`) whenever parsing command strings.
+2. Validate that argument parsing succeeds before attempting to sanitize or execute commands.
+3. If parsing fails during sanitization, fallback to a safe error message rather than leaking raw data.
