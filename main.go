@@ -230,7 +230,11 @@ func main() {
 			src := sources.NewDmesgSource(monCfg.Name)
 			addMonitor(src, monCfg)
 		case "command":
-			parts := strings.Fields(monCfg.Args)
+			parts, err := sysstat.SplitCommand(monCfg.Args)
+			if err != nil {
+				log.Printf("Warning: Failed to parse command args for monitor '%s': %v. Falling back to simple split.", monCfg.Name, err)
+				parts = strings.Fields(monCfg.Args)
+			}
 			if len(parts) > 0 {
 				src := sources.NewCommandSource(monCfg.Name, parts[0], parts[1:]...)
 				addMonitor(src, monCfg)
