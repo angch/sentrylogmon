@@ -19,6 +19,11 @@ pub const StatusResponse = struct {
     }
 };
 
+pub fn getSocketDir(allocator: std.mem.Allocator) ![]const u8 {
+    const uid = std.posix.getuid();
+    return std.fmt.allocPrint(allocator, "/tmp/sentrylogmon-{d}", .{uid});
+}
+
 pub fn ensureSecureDirectory(path: []const u8) !void {
     // Try to create directory
     std.fs.makeDirAbsolute(path) catch |err| {
