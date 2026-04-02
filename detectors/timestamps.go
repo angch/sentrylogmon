@@ -3,6 +3,7 @@ package detectors
 import (
 	"regexp"
 	"strconv"
+	"sync/atomic"
 	"time"
 )
 
@@ -17,6 +18,20 @@ var (
 	// [27/Oct/2023:10:00:00 +0000]
 	TimestampRegexNginxAccess = regexp.MustCompile(`\[(\d{2}/[A-Z][a-z]{2}/\d{4}:\d{2}:\d{2}:\d{2}\s+[+-]\d{4})\]`)
 )
+
+// syslogCacheEntry stores the pre-calculated base timestamp (year-month-day 00:00:00 UTC)
+// and the time it was updated, to optimize ParseSyslogTimestamp by avoiding frequent time.Now() calls
+// and full time.Date() reconstruction.
+type syslogCacheEntry struct {
+	month     time.Month
+	day       int
+	year      int
+	base      int64
+	updatedAt time.Time
+}
+
+// syslogCache is an atomic value holding *syslogCacheEntry
+var syslogCache atomic.Value
 
 func ParseISO8601(line []byte) (float64, string, bool) {
 	if len(line) < 19 {
@@ -379,18 +394,53 @@ func ParseSyslogTimestamp(line []byte) (float64, string, bool) {
 		return 0, "", false
 	}
 
-	// Year Inference
-	now := time.Now()
-	// Use UTC to match time.Parse(time.Stamp) behavior which defaults to UTC
-	currentYear := now.Year()
-	t := time.Date(currentYear, month, day, hour, minute, sec, 0, time.UTC)
+	// Year Inference optimization
+	var base int64
+	var found bool
 
-	// Simple heuristic for year boundary
-	if t.Sub(now) > 30*24*time.Hour {
-		t = t.AddDate(-1, 0, 0)
+	// Try cache first
+	if cached := syslogCache.Load(); cached != nil {
+		entry := cached.(*syslogCacheEntry)
+		if entry.month == month && entry.day == day {
+			// Check if cache is fresh enough (within 1 second)
+			// time.Since uses monotonic clock if available, cheaper than time.Now()
+			if time.Since(entry.updatedAt) < 1*time.Second {
+				base = entry.base
+				found = true
+			}
+		}
 	}
 
-	return float64(t.Unix()) + float64(t.Nanosecond())/1e9, string(tsBytes), true
+	if !found {
+		now := time.Now()
+		currentYear := now.Year()
+		// Calculate full timestamp to perform boundary check
+		t := time.Date(currentYear, month, day, hour, minute, sec, 0, time.UTC)
+
+		// Simple heuristic for year boundary
+		// If timestamp is > 30 days in future relative to now, assume it's previous year
+		// (e.g. log is Dec 31, now is Jan 1 -> t is Dec 31 of new year -> t > now)
+		if t.Sub(now) > 30*24*time.Hour {
+			t = t.AddDate(-1, 0, 0)
+			currentYear--
+		}
+
+		// Calculate base (timestamp at 00:00:00)
+		// We can't just use time.Date(..., 0, 0, 0) because t might have been adjusted for year
+		// So we derive base from t (which is at hour:minute:sec)
+		base = t.Unix() - int64(hour*3600+minute*60+sec)
+
+		// Update cache
+		syslogCache.Store(&syslogCacheEntry{
+			month:     month,
+			day:       day,
+			year:      currentYear,
+			base:      base,
+			updatedAt: now,
+		})
+	}
+
+	return float64(base) + float64(hour*3600+minute*60+sec), string(tsBytes), true
 }
 
 func ParseNginxAccess(line []byte) (float64, string, bool) {
