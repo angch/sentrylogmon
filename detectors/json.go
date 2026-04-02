@@ -11,8 +11,9 @@ import (
 )
 
 type JsonDetector struct {
-	Field    string
-	Pattern  *regexp.Regexp
+	Field       string
+	Pattern     *regexp.Regexp
+	searchBytes []byte
 
 	mu       sync.Mutex
 	lastData map[string]interface{}
@@ -32,13 +33,23 @@ func NewJsonDetector(pattern string) (*JsonDetector, error) {
 		return nil, fmt.Errorf("invalid regex for json detector: %v", err)
 	}
 
+	// Pre-calculate the JSON-encoded field name for fast-path rejection
+	// json.Marshal adds quotes which handles spaces well: "field"
+	searchBytes, _ := json.Marshal(field)
+
 	return &JsonDetector{
-		Field:   field,
-		Pattern: re,
+		Field:       field,
+		Pattern:     re,
+		searchBytes: searchBytes,
 	}, nil
 }
 
 func (d *JsonDetector) Detect(line []byte) bool {
+	// Fast-path: reject lines that don't contain the target field at all
+	if !bytes.Contains(line, d.searchBytes) {
+		return false
+	}
+
 	// We do not lock initially because Unmarshal is heavy and we don't want to block readers if possible.
 	// However, usually Detect is called before readers.
 
@@ -60,8 +71,15 @@ func (d *JsonDetector) Detect(line []byte) bool {
 		return false
 	}
 
-	// Convert value to string for regex matching
-	valStr := fmt.Sprintf("%v", val)
+	// Convert value to string for regex matching.
+	// Fast-path: if the value is already a string, avoid the heavy fmt.Sprintf allocation
+	var valStr string
+	if s, ok := val.(string); ok {
+		valStr = s
+	} else {
+		valStr = fmt.Sprintf("%v", val)
+	}
+
 	if d.Pattern.MatchString(valStr) {
 		d.mu.Lock()
 		d.lastData = data
