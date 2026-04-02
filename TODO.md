@@ -34,3 +34,8 @@ This file tracks active work items.
   - Improved performance by 36% for standard RFC3339 (142ns -> 90ns) and 73% for space-separated format (270ns -> 73ns).
   - Maintained zero-allocation correctness (excluding return string).
   - Added comprehensive unit tests and benchmarks.
+- [x] **Nginx Error Timestamp Optimization** (2026-03-08)
+  - Implemented manual byte extraction in `ParseNginxError` to replace `time.Parse`.
+  - Reduced parsing time significantly (from ~270ns to ~70ns).
+  - Eliminated intermediate string allocation.
+  - Added comprehensive unit tests and benchmarks to verify correctness.
