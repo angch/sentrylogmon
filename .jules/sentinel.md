@@ -44,3 +44,7 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+## 2026-04-02 - User-isolated IPC directory
+**Vulnerability:** Shared socket directory in /tmp without user isolation.
+**Learning:** Hardcoding shared directories in multi-user environments can lead to local DoS/collision attacks.
+**Prevention:** Use per-user temporary directories, e.g. namespacing by UID.
