@@ -2,13 +2,17 @@ package monitor
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/angch/sentrylogmon/metrics"
 	"github.com/getsentry/sentry-go"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 )
 
 // MockSource implements sources.LogSource
@@ -343,6 +347,70 @@ func TestMessageTransformation(t *testing.T) {
 		}
 	}
 }
+
+func TestMonitorLagMetric(t *testing.T) {
+	// Setup Sentry Mock
+	transport := &MockTransport{}
+	err := sentry.Init(sentry.ClientOptions{
+		Transport: transport,
+	})
+	if err != nil {
+		t.Fatalf("Failed to init sentry: %v", err)
+	}
+
+	sourceName := "mock_lag_test"
+	// 2 seconds ago
+	timestamp := float64(time.Now().UnixNano())/1e9 - 2.0
+	input := fmt.Sprintf("[%f] Error message", timestamp)
+	source := &MockSource{content: input}
+
+	detector := &MockDetector{}
+
+	mon, err := New(context.Background(), source, detector, nil, Options{})
+	if err != nil {
+		t.Fatalf("Failed to create monitor: %v", err)
+	}
+
+	// Override source name for testing metrics isolation
+	mon.Source = &mockSourceName{source, sourceName}
+
+	// Re-initialize metrics
+	mon.metricLogLag = metrics.LogLagSeconds.With(prometheus.Labels{"source": sourceName})
+
+	mon.StopOnEOF = true
+
+	go mon.Start()
+
+	// Wait for processing
+	time.Sleep(100 * time.Millisecond)
+
+	// Fetch metric
+	metric, err := metrics.LogLagSeconds.GetMetricWith(prometheus.Labels{"source": sourceName})
+	if err != nil {
+		t.Fatalf("Failed to get metric: %v", err)
+	}
+
+	var m dto.Metric
+	if err := metric.(prometheus.Metric).Write(&m); err != nil {
+		t.Fatalf("Failed to write metric: %v", err)
+	}
+
+	if m.Histogram == nil {
+		t.Fatal("Histogram is nil")
+	}
+
+	if *m.Histogram.SampleCount != 1 {
+		t.Errorf("Expected SampleCount 1, got %v", *m.Histogram.SampleCount)
+	}
+}
+
+// Wrapper to change source name
+type mockSourceName struct {
+	*MockSource
+	name string
+}
+
+func (m *mockSourceName) Name() string { return m.name }
 
 func TestMonitorMultiTenancy(t *testing.T) {
 	// Setup global Sentry to verify separation

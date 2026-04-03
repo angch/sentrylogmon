@@ -36,6 +36,15 @@ var (
 		},
 		[]string{"source"},
 	)
+
+	LogLagSeconds = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "sentrylogmon_log_lag_seconds",
+			Help:    "Lag between log timestamp and processing time.",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"source"},
+	)
 )
 
 func init() {
@@ -43,4 +52,5 @@ func init() {
 	prometheus.MustRegister(IssuesDetectedTotal)
 	prometheus.MustRegister(SentryEventsTotal)
 	prometheus.MustRegister(LastActivityTimestamp)
+	prometheus.MustRegister(LogLagSeconds)
 }
