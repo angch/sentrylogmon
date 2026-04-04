@@ -156,3 +156,18 @@ func BenchmarkJsonDetector_NoMatch(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkJsonDetector_MissingField(b *testing.B) {
+	d, err := NewJsonDetector("severity:error")
+	if err != nil {
+		b.Fatalf("Failed to create detector: %v", err)
+	}
+
+	line := []byte(`{"level":"info","msg":"everything is fine","time":"2023-10-27T10:00:00Z"}`)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if d.Detect(line) {
+			b.Fatal("Expected no match")
+		}
+	}
+}
