@@ -44,3 +44,7 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+## 2026-02-09 - [CRITICAL] Fix CLI credential leakage in Rust sanitizer via parity
+**Vulnerability:** The Rust CLI command sanitizer did not enforce word boundaries for suffix matching and relied on case-sensitive lookups, leading to potential credential leakage.
+**Learning:** Security allowlists/blocklists for partial matching must account for common naming conventions and boundaries, and ensure case-insensitivity.
+**Prevention:** Use boundary checks and case-insensitivity in security redact logic.

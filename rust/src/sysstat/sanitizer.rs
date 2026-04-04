@@ -12,11 +12,24 @@ static SENSITIVE_FLAGS: Lazy<HashMap<&'static str, bool>> = Lazy::new(|| {
     m.insert("--client-secret", true);
     m.insert("--access-token", true);
     m.insert("--auth-token", true);
+    m.insert("--session-id", true);
     m
 });
 
-static SENSITIVE_SUFFIXES: Lazy<Vec<&'static str>> =
-    Lazy::new(|| vec!["password", "token", "secret", "_key"]);
+static SENSITIVE_SUFFIXES: Lazy<Vec<&'static str>> = Lazy::new(|| {
+    vec![
+        "password",
+        "token",
+        "secret",
+        "_key",
+        "-key",
+        ".key",
+        "signature",
+        "credential",
+        "cookie",
+        "session",
+    ]
+});
 
 // sanitize_command reconstructs the command line string from arguments while redacting sensitive information.
 // It aims for parity with the Go implementation, handling both `--flag=value` and `--flag value` patterns.
@@ -47,8 +60,8 @@ pub fn sanitize_command(args: &[String]) -> String {
                 continue;
             }
 
-            // Check if key matches a sensitive flag explicitly
-            if SENSITIVE_FLAGS.contains_key(key) {
+            // Check if key matches a sensitive flag explicitly (case-insensitive)
+            if SENSITIVE_FLAGS.contains_key(key.to_lowercase().as_str()) {
                 sanitized.push(format!("{}=[REDACTED]", key));
                 continue;
             }
@@ -58,9 +71,20 @@ pub fn sanitize_command(args: &[String]) -> String {
         }
 
         // Check for sensitive flags that take the next argument
-        if let Some(&should_skip) = SENSITIVE_FLAGS.get(arg.as_str()) {
+        let lower_arg = arg.to_lowercase();
+        if let Some(&should_skip) = SENSITIVE_FLAGS.get(lower_arg.as_str()) {
             sanitized.push(arg.clone());
             if should_skip && i + 1 < args.len() {
+                skip_next = true;
+            }
+            continue;
+        }
+
+        // Check heuristics (suffix matching)
+        let clean_arg = arg.trim_start_matches('-');
+        if is_sensitive_key(clean_arg) {
+            sanitized.push(arg.clone());
+            if i + 1 < args.len() && !args[i + 1].starts_with('-') {
                 skip_next = true;
             }
             continue;
@@ -86,7 +110,19 @@ fn is_sensitive_key(key: &str) -> bool {
     // Suffix matches
     for suffix in SENSITIVE_SUFFIXES.iter() {
         if lower_key.ends_with(suffix) {
-            return true;
+            if lower_key.len() == suffix.len() {
+                return true;
+            }
+            if suffix.starts_with('-') || suffix.starts_with('_') || suffix.starts_with('.') {
+                return true;
+            }
+            let match_index = lower_key.len() - suffix.len();
+            if match_index > 0 {
+                let char_before = lower_key.as_bytes()[match_index - 1];
+                if char_before == b'-' || char_before == b'_' || char_before == b'.' {
+                    return true;
+                }
+            }
         }
     }
 
