@@ -33,8 +33,8 @@ func TestBufferByteLimit(t *testing.T) {
 	// Without size limit, they would be grouped into one event (diff < 5.0s).
 	// With size limit, they should be split.
 	input := "[100.0] " + lineContent + "\n" +
-			 "[100.0] " + lineContent + "\n" +
-			 "[100.0] " + lineContent + "\n"
+		"[100.0] " + lineContent + "\n" +
+		"[100.0] " + lineContent + "\n"
 
 	source := &MockSource{content: input}
 	detector := &MockDetector{}
