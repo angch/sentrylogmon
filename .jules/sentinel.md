@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-03-01 - Umask Race Condition on Unix Domain Sockets
+**Vulnerability:** When creating a Unix domain socket with `net.Listen("unix", path)`, the socket file permissions are determined by the process's current `umask`. The application previously called `net.Listen` and then immediately called `os.Chmod` to set permissions to `0600`. This created a race condition window where an attacker could connect to the socket before `os.Chmod` was executed.
+**Learning:** `os.Chmod` is not a secure way to restrict permissions on newly created files or sockets in shared directories. The file must be created with secure permissions from the start. For Unix sockets in Go, modifying the `umask` temporarily before calling `net.Listen` is an effective workaround, but requires proper synchronization (like a mutex) to avoid race conditions with other goroutines creating files.
+**Prevention:**
+1. Temporarily set the process `umask` (e.g., `syscall.Umask(0177)`) when creating sensitive files or sockets.
+2. Ensure `umask` manipulation is thread-safe by using a `sync.Mutex` during the operation.
