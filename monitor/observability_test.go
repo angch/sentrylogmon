@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -53,5 +54,53 @@ func TestLastActivityMetric(t *testing.T) {
 	}
 	if val > now+1 {
 		t.Errorf("Metric value in future. Got %v, expected ~%v", val, now)
+	}
+}
+
+func TestMonitorLagMetric(t *testing.T) {
+	// Reset metrics to ensure clean state
+	metrics.MonitorLagSeconds.Reset()
+
+	// Use a dmesg-style timestamp from ~1.5 second ago
+	nowFloat := float64(time.Now().UnixNano()) / 1e9
+	ts := nowFloat - 1.5
+	// Dmesg format is [seconds.microseconds]
+	input := fmt.Sprintf("[%f] mock error\n", ts)
+
+	// Create mock source and detector that will match
+	source := &MockSource{content: input}
+	detector := &MockDetector{}
+
+	mon, err := New(context.Background(), source, detector, nil, Options{})
+	if err != nil {
+		t.Fatalf("Failed to create monitor: %v", err)
+	}
+	mon.StopOnEOF = true
+
+	// Run monitor
+	mon.Start()
+
+	// Verify metric
+	m := metrics.MonitorLagSeconds.With(prometheus.Labels{"source": "mock"})
+
+	var metric dto.Metric
+	// We need to type assert the metric since it's an Observer
+	if hist, ok := m.(prometheus.Metric); ok {
+		err = hist.Write(&metric)
+		if err != nil {
+			t.Fatalf("Failed to read metric: %v", err)
+		}
+
+		val := metric.GetHistogram().GetSampleCount()
+		if val == 0 {
+			t.Errorf("Metric sample count is 0, expected it to be updated")
+		}
+
+		sum := metric.GetHistogram().GetSampleSum()
+		if sum < 1.0 || sum > 2.0 {
+			t.Errorf("Metric sum unexpected. Got %v, expected ~1.5", sum)
+		}
+	} else {
+		t.Fatalf("Metric is not of expected type")
 	}
 }
