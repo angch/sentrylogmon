@@ -230,7 +230,11 @@ pub fn main() !void {
             var tw = tabwriter.TabWriter(@TypeOf(w.interface)).init(allocator, w.interface);
             defer tw.deinit();
 
-            try tw.print("PID\tSTARTED\tUPTIME\tMEM\tVERSION\tDETAILS\n", .{});
+            if (instances.items.len == 0) {
+                try tw.print("No running instances found.\n", .{});
+            } else {
+                try tw.print("PID\tSTARTED\tUPTIME\tMEM\tVERSION\tDETAILS\n", .{});
+            }
             for (instances.items) |inst| {
                 const start_ts = std.fmt.parseInt(i64, inst.start_time, 10) catch 0;
                 const now = std.time.timestamp();
