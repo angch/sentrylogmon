@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-02-21 - Security Parity Discrepancy
+**Vulnerability:** A local DoS vulnerability via hardcoded IPC path (/tmp/sentrylogmon) was fixed in Go but remained in Rust and Zig ports.
+**Learning:** Security fixes must be propagated to all language implementations in a polyglot repository to avoid parity gaps.
+**Prevention:**
+1. Check all active language ports (Go, Rust, Zig) when resolving a security flaw.
+2. Ensure tests explicitly verify platform-specific security behaviors in all active builds.
