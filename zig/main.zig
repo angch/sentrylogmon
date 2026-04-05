@@ -210,7 +210,12 @@ pub fn main() !void {
     defer if (args.config) |c| allocator.free(c);
 
     // IPC Commands
-    const socket_dir = "/tmp/sentrylogmon";
+    const socket_dir = if (@import("builtin").os.tag == .windows)
+        try std.fmt.allocPrint(allocator, "/tmp/sentrylogmon", .{})
+    else
+        try std.fmt.allocPrint(allocator, "/tmp/sentrylogmon-{d}", .{std.posix.getuid()});
+    defer allocator.free(socket_dir);
+
     if (args.status) {
         var instances = ipc.listInstances(allocator, socket_dir) catch |err| {
             std.debug.print("Error listing instances: {}\n", .{err});
