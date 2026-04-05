@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-02-21 - DSN Leakage via CLI Arguments
+**Vulnerability:** The application failed to redact Sentry DSNs passed via command-line arguments (e.g., `--dsn`, `--sentry-dsn`) in the status report. The `sysstat.SanitizeCommand` function lacked `dsn` in its list of sensitive suffixes.
+**Learning:** Security heuristics (like suffix matching) must explicitly include domain-specific secrets (like DSNs) in addition to generic terms (password, token). Assuming generic terms cover all secrets leads to gaps.
+**Prevention:**
+1. Explicitly list domain-specific secret keys (e.g., `dsn`) in sanitizer configurations.
+2. Add regression tests that specifically target domain-specific secrets to ensure they are covered by sanitization logic.
