@@ -2,6 +2,7 @@ use crate::config::Config;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::os::unix::fs::DirBuilderExt;
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::CommandExt;
@@ -21,14 +22,28 @@ pub struct StatusResponse {
     pub memory_alloc: u64,
 }
 
-pub fn ensure_secure_directory(path: &Path) -> Result<()> {
-    if !path.exists() {
-        fs::create_dir_all(path)
-            .with_context(|| format!("Failed to create directory {:?}", path))?;
-    }
+pub fn get_socket_dir() -> PathBuf {
+    let uid = unsafe { libc::getuid() };
+    std::env::temp_dir().join(format!("sentrylogmon-{}", uid))
+}
 
-    let metadata = fs::symlink_metadata(path)
-        .with_context(|| format!("Failed to get metadata for {:?}", path))?;
+pub fn ensure_secure_directory(path: &Path) -> Result<()> {
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(m) => m,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // Directory doesn't exist, create it atomically with 0700 permissions
+            let mut builder = fs::DirBuilder::new();
+            builder.mode(0o700);
+            builder.recursive(true);
+            builder.create(path)
+                .with_context(|| format!("Failed to create directory {:?}", path))?;
+
+            // Re-fetch metadata to ensure creation succeeded
+            fs::symlink_metadata(path)
+                .with_context(|| format!("Failed to get metadata for {:?}", path))?
+        }
+        Err(e) => return Err(anyhow::anyhow!("Failed to stat {:?}: {}", path, e)),
+    };
 
     // Check if it is a directory
     if !metadata.is_dir() {
