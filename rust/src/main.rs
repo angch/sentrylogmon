@@ -21,6 +21,42 @@ async fn main() -> Result<()> {
     // Load configuration
     let cfg = config::Config::load()?;
 
+    if cfg.init {
+        let filename = "sentrylogmon.yaml";
+        if std::path::Path::new(filename).exists() {
+            println!("{} already exists. Will not overwrite", filename);
+            return Ok(());
+        }
+
+        let content = r#"# sentrylogmon.yaml - Configuration for Sentry Log Monitor
+
+# Global Sentry Configuration
+sentry:
+  # Your Sentry DSN (Data Source Name)
+  # Example: https://examplePublicKey@o0.ingest.sentry.io/0
+  dsn: ""
+  environment: production
+  release: v1.0.0
+
+monitors:
+  # Example: Monitor a log file for errors
+  - name: system-logs
+    type: file
+    path: /var/log/syslog
+    # Regex pattern to match (case-insensitive)
+    pattern: "(?i)(error|fatal|panic)"
+
+  # Example: Monitor Nginx error logs with built-in format
+  # - name: nginx-errors
+  #   type: file
+  #   path: /var/log/nginx/error.log
+  #   format: nginx
+"#;
+        std::fs::write(filename, content)?;
+        println!("Generated sentrylogmon.yaml");
+        return Ok(());
+    }
+
     if cfg.status {
         let socket_dir = PathBuf::from("/tmp/sentrylogmon");
         let instances = ipc::list_instances(&socket_dir)?;
@@ -434,6 +470,7 @@ mod tests {
             oneshot: false,
             status: false,
             update: false,
+            init: false,
             metrics_port: 0,
         }
     }
