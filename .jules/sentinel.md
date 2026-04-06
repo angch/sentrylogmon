@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-04-06 - Incomplete Fix Propagation for IPC Path
+**Vulnerability:** A Local DoS vulnerability related to hardcoded IPC paths (`/tmp/sentrylogmon`) was previously fixed in the Go implementation (by appending `os.Getuid()`) but the fix was not propagated to the Rust and Zig ports. This left the Rust and Zig services vulnerable to the same resource collision/hijacking attacks in multi-user environments.
+**Learning:** Security fixes must be systematically verified and applied across all language implementations in a polyglot repository. A vulnerability in one port likely exists in the others.
+**Prevention:**
+1. When applying a security fix to a multi-language project, explicitly grep for the vulnerable pattern across all source directories (e.g., `rust/`, `zig/`).
+2. Include cross-port parity checks in security code reviews.
