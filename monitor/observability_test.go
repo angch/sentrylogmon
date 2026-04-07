@@ -55,3 +55,42 @@ func TestLastActivityMetric(t *testing.T) {
 		t.Errorf("Metric value in future. Got %v, expected ~%v", val, now)
 	}
 }
+
+func TestProcessingLagMetric(t *testing.T) {
+	// Reset metrics to ensure clean state
+	metrics.ProcessingLagSeconds.Reset()
+
+	// Use a mock line that extractTimestamp can parse. For example, a line starting with an ISO8601 timestamp.
+	// We'll use a recent timestamp so lag isn't enormous, but any parseable timestamp works.
+	now := time.Now()
+	// Create a line that will be parsed by ParseISO8601
+	input := now.Format(time.RFC3339Nano) + " test message\n"
+
+	source := &MockSource{content: input}
+	detector := &MockDetector{}
+
+	mon, err := New(context.Background(), source, detector, nil, Options{})
+	if err != nil {
+		t.Fatalf("Failed to create monitor: %v", err)
+	}
+	mon.StopOnEOF = true
+
+	// Run monitor
+	mon.Start()
+
+	// Verify metric
+	m := metrics.ProcessingLagSeconds.With(prometheus.Labels{"source": "mock"})
+
+	// Read metric value
+	var metric dto.Metric
+	err = m.(prometheus.Histogram).Write(&metric)
+	if err != nil {
+		t.Fatalf("Failed to read metric: %v", err)
+	}
+
+	sampleCount := metric.GetHistogram().GetSampleCount()
+
+	if sampleCount != 1 {
+		t.Errorf("Expected sample count 1, got %v", sampleCount)
+	}
+}
