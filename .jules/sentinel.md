@@ -44,3 +44,8 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-02-28 - Local DoS via Hardcoded IPC Path in Rust and Zig
+**Vulnerability:** The application used a hardcoded path (`/tmp/sentrylogmon`) for its IPC socket directory in Rust and Zig implementations.
+**Learning:** Hardcoded paths in shared temporary directories create resource collision vulnerabilities in multi-user environments.
+**Prevention:** Namespace temporary directories using the user's UID.
