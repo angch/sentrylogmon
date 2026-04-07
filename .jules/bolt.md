@@ -5,3 +5,6 @@
 ## 2026-01-27 - Regexp Allocation Limits
 **Learning:** Go's `regexp.FindSubmatchIndex` still allocates the `[]int` result slice. While it reduces memory usage compared to `FindSubmatch` (which allocates `[][]byte`), it doesn't eliminate allocations entirely. Zero-alloc regex capturing requires different libraries or manual parsing.
 **Action:** For hot paths requiring zero allocations, prefer manual parsing (`bytes.Index`, etc.) over `regexp` if feasible, otherwise accept the reduced but non-zero allocation of `FindSubmatchIndex`.
+## 2026-04-07 - Fast-Path Heuristic Rejection
+**Learning:** When dealing with heavy operations like JSON unmarshaling in a hot path, implementing a fast-path heuristic rejection (like using bytes.Contains for a known required string) can yield extreme performance gains (e.g. 2000ns down to 25ns) for non-matching cases.
+**Action:** Always look for opportunities to pre-filter inputs using fast, zero-allocation byte operations before passing them to expensive decoders.
