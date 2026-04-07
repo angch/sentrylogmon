@@ -52,9 +52,13 @@ func main() {
 		if isTerminal {
 			printInstanceTable(instances)
 		} else {
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			enc.Encode(instances)
+			if len(instances) == 0 {
+				fmt.Println("[]")
+			} else {
+				enc := json.NewEncoder(os.Stdout)
+				enc.SetIndent("", "  ")
+				enc.Encode(instances)
+			}
 		}
 		return
 	}
