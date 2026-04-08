@@ -192,6 +192,7 @@ const Args = struct {
     config: ?[]const u8 = null,
     status: bool = false,
     update: bool = false,
+    init: bool = false,
     metrics_port: ?u16 = null,
 };
 
@@ -293,6 +294,56 @@ pub fn main() !void {
             try w.end();
         }
         std.process.exit(0);
+    }
+
+    if (args.init) {
+        const filename = "sentrylogmon.yaml";
+        const cwd = std.fs.cwd();
+        if (cwd.openFile(filename, .{})) |f| {
+            f.close();
+            std.debug.print("{s} already exists. Will not overwrite\n", .{filename});
+            std.process.exit(1);
+        } else |_| {}
+
+        const content =
+            \\# sentrylogmon.yaml - Configuration for Sentry Log Monitor
+            \\
+            \\# Global Sentry Configuration
+            \\sentry:
+            \\  # Your Sentry DSN (Data Source Name)
+            \\  # Example: https://examplePublicKey@o0.ingest.sentry.io/0
+            \\  dsn: ""
+            \\  environment: production
+            \\  release: v1.0.0
+            \\
+            \\monitors:
+            \\  # Example: Monitor a log file for errors
+            \\  - name: system-logs
+            \\    type: file
+            \\    path: /var/log/syslog
+            \\    # Regex pattern to match (case-insensitive)
+            \\    pattern: "(?i)(error|fatal|panic)"
+            \\
+            \\  # Example: Monitor Nginx error logs with built-in format
+            \\  # - name: nginx-errors
+            \\  #   type: file
+            \\  #   path: /var/log/nginx/error.log
+            \\  #   format: nginx
+            \\
+        ;
+
+        if (cwd.createFile(filename, .{})) |f| {
+            defer f.close();
+            f.writeAll(content) catch |err| {
+                std.debug.print("Failed to write {s}: {}\n", .{filename, err});
+                std.process.exit(1);
+            };
+            std.debug.print("Generated {s}\n", .{filename});
+            std.process.exit(0);
+        } else |err| {
+            std.debug.print("Failed to create {s}: {}\n", .{filename, err});
+            std.process.exit(1);
+        }
     }
 
     if (args.update) {
@@ -616,6 +667,8 @@ fn printUsage() void {
         \\        Enable verbose logging
         \\  --oneshot
         \\        Process existing logs and exit (do not follow)
+        \\  --init
+        \\        Generate a starter configuration file
         \\  --metrics-port int
         \\        Port to expose Prometheus metrics
         \\  --help
@@ -696,6 +749,8 @@ fn parseArgs(allocator: std.mem.Allocator) !Args {
             args.status = true;
         } else if (std.mem.eql(u8, arg, "--update")) {
             args.update = true;
+        } else if (std.mem.eql(u8, arg, "--init")) {
+            args.init = true;
         } else if (std.mem.eql(u8, arg, "--metrics-port")) {
             if (arg_iter.next()) |port_str| {
                 args.metrics_port = try std.fmt.parseInt(u16, port_str, 10);
