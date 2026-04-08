@@ -11,8 +11,8 @@ import (
 )
 
 type JsonDetector struct {
-	Field    string
-	Pattern  *regexp.Regexp
+	Field   string
+	Pattern *regexp.Regexp
 
 	mu       sync.Mutex
 	lastData map[string]interface{}
@@ -61,7 +61,13 @@ func (d *JsonDetector) Detect(line []byte) bool {
 	}
 
 	// Convert value to string for regex matching
-	valStr := fmt.Sprintf("%v", val)
+	var valStr string
+	// Fast-path: avoid reflection and allocation if the value is already a string
+	if s, ok := val.(string); ok {
+		valStr = s
+	} else {
+		valStr = fmt.Sprintf("%v", val)
+	}
 	if d.Pattern.MatchString(valStr) {
 		d.mu.Lock()
 		d.lastData = data
