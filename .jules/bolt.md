@@ -5,3 +5,6 @@
 ## 2026-01-27 - Regexp Allocation Limits
 **Learning:** Go's `regexp.FindSubmatchIndex` still allocates the `[]int` result slice. While it reduces memory usage compared to `FindSubmatch` (which allocates `[][]byte`), it doesn't eliminate allocations entirely. Zero-alloc regex capturing requires different libraries or manual parsing.
 **Action:** For hot paths requiring zero allocations, prefer manual parsing (`bytes.Index`, etc.) over `regexp` if feasible, otherwise accept the reduced but non-zero allocation of `FindSubmatchIndex`.
+## 2026-04-08 - Fast String Extraction in Go
+**Learning:** In Go hot paths, using `fmt.Sprintf("%v", val)` on `any` or `interface{}` values to extract strings causes allocations and is slow due to reflection. A simple type assertion `val.(string)` avoids this cost and is orders of magnitude faster.
+**Action:** Use type assertion first for common types before falling back to reflection-based `fmt.Sprintf`.
