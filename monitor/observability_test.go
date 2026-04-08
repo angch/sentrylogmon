@@ -55,3 +55,36 @@ func TestLastActivityMetric(t *testing.T) {
 		t.Errorf("Metric value in future. Got %v, expected ~%v", val, now)
 	}
 }
+
+func TestMonitorLagMetric(t *testing.T) {
+	metrics.MonitorLagSeconds.Reset()
+
+	input := "[1700000000.000] Error: test\n"
+	// Use a unique source name to isolate the test from other tests that might run in parallel
+	source := &MockSource{content: input}
+	detector := &MockDetector{}
+
+	mon, err := New(context.Background(), source, detector, nil, Options{})
+	if err != nil {
+		t.Fatalf("Failed to create monitor: %v", err)
+	}
+	mon.StopOnEOF = true
+
+	// Run monitor
+	mon.Start()
+
+	m := metrics.MonitorLagSeconds.With(prometheus.Labels{"source": "mock"})
+
+	var metric dto.Metric
+	err = m.Write(&metric)
+	if err != nil {
+		t.Fatalf("Failed to read metric: %v", err)
+	}
+
+	val := metric.GetGauge().GetValue()
+
+	// Lag should be greater than zero since 1700000000.000 is far in the past.
+	if val <= 0 {
+		t.Errorf("MonitorLagSeconds metric value is %v, expected it to be > 0", val)
+	}
+}
