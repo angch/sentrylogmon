@@ -4,10 +4,29 @@ package ipc
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
+	"sync"
 	"syscall"
 )
+
+var umaskMutex sync.Mutex
+
+// ListenUnix safely creates a Unix domain socket listener with 0600 permissions.
+// It uses a mutex to temporarily change the umask to 0177 before calling net.Listen,
+// preventing TOCTOU vulnerabilities where a socket could briefly be created
+// with too permissive permissions before os.Chmod is called.
+func ListenUnix(socketPath string) (net.Listener, error) {
+	umaskMutex.Lock()
+	defer umaskMutex.Unlock()
+
+	// 0177 umask means create with rw------- (0600)
+	oldUmask := syscall.Umask(0177)
+	defer syscall.Umask(oldUmask)
+
+	return net.Listen("unix", socketPath)
+}
 
 // EnsureSecureDirectory ensures that the directory at path exists,
 // is a directory, has 0700 permissions, and is owned by the current user.

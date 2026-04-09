@@ -3,9 +3,15 @@
 package ipc
 
 import (
+	"net"
 	"os"
 	"path/filepath"
 )
+
+// ListenUnix is a fallback for Windows that does not use umask.
+func ListenUnix(socketPath string) (net.Listener, error) {
+	return net.Listen("unix", socketPath)
+}
 
 // EnsureSecureDirectory ensures that the directory at path exists.
 // Security checks are simplified for Windows.

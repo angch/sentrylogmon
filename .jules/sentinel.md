@@ -44,3 +44,7 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+## 2026-03-12 - Prevent TOCTOU vulnerability when creating IPC Unix domain sockets
+**Vulnerability:** A Time-of-Check to Time-of-Use (TOCTOU) vulnerability existed when creating Unix domain sockets for IPC. The application was calling `net.Listen("unix", ...)` which created the socket with default umask permissions, and then immediately called `os.Chmod` to restrict permissions to `0600`. During this brief window, another process could access the socket.
+**Learning:** Functions that create files or sockets should do so with secure permissions natively rather than creating insecurely and restricting permissions after. Because `net.Listen("unix", ...)` in Go does not accept a permission mode, we have to leverage the OS umask.
+**Prevention:** To safely create Unix domain sockets, wrap `net.Listen` with a function that acquires a package-level mutex, temporarily sets the umask to `0177` (resulting in `0600` permissions), calls `net.Listen`, and then restores the previous umask before releasing the mutex.
