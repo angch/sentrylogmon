@@ -224,6 +224,15 @@ pub fn main() !void {
         }
 
         const stdout = std.fs.File.stdout();
+        if (instances.items.len == 0) {
+            if (stdout.isTty()) {
+                try stdout.writeAll("No running instances found.\n");
+            } else {
+                try stdout.writeAll("[]\n");
+            }
+            return;
+        }
+
         if (stdout.isTty()) {
             var buf: [4096]u8 = undefined;
             const w = stdout.writer(&buf);
