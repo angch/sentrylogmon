@@ -2,6 +2,7 @@ use crate::config::Config;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::CommandExt;
@@ -22,9 +23,11 @@ pub struct StatusResponse {
 }
 
 pub fn ensure_secure_directory(path: &Path) -> Result<()> {
-    if !path.exists() {
-        fs::create_dir_all(path)
-            .with_context(|| format!("Failed to create directory {:?}", path))?;
+    // Attempt creation without checking existence first to avoid TOCTOU
+    if let Err(e) = fs::create_dir_all(path) {
+        if e.kind() != std::io::ErrorKind::AlreadyExists {
+            anyhow::bail!("Failed to create directory {:?}: {}", path, e);
+        }
     }
 
     let metadata = fs::symlink_metadata(path)
@@ -43,8 +46,31 @@ pub fn ensure_secure_directory(path: &Path) -> Result<()> {
     // Check permissions (0700)
     let mode = metadata.permissions().mode() & 0o777;
     if mode != 0o700 {
-        fs::set_permissions(path, fs::Permissions::from_mode(0o700))
-            .with_context(|| format!("Failed to set permissions 0700 on {:?}", path))?;
+        use std::ffi::CString;
+        let c_path = CString::new(path.as_os_str().as_bytes())
+            .with_context(|| format!("Invalid path {:?}", path))?;
+
+        unsafe {
+            // Open with O_NOFOLLOW to avoid following symlinks (prevents TOCTOU symlink attack)
+            // and O_DIRECTORY to ensure it's a directory
+            let fd = libc::open(
+                c_path.as_ptr(),
+                libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_DIRECTORY,
+            );
+
+            if fd < 0 {
+                let err = std::io::Error::last_os_error();
+                anyhow::bail!("Failed to open directory {:?} securely: {}", path, err);
+            }
+
+            let res = libc::fchmod(fd, 0o700);
+            libc::close(fd);
+
+            if res < 0 {
+                let err = std::io::Error::last_os_error();
+                anyhow::bail!("Failed to set permissions 0700 on {:?}: {}", path, err);
+            }
+        }
     }
 
     // Check ownership
