@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"strings"
 	"sync"
@@ -9,6 +10,10 @@ import (
 	"time"
 
 	"github.com/getsentry/sentry-go"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
+
+	"github.com/angch/sentrylogmon/metrics"
 )
 
 // MockSource implements sources.LogSource
@@ -52,6 +57,86 @@ func (t *MockTransport) SendEvent(event *sentry.Event) {
 func (t *MockTransport) Flush(timeout time.Duration) bool          { return true }
 func (t *MockTransport) FlushWithContext(ctx context.Context) bool { return true }
 func (t *MockTransport) Close()                                    {}
+
+func TestMonitorLagMetric(t *testing.T) {
+	// Setup Sentry Mock
+	transport := &MockTransport{}
+	err := sentry.Init(sentry.ClientOptions{
+		Transport: transport,
+	})
+	if err != nil {
+		t.Fatalf("Failed to init sentry: %v", err)
+	}
+
+	// We create a custom log line with an ISO8601 timestamp that is 5 seconds in the past.
+	logTime := time.Now().Add(-5 * time.Second)
+	// We use space-separated format instead of T since it might interfere with testing. But RFC3339 is fine
+
+	input := fmt.Sprintf("%s Error something went wrong", logTime.Format(time.RFC3339Nano))
+
+	detector := &MockDetector{}
+
+	// Important: We need a unique source name to avoid leaking state in metrics test
+	sourceName := "mock_lag_test"
+
+	customSource := &customMockSource{name: sourceName, content: input}
+
+	mon, err := New(context.Background(), customSource, detector, nil, Options{})
+	if err != nil {
+		t.Fatalf("Failed to create monitor: %v", err)
+	}
+	mon.StopOnEOF = true
+
+	go mon.Start()
+
+	// Wait for processing
+	time.Sleep(100 * time.Millisecond)
+
+	sentry.Flush(time.Second)
+
+	// Fetch metric
+	metric, err := metrics.MonitorLagSeconds.GetMetricWith(prometheus.Labels{"source": sourceName})
+	if err != nil {
+		t.Fatalf("Failed to get metric: %v", err)
+	}
+
+	// Convert to prometheus.Metric to read it
+	var pb dto.Metric
+	if m, ok := metric.(prometheus.Metric); ok {
+		err = m.Write(&pb)
+		if err != nil {
+			t.Fatalf("Failed to write metric: %v", err)
+		}
+	} else {
+		t.Fatalf("Failed to cast metric to prometheus.Metric")
+	}
+
+	if pb.Histogram == nil {
+		t.Fatalf("Expected histogram metric")
+	}
+
+	sampleCount := pb.Histogram.GetSampleCount()
+	if sampleCount != 1 {
+		t.Errorf("Expected 1 observation, got %d", sampleCount)
+	}
+
+	sampleSum := pb.Histogram.GetSampleSum()
+	// The elapsed time should be approximately 5 seconds
+	if sampleSum < 4.0 || sampleSum > 6.0 {
+		t.Errorf("Expected lag around 5 seconds, got %f", sampleSum)
+	}
+}
+
+type customMockSource struct {
+	name    string
+	content string
+}
+
+func (s *customMockSource) Name() string { return s.name }
+func (s *customMockSource) Stream() (io.Reader, error) {
+	return strings.NewReader(s.content), nil
+}
+func (s *customMockSource) Close() error { return nil }
 
 func TestMonitorGrouping(t *testing.T) {
 	// Setup Sentry Mock
