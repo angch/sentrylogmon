@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-03-14 - Local DoS via Hardcoded IPC Path (Rust/Zig Ports)
+**Vulnerability:** Similar to the vulnerability identified on 2026-02-02 in the Go implementation, the Rust and Zig ports also used a hardcoded path (`/tmp/sentrylogmon`) for the IPC socket directory. This allowed a local user to pre-create the directory, blocking other users from starting their own instances.
+**Learning:** Security fixes applied to a reference implementation (Go) do not automatically propagate to other language ports (Rust, Zig). Cross-language ports often copy the same insecure patterns from the original implementation before it was patched.
+**Prevention:**
+1. When fixing a vulnerability in one language implementation of a multi-language repository, always search for and patch the equivalent vulnerability in all other ports.
+2. Ensure temporary directories are namespaced by user ID (`getuid()`) across all implementations to avoid cross-user interference.
