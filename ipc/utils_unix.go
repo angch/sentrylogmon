@@ -38,21 +38,27 @@ func EnsureSecureDirectory(path string) error {
 		return fmt.Errorf("%s is not a directory", path)
 	}
 
-	// 3. Check permissions
-	mode := info.Mode().Perm()
-	if mode != 0700 {
-		// Attempt to fix permissions
-		if err := os.Chmod(path, 0700); err != nil {
-			return fmt.Errorf("insecure permissions on %s (%o) and failed to fix: %v", path, mode, err)
-		}
-	}
-
-	// 4. Check ownership
+	// 3. Check ownership BEFORE permissions to avoid modifying an attacker's file
 	stat, ok := info.Sys().(*syscall.Stat_t)
 	if ok {
 		uid := uint32(os.Getuid())
 		if stat.Uid != uid {
 			return fmt.Errorf("insecure ownership on %s: owned by uid %d, expected %d", path, stat.Uid, uid)
+		}
+	}
+
+	// 4. Check permissions
+	mode := info.Mode().Perm()
+	if mode != 0700 {
+		// Attempt to fix permissions securely to prevent TOCTOU symlink attack
+		f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+		if err != nil {
+			return fmt.Errorf("failed to open %s securely to fix permissions: %v", path, err)
+		}
+		defer f.Close()
+
+		if err := f.Chmod(0700); err != nil {
+			return fmt.Errorf("insecure permissions on %s (%o) and failed to fix securely: %v", path, mode, err)
 		}
 	}
 
