@@ -224,6 +224,12 @@ pub fn main() !void {
         }
 
         const stdout = std.fs.File.stdout();
+
+        if (instances.items.len == 0) {
+            stdout.writeAll("No running instances found.\n") catch {};
+            std.process.exit(0);
+        }
+
         if (stdout.isTty()) {
             var buf: [4096]u8 = undefined;
             const w = stdout.writer(&buf);
@@ -301,6 +307,11 @@ pub fn main() !void {
             std.process.exit(1);
         };
         defer instances.deinit(allocator);
+
+        if (instances.items.len == 0) {
+            std.debug.print("No running instances found to update.\n", .{});
+            std.process.exit(0);
+        }
 
         for (instances.items) |inst| {
             const socket_path = try std.fmt.allocPrint(allocator, "{s}/sentrylogmon.{d}.sock", .{ socket_dir, inst.pid });
