@@ -22,7 +22,17 @@ async fn main() -> Result<()> {
     let cfg = config::Config::load()?;
 
     if cfg.status {
-        let socket_dir = PathBuf::from("/tmp/sentrylogmon");
+        let socket_dir = {
+            #[cfg(unix)]
+            {
+                let uid = unsafe { libc::getuid() };
+                PathBuf::from(format!("/tmp/sentrylogmon-{}", uid))
+            }
+            #[cfg(not(unix))]
+            {
+                PathBuf::from("/tmp/sentrylogmon")
+            }
+        };
         let instances = ipc::list_instances(&socket_dir)?;
 
         if is_terminal() {
@@ -34,7 +44,17 @@ async fn main() -> Result<()> {
     }
 
     if cfg.update {
-        let socket_dir = PathBuf::from("/tmp/sentrylogmon");
+        let socket_dir = {
+            #[cfg(unix)]
+            {
+                let uid = unsafe { libc::getuid() };
+                PathBuf::from(format!("/tmp/sentrylogmon-{}", uid))
+            }
+            #[cfg(not(unix))]
+            {
+                PathBuf::from("/tmp/sentrylogmon")
+            }
+        };
         let instances = ipc::list_instances(&socket_dir)?;
         for inst in instances {
             let socket_path = socket_dir.join(format!("sentrylogmon.{}.sock", inst.pid));
@@ -83,7 +103,17 @@ async fn main() -> Result<()> {
     collector.run().await;
 
     // Start IPC server
-    let socket_dir = PathBuf::from("/tmp/sentrylogmon");
+    let socket_dir = {
+        #[cfg(unix)]
+        {
+            let uid = unsafe { libc::getuid() };
+            PathBuf::from(format!("/tmp/sentrylogmon-{}", uid))
+        }
+        #[cfg(not(unix))]
+        {
+            PathBuf::from("/tmp/sentrylogmon")
+        }
+    };
     if let Err(e) = ipc::ensure_secure_directory(&socket_dir) {
         tracing::error!("Failed to ensure secure IPC directory: {}", e);
     } else {
