@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-03-10 - Security Parity Across Multi-Language Implementations
+**Vulnerability:** The command-line sanitization logic in the Rust and Zig ports lacked the case-insensitivity and heuristic boundary checks that had been previously patched in the Go reference implementation. This disparity meant the same sensitive flag (e.g., `--PASSWORD` or `--db-password`) could be safely redacted in Go but leaked in Rust and Zig.
+**Learning:** When maintaining a multi-language repository, security fixes applied to the reference implementation (Go) often fail to automatically propagate to other language ports (Rust, Zig). Relying on disparate codebases for security controls leads to coverage gaps.
+**Prevention:**
+1. Maintain shared test suites or cross-language test matrices for security-critical functions (like sanitization) to enforce parity.
+2. When patching a vulnerability in one language, always verify and port the fix to all other implementations simultaneously.

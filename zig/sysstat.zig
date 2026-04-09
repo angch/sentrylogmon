@@ -530,6 +530,7 @@ fn sanitizeCommand(allocator: std.mem.Allocator, args: []const []const u8) ![]u8
 
     const sensitive_flags = std.StaticStringMap(bool).initComptime(.{
         .{ "--password", true },
+        .{ "-p", false }, // Ambiguous
         .{ "--token", true },
         .{ "--api-key", true },
         .{ "--apikey", true },
@@ -537,10 +538,11 @@ fn sanitizeCommand(allocator: std.mem.Allocator, args: []const []const u8) ![]u8
         .{ "--client-secret", true },
         .{ "--access-token", true },
         .{ "--auth-token", true },
+        .{ "--session-id", true },
     });
 
     const sensitive_suffixes = [_][]const u8{
-        "password", "token", "secret", "_key",
+        "password", "token", "secret", "_key", "-key", ".key", "signature", "credential", "cookie", "session",
     };
 
     for (args, 0..) |arg, i| {
@@ -560,34 +562,101 @@ fn sanitizeCommand(allocator: std.mem.Allocator, args: []const []const u8) ![]u8
             const clean_key = std.mem.trimLeft(u8, key, "-");
 
             var sensitive = false;
-            const lower_key = try std.ascii.allocLowerString(allocator, clean_key);
-            defer allocator.free(lower_key);
+            const lower_clean_key = try std.ascii.allocLowerString(allocator, clean_key);
+            defer allocator.free(lower_clean_key);
 
-            if (std.mem.eql(u8, lower_key, "password") or
-                std.mem.eql(u8, lower_key, "token") or
-                std.mem.eql(u8, lower_key, "secret") or
-                std.mem.eql(u8, lower_key, "key") or
-                std.mem.eql(u8, lower_key, "auth")) {
+            if (std.mem.eql(u8, lower_clean_key, "password") or
+                std.mem.eql(u8, lower_clean_key, "token") or
+                std.mem.eql(u8, lower_clean_key, "secret") or
+                std.mem.eql(u8, lower_clean_key, "key") or
+                std.mem.eql(u8, lower_clean_key, "auth")) {
                 sensitive = true;
             } else {
                  for (sensitive_suffixes) |suffix| {
-                     if (std.mem.endsWith(u8, lower_key, suffix)) {
-                         sensitive = true;
-                         break;
+                     if (std.mem.endsWith(u8, lower_clean_key, suffix)) {
+                         if (lower_clean_key.len == suffix.len) {
+                             sensitive = true;
+                             break;
+                         }
+                         if (std.mem.startsWith(u8, suffix, "-") or std.mem.startsWith(u8, suffix, "_") or std.mem.startsWith(u8, suffix, ".")) {
+                             sensitive = true;
+                             break;
+                         }
+                         const match_index = lower_clean_key.len - suffix.len;
+                         if (match_index > 0) {
+                             const char_before = lower_clean_key[match_index - 1];
+                             if (char_before == '-' or char_before == '_' or char_before == '.') {
+                                 sensitive = true;
+                                 break;
+                             }
+                         }
                      }
                  }
             }
 
-            if (sensitive or sensitive_flags.has(key)) {
+            const lower_key = try std.ascii.allocLowerString(allocator, key);
+            defer allocator.free(lower_key);
+
+            if (sensitive or sensitive_flags.has(lower_key)) {
                 try out.appendSlice(allocator, key);
                 try out.appendSlice(allocator, "=[REDACTED]");
                 continue;
             }
+
+            try out.appendSlice(allocator, arg);
+            continue;
         }
 
-        if (sensitive_flags.has(arg)) {
+        const lower_arg = try std.ascii.allocLowerString(allocator, arg);
+        defer allocator.free(lower_arg);
+
+        if (sensitive_flags.get(lower_arg)) |should_skip| {
             try out.appendSlice(allocator, arg);
-            skip_next = true;
+            if (should_skip and i + 1 < args.len) {
+                skip_next = true;
+            }
+            continue;
+        }
+
+        const clean_arg = std.mem.trimLeft(u8, arg, "-");
+        var sensitive = false;
+        const lower_clean_arg = try std.ascii.allocLowerString(allocator, clean_arg);
+        defer allocator.free(lower_clean_arg);
+
+        if (std.mem.eql(u8, lower_clean_arg, "password") or
+            std.mem.eql(u8, lower_clean_arg, "token") or
+            std.mem.eql(u8, lower_clean_arg, "secret") or
+            std.mem.eql(u8, lower_clean_arg, "key") or
+            std.mem.eql(u8, lower_clean_arg, "auth")) {
+            sensitive = true;
+        } else {
+             for (sensitive_suffixes) |suffix| {
+                 if (std.mem.endsWith(u8, lower_clean_arg, suffix)) {
+                     if (lower_clean_arg.len == suffix.len) {
+                         sensitive = true;
+                         break;
+                     }
+                     if (std.mem.startsWith(u8, suffix, "-") or std.mem.startsWith(u8, suffix, "_") or std.mem.startsWith(u8, suffix, ".")) {
+                         sensitive = true;
+                         break;
+                     }
+                     const match_index = lower_clean_arg.len - suffix.len;
+                     if (match_index > 0) {
+                         const char_before = lower_clean_arg[match_index - 1];
+                         if (char_before == '-' or char_before == '_' or char_before == '.') {
+                             sensitive = true;
+                             break;
+                         }
+                     }
+                 }
+             }
+        }
+
+        if (sensitive) {
+            try out.appendSlice(allocator, arg);
+            if (i + 1 < args.len and !std.mem.startsWith(u8, args[i + 1], "-")) {
+                skip_next = true;
+            }
             continue;
         }
 
@@ -599,15 +668,46 @@ fn sanitizeCommand(allocator: std.mem.Allocator, args: []const []const u8) ![]u8
 
 test "sanitizeCommand" {
     const allocator = std.testing.allocator;
-    const args = [_][]const u8{ "curl", "--user", "user:pass", "--token", "123", "--url=http://example.com?key=secret" };
-    // Note: our logic redacts next arg for --token, but key=value for --url (if key is sensitive).
-    // wait, --url=... key is --url. --url is not sensitive.
-    // user:pass is not flagged by simple logic unless it matches something.
-    // The current Go implementation handles --flag=value.
 
-    const res = try sanitizeCommand(allocator, &args);
-    defer allocator.free(res);
+    const TestCase = struct {
+        input: []const []const u8,
+        expected: []const u8,
+    };
 
-    // std.debug.print("Sanitized: {s}\n", .{res});
-    // Expected: curl --user user:pass --token [REDACTED] --url=http://example.com?key=secret
+    const cases = [_]TestCase{
+        .{
+            .input = &[_][]const u8{ "curl", "--user", "user:pass", "--token", "123", "--url=http://example.com?key=secret" },
+            .expected = "curl --user user:pass --token [REDACTED] --url=http://example.com?key=secret",
+        },
+        .{
+            .input = &[_][]const u8{ "app", "--PASSWORD", "supersecret" },
+            .expected = "app --PASSWORD [REDACTED]",
+        },
+        .{
+            .input = &[_][]const u8{ "app", "--API-KEY", "12345" },
+            .expected = "app --API-KEY [REDACTED]",
+        },
+        .{
+            .input = &[_][]const u8{ "app", "--db-password", "supersecret" },
+            .expected = "app --db-password [REDACTED]",
+        },
+        .{
+            .input = &[_][]const u8{ "app", "--use-password", "--verbose" },
+            .expected = "app --use-password --verbose",
+        },
+        .{
+            .input = &[_][]const u8{ "mysql", "-pSecret", "production_db" },
+            .expected = "mysql -pSecret production_db",
+        },
+        .{
+            .input = &[_][]const u8{ "--ApiKey=secret123" },
+            .expected = "--ApiKey=[REDACTED]",
+        },
+    };
+
+    for (cases) |tc| {
+        const res = try sanitizeCommand(allocator, tc.input);
+        defer allocator.free(res);
+        try std.testing.expectEqualStrings(tc.expected, res);
+    }
 }
