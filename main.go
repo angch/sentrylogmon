@@ -52,9 +52,13 @@ func main() {
 		if isTerminal {
 			printInstanceTable(instances)
 		} else {
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			enc.Encode(instances)
+			if len(instances) == 0 {
+				fmt.Println("[]")
+			} else {
+				enc := json.NewEncoder(os.Stdout)
+				enc.SetIndent("", "  ")
+				enc.Encode(instances)
+			}
 		}
 		return
 	}
@@ -64,6 +68,12 @@ func main() {
 		if err != nil {
 			log.Fatalf("Error listing instances: %v", err)
 		}
+
+		if len(instances) == 0 {
+			fmt.Println("No running instances found.")
+			return
+		}
+
 		for _, inst := range instances {
 			socketPath := filepath.Join(ipc.GetSocketDir(), fmt.Sprintf("sentrylogmon.%d.sock", inst.PID))
 			fmt.Printf("Requesting update for PID %d...\n", inst.PID)

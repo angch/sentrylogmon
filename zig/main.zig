@@ -225,72 +225,80 @@ pub fn main() !void {
 
         const stdout = std.fs.File.stdout();
         if (stdout.isTty()) {
-            var buf: [4096]u8 = undefined;
-            const w = stdout.writer(&buf);
-            var tw = tabwriter.TabWriter(@TypeOf(w.interface)).init(allocator, w.interface);
-            defer tw.deinit();
+            if (instances.items.len == 0) {
+                try stdout.writeAll("No running instances found.\n");
+            } else {
+                var buf: [4096]u8 = undefined;
+                const w = stdout.writer(&buf);
+                var tw = tabwriter.TabWriter(@TypeOf(w.interface)).init(allocator, w.interface);
+                defer tw.deinit();
 
-            try tw.print("PID\tSTARTED\tUPTIME\tMEM\tVERSION\tDETAILS\n", .{});
-            for (instances.items) |inst| {
-                const start_ts = std.fmt.parseInt(i64, inst.start_time, 10) catch 0;
-                const now = std.time.timestamp();
-                const uptime_sec = if (now > start_ts) now - start_ts else 0;
+                try tw.print("PID\tSTARTED\tUPTIME\tMEM\tVERSION\tDETAILS\n", .{});
+                for (instances.items) |inst| {
+                    const start_ts = std.fmt.parseInt(i64, inst.start_time, 10) catch 0;
+                    const now = std.time.timestamp();
+                    const uptime_sec = if (now > start_ts) now - start_ts else 0;
 
-                const started_str = formatDate(allocator, start_ts) catch "unknown";
-                defer if (!std.mem.eql(u8, started_str, "unknown")) allocator.free(started_str);
+                    const started_str = formatDate(allocator, start_ts) catch "unknown";
+                    defer if (!std.mem.eql(u8, started_str, "unknown")) allocator.free(started_str);
 
-                const uptime_str = formatDuration(allocator, uptime_sec) catch "unknown";
-                defer if (!std.mem.eql(u8, uptime_str, "unknown")) allocator.free(uptime_str);
+                    const uptime_str = formatDuration(allocator, uptime_sec) catch "unknown";
+                    defer if (!std.mem.eql(u8, uptime_str, "unknown")) allocator.free(uptime_str);
 
-                const mem_str = formatBytes(allocator, inst.memory_alloc) catch "unknown";
-                defer if (!std.mem.eql(u8, mem_str, "unknown")) allocator.free(mem_str);
+                    const mem_str = formatBytes(allocator, inst.memory_alloc) catch "unknown";
+                    defer if (!std.mem.eql(u8, mem_str, "unknown")) allocator.free(mem_str);
 
-                const details = getDetails(allocator, inst) catch "error";
-                defer if (!std.mem.eql(u8, details, "error")) allocator.free(details);
+                    const details = getDetails(allocator, inst) catch "error";
+                    defer if (!std.mem.eql(u8, details, "error")) allocator.free(details);
 
-                try tw.print("{d}\t{s}\t{s}\t{s}\t{s}\t{s}\n", .{ inst.pid, started_str, uptime_str, mem_str, inst.version, details });
-            }
-            try tw.flush();
-        } else {
-            var buf: [4096]u8 = undefined;
-            var w = stdout.writer(&buf);
-
-            try w.interface.writeAll("[");
-            for (instances.items, 0..) |inst, i| {
-                if (i > 0) try w.interface.writeAll(",");
-
-                const JsonConfig = struct {
-                    sentry: config_mod.SentryConfig,
-                    monitors: []const config_mod.MonitorConfig,
-                };
-                const JsonStatus = struct {
-                    pid: i32,
-                    start_time: []const u8,
-                    version: []const u8,
-                    config: ?JsonConfig,
-                    command_line: []const u8,
-                };
-
-                var json_config: ?JsonConfig = null;
-                if (inst.config) |c| {
-                    json_config = .{
-                        .sentry = c.sentry,
-                        .monitors = c.monitors.items,
-                    };
+                    try tw.print("{d}\t{s}\t{s}\t{s}\t{s}\t{s}\n", .{ inst.pid, started_str, uptime_str, mem_str, inst.version, details });
                 }
-
-                const json_inst = JsonStatus{
-                    .pid = inst.pid,
-                    .start_time = inst.start_time,
-                    .version = inst.version,
-                    .config = json_config,
-                    .command_line = inst.command_line,
-                };
-
-                try std.json.Stringify.value(json_inst, .{}, &w.interface);
+                try tw.flush();
             }
-            try w.interface.writeAll("]\n");
-            try w.end();
+        } else {
+            if (instances.items.len == 0) {
+                try stdout.writeAll("[]\n");
+            } else {
+                var buf: [4096]u8 = undefined;
+                var w = stdout.writer(&buf);
+
+                try w.interface.writeAll("[");
+                for (instances.items, 0..) |inst, i| {
+                    if (i > 0) try w.interface.writeAll(",");
+
+                    const JsonConfig = struct {
+                        sentry: config_mod.SentryConfig,
+                        monitors: []const config_mod.MonitorConfig,
+                    };
+                    const JsonStatus = struct {
+                        pid: i32,
+                        start_time: []const u8,
+                        version: []const u8,
+                        config: ?JsonConfig,
+                        command_line: []const u8,
+                    };
+
+                    var json_config: ?JsonConfig = null;
+                    if (inst.config) |c| {
+                        json_config = .{
+                            .sentry = c.sentry,
+                            .monitors = c.monitors.items,
+                        };
+                    }
+
+                    const json_inst = JsonStatus{
+                        .pid = inst.pid,
+                        .start_time = inst.start_time,
+                        .version = inst.version,
+                        .config = json_config,
+                        .command_line = inst.command_line,
+                    };
+
+                    try std.json.Stringify.value(json_inst, .{}, &w.interface);
+                }
+                try w.interface.writeAll("]\n");
+                try w.end();
+            }
         }
         std.process.exit(0);
     }
@@ -301,6 +309,11 @@ pub fn main() !void {
             std.process.exit(1);
         };
         defer instances.deinit(allocator);
+
+        if (instances.items.len == 0) {
+            std.debug.print("No running instances found.\n", .{});
+            std.process.exit(0);
+        }
 
         for (instances.items) |inst| {
             const socket_path = try std.fmt.allocPrint(allocator, "{s}/sentrylogmon.{d}.sock", .{ socket_dir, inst.pid });
