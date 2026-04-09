@@ -55,3 +55,4 @@ rust/Cargo.lock
 zig/zig-cache
 *~
 dev.sh
+sentrylogmon.yaml
