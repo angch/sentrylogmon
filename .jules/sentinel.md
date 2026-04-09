@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-03-17 - TOCTOU in IPC Socket and Directory Creation
+**Vulnerability:** The IPC server created Unix sockets with default umask permissions and then used `os.Chmod` to tighten them to `0600`. Similarly, `EnsureSecureDirectory` checked for symlinks using `os.Lstat` but then used `os.Chmod(path)` to fix permissions. Both of these are Time-of-Check to Time-of-Use (TOCTOU) race conditions. An attacker could connect to the socket in the brief window before `Chmod`, or swap the directory for a symlink between `Lstat` and `Chmod` to change permissions of arbitrary files.
+**Learning:** `os.Chmod` operates on paths and follows symlinks, making it inherently vulnerable to race conditions if the path's integrity was checked previously. Additionally, creating files/sockets and modifying permissions sequentially is not atomic.
+**Prevention:**
+1. To securely create files or sockets with specific permissions, temporarily set the process umask (e.g., `syscall.Umask(0177)`) before creation. Use a mutex to prevent concurrent creations from inheriting the restrictive umask.
+2. To securely modify permissions of an existing directory without following symlinks, use `os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0)` to get a file descriptor, then use `f.Chmod()`.

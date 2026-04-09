@@ -4,8 +4,10 @@ package ipc
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
+	"sync"
 	"syscall"
 )
 
@@ -38,21 +40,27 @@ func EnsureSecureDirectory(path string) error {
 		return fmt.Errorf("%s is not a directory", path)
 	}
 
-	// 3. Check permissions
-	mode := info.Mode().Perm()
-	if mode != 0700 {
-		// Attempt to fix permissions
-		if err := os.Chmod(path, 0700); err != nil {
-			return fmt.Errorf("insecure permissions on %s (%o) and failed to fix: %v", path, mode, err)
-		}
-	}
-
-	// 4. Check ownership
+	// 3. Check ownership (do this before trying to fix permissions)
 	stat, ok := info.Sys().(*syscall.Stat_t)
 	if ok {
 		uid := uint32(os.Getuid())
 		if stat.Uid != uid {
 			return fmt.Errorf("insecure ownership on %s: owned by uid %d, expected %d", path, stat.Uid, uid)
+		}
+	}
+
+	// 4. Check permissions
+	mode := info.Mode().Perm()
+	if mode != 0700 {
+		// Attempt to fix permissions securely using OpenFile with O_NOFOLLOW
+		f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+		if err != nil {
+			return fmt.Errorf("failed to open %s to fix permissions: %v", path, err)
+		}
+		defer f.Close()
+
+		if err := f.Chmod(0700); err != nil {
+			return fmt.Errorf("insecure permissions on %s (%o) and failed to fix: %v", path, mode, err)
 		}
 	}
 
@@ -62,4 +70,20 @@ func EnsureSecureDirectory(path string) error {
 // GetSocketDir returns the secure socket directory for the current user.
 func GetSocketDir() string {
 	return filepath.Join(os.TempDir(), fmt.Sprintf("sentrylogmon-%d", os.Getuid()))
+}
+
+var umaskMu sync.Mutex
+
+// ListenUnix creates a Unix domain socket listener with secure 0600 permissions
+// atomically by temporarily changing the umask.
+func ListenUnix(socketPath string) (net.Listener, error) {
+	umaskMu.Lock()
+	defer umaskMu.Unlock()
+
+	// Set umask to 0177 to ensure the created file has 0600 permissions (0777 & ~0177 = 0600).
+	// syscall.Umask returns the previous umask.
+	oldUmask := syscall.Umask(0177)
+	defer syscall.Umask(oldUmask)
+
+	return net.Listen("unix", socketPath)
 }
