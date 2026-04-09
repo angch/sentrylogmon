@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-03-22 - Multi-Language Security Consistency
+**Vulnerability:** A case-sensitive CLI redaction bypass and heuristic false-positive issue previously fixed in the Go implementation remained vulnerable in the Rust and Zig ports. This allowed sensitive command-line arguments (like `--PASSWORD`) to leak to Sentry in those specific binaries.
+**Learning:** In repositories with multiple implementations (e.g. Go, Rust, Zig) of the same application, security fixes applied to the reference implementation do not automatically propagate. Security logic involving string matching, such as heuristic redaction boundaries and case-insensitivity, requires explicit cross-port synchronization to avoid coverage gaps.
+**Prevention:**
+1. When fixing a security vulnerability in one language, explicitly review and apply the same logic to all other ports in the repository.
+2. Maintain shared or synchronized test suites (like false-positive test cases) across all implementations to ensure consistent security coverage.
