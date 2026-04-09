@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-04-09 - Cross-Platform Hardcoded IPC Path Vulnerability
+**Vulnerability:** The Rust and Zig ports used a hardcoded `/tmp/sentrylogmon` path for their IPC sockets. While the Go reference implementation correctly used `os.Getuid()`, the ports did not achieve parity, leading to a local DoS resource collision vulnerability in multi-user environments.
+**Learning:** Security fixes must be explicitly audited and ported across all language implementations to prevent security regressions or lack of parity. Hardcoded temporary paths must be dynamically namespaced (e.g., using UID).
+**Prevention:**
+1. Enforce strict parity checks for security-related file operations across all ports.
+2. Use dynamic path creation (e.g., `libc::getuid()` in Rust, `std.posix.getuid()` in Zig) for shared temporary directories.
