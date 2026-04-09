@@ -12,6 +12,11 @@ This file tracks active work items.
 
 ## Completed
 
+- [x] **JsonDetector String Extraction Optimization**
+  - Replaced `fmt.Sprintf("%v", val)` with type assertion `val.(string)` for strings in `JsonDetector.Detect`.
+  - Avoided memory allocations on the hot path.
+  - Improved performance: 3514 ns/op down to 2935 ns/op.
+  - Reduced allocations by 1 alloc/op.
 - [x] **Syslog Timestamp Optimization** (2026-02-06)
   - Implemented `ParseSyslogTimestamp` manual parser to replace regex.
   - Reduced allocations from 32B/op to 16B/op.
