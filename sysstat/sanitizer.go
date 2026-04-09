@@ -134,6 +134,27 @@ func isSensitiveKey(key string) bool {
 				if charBefore == '-' || charBefore == '_' || charBefore == '.' {
 					return true
 				}
+
+				// Check for camelCase boundary in the original key string
+				// Ensure we don't index out of bounds if strings.ToLower expanded unicode bytes
+				if matchIndex < len(key) {
+					origChar := key[matchIndex]
+					if origChar >= 'A' && origChar <= 'Z' {
+						// prevent `-pSecret` from matching by enforcing `matchIndex > 1` when it's just a camelCase letter boundary
+						if matchIndex > 1 {
+							return true
+						}
+					}
+				}
+
+				// If there's no boundary but the key contains no separators at all
+				// (e.g. `adminpassword`), we assume it's a concatenated word flag.
+				// However, we want to prevent matching `pSecret` (where `matchIndex` is 1).
+				// So we only accept it if `matchIndex` > 1 (e.g. it's a real flag like `dbpassword`)
+				// or if it doesn't look like a short flag. Also exclude values that contain `:`.
+				if matchIndex > 1 && !strings.ContainsAny(key, "-_.:") {
+					return true
+				}
 			}
 		}
 	}

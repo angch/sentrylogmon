@@ -140,6 +140,21 @@ func TestSanitizeCommand(t *testing.T) {
 			input:    []string{"--Session-Id=secret123"},
 			expected: "--Session-Id=[REDACTED]",
 		},
+		{
+			name:     "CamelCase Flag",
+			input:    []string{"myapp", "--dbPassword", "supersecret"},
+			expected: "myapp --dbPassword [REDACTED]",
+		},
+		{
+			name:     "Concatenated Flag",
+			input:    []string{"myapp", "--adminpassword", "supersecret"},
+			expected: "myapp --adminpassword [REDACTED]",
+		},
+		{
+			name:     "CamelCase Flag with equals",
+			input:    []string{"myapp", "--apiToken=123"},
+			expected: "myapp --apiToken=[REDACTED]",
+		},
 	}
 
 	for _, tt := range tests {
@@ -151,3 +166,4 @@ func TestSanitizeCommand(t *testing.T) {
 		})
 	}
 }
+// Added test cases for camelCase and concatenation

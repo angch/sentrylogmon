@@ -540,7 +540,7 @@ fn sanitizeCommand(allocator: std.mem.Allocator, args: []const []const u8) ![]u8
     });
 
     const sensitive_suffixes = [_][]const u8{
-        "password", "token", "secret", "_key",
+        "password", "token", "secret", "_key", "-key", ".key", "signature", "credential", "cookie", "session"
     };
 
     for (args, 0..) |arg, i| {
@@ -572,22 +572,121 @@ fn sanitizeCommand(allocator: std.mem.Allocator, args: []const []const u8) ![]u8
             } else {
                  for (sensitive_suffixes) |suffix| {
                      if (std.mem.endsWith(u8, lower_key, suffix)) {
-                         sensitive = true;
-                         break;
+                         if (lower_key.len == suffix.len) {
+                             sensitive = true;
+                             break;
+                         }
+
+                         if (std.mem.startsWith(u8, suffix, "-") or std.mem.startsWith(u8, suffix, "_") or std.mem.startsWith(u8, suffix, ".")) {
+                             sensitive = true;
+                             break;
+                         }
+
+                         const match_index = lower_key.len - suffix.len;
+                         if (match_index > 0) {
+                             const char_before = lower_key[match_index - 1];
+                             if (char_before == '-' or char_before == '_' or char_before == '.') {
+                                 sensitive = true;
+                                 break;
+                             }
+                             if (match_index < clean_key.len) {
+                                 const orig_char = clean_key[match_index];
+                                 if (std.ascii.isUpper(orig_char)) {
+                                     if (match_index > 1) {
+                                         sensitive = true;
+                                         break;
+                                     }
+                                 }
+                             }
+                             if (match_index > 1 and std.mem.indexOf(u8, clean_key, "-") == null and std.mem.indexOf(u8, clean_key, "_") == null and std.mem.indexOf(u8, clean_key, ".") == null and std.mem.indexOf(u8, clean_key, ":") == null) {
+                                 sensitive = true;
+                                 break;
+                             }
+                         }
                      }
                  }
             }
 
-            if (sensitive or sensitive_flags.has(key)) {
+            // Case insensitive strict flag check for key=value
+            var flag_sensitive = sensitive_flags.has(key);
+            if (!flag_sensitive) {
+                 const key_lower = try std.ascii.allocLowerString(allocator, key);
+                 defer allocator.free(key_lower);
+                 flag_sensitive = sensitive_flags.has(key_lower);
+            }
+
+            if (sensitive or flag_sensitive) {
                 try out.appendSlice(allocator, key);
                 try out.appendSlice(allocator, "=[REDACTED]");
                 continue;
             }
+
+            try out.appendSlice(allocator, arg);
+            continue;
         }
 
-        if (sensitive_flags.has(arg)) {
+        // Space separated flags
+        const lower_arg = try std.ascii.allocLowerString(allocator, arg);
+        defer allocator.free(lower_arg);
+        if (sensitive_flags.get(lower_arg)) |should_skip| {
             try out.appendSlice(allocator, arg);
-            skip_next = true;
+            if (should_skip and i + 1 < args.len) skip_next = true;
+            continue;
+        }
+
+        // 2. Check heuristics
+        const clean_arg = std.mem.trimLeft(u8, arg, "-");
+        var sensitive = false;
+        const lower_clean = try std.ascii.allocLowerString(allocator, clean_arg);
+        defer allocator.free(lower_clean);
+
+        if (std.mem.eql(u8, lower_clean, "password") or
+            std.mem.eql(u8, lower_clean, "token") or
+            std.mem.eql(u8, lower_clean, "secret") or
+            std.mem.eql(u8, lower_clean, "key") or
+            std.mem.eql(u8, lower_clean, "auth")) {
+            sensitive = true;
+        } else {
+             for (sensitive_suffixes) |suffix| {
+                 if (std.mem.endsWith(u8, lower_clean, suffix)) {
+                     if (lower_clean.len == suffix.len) {
+                         sensitive = true;
+                         break;
+                     }
+
+                     if (std.mem.startsWith(u8, suffix, "-") or std.mem.startsWith(u8, suffix, "_") or std.mem.startsWith(u8, suffix, ".")) {
+                         sensitive = true;
+                         break;
+                     }
+
+                     const match_index = lower_clean.len - suffix.len;
+                     if (match_index > 0) {
+                         const char_before = lower_clean[match_index - 1];
+                         if (char_before == '-' or char_before == '_' or char_before == '.') {
+                             sensitive = true;
+                             break;
+                         }
+                         if (match_index < clean_arg.len) {
+                             const orig_char = clean_arg[match_index];
+                             if (std.ascii.isUpper(orig_char)) {
+                                 if (match_index > 1) {
+                                     sensitive = true;
+                                     break;
+                                 }
+                             }
+                         }
+                         if (match_index > 1 and std.mem.indexOf(u8, clean_arg, "-") == null and std.mem.indexOf(u8, clean_arg, "_") == null and std.mem.indexOf(u8, clean_arg, ".") == null and std.mem.indexOf(u8, clean_arg, ":") == null) {
+                             sensitive = true;
+                             break;
+                         }
+                     }
+                 }
+             }
+        }
+
+        if (sensitive) {
+            try out.appendSlice(allocator, arg);
+            if (i + 1 < args.len and !std.mem.startsWith(u8, args[i + 1], "-")) skip_next = true;
             continue;
         }
 
