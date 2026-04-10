@@ -52,6 +52,9 @@ func main() {
 		if isTerminal {
 			printInstanceTable(instances)
 		} else {
+			if instances == nil {
+				instances = make([]ipc.StatusResponse, 0)
+			}
 			enc := json.NewEncoder(os.Stdout)
 			enc.SetIndent("", "  ")
 			enc.Encode(instances)
