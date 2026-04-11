@@ -1,3 +1,7 @@
 ## 2026-02-07 - CLI Onboarding UX
 **Learning:** UX isn't just for GUIs. Adding an `--init` flag to generate a starter configuration file significantly reduces onboarding friction for CLI tools, acting as a "helpful empty state."
 **Action:** For CLI tools with complex configuration, always look for ways to scaffold the initial setup (e.g., `init` commands, interactive wizards).
+
+## 2026-02-08 - Empty State Feedback
+**Learning:** Adding empty states to CLI tables prevents confusion when there are no items to display.
+**Action:** Always verify if a collection is empty before printing headers for a tabular output.
