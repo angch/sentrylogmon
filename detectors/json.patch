@@ -1,0 +1,51 @@
+<<<<<<< SEARCH
+type JsonDetector struct {
+	Field    string
+	Pattern  *regexp.Regexp
+
+	mu       sync.Mutex
+	lastData map[string]interface{}
+	lastLine []byte
+}
+
+func NewJsonDetector(pattern string) (*JsonDetector, error) {
+=======
+type JsonDetector struct {
+	Field      string
+	Pattern    *regexp.Regexp
+	FieldBytes []byte
+
+	mu       sync.Mutex
+	lastData map[string]interface{}
+	lastLine []byte
+}
+
+func NewJsonDetector(pattern string) (*JsonDetector, error) {
+>>>>>>> REPLACE
+<<<<<<< SEARCH
+	return &JsonDetector{
+		Field:   field,
+		Pattern: re,
+	}, nil
+}
+
+func (d *JsonDetector) Detect(line []byte) bool {
+	// Fast-path byte sequence rejection: if the line doesn't even contain the target field,
+	// skip expensive JSON unmarshaling entirely.
+	fieldBytes := []byte(`"` + d.Field + `"`)
+	if !bytes.Contains(line, fieldBytes) {
+		d.mu.Lock()
+=======
+	return &JsonDetector{
+		Field:      field,
+		Pattern:    re,
+		FieldBytes: []byte(`"` + field + `"`),
+	}, nil
+}
+
+func (d *JsonDetector) Detect(line []byte) bool {
+	// Fast-path byte sequence rejection: if the line doesn't even contain the target field,
+	// skip expensive JSON unmarshaling entirely.
+	if !bytes.Contains(line, d.FieldBytes) {
+		d.mu.Lock()
+>>>>>>> REPLACE
