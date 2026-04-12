@@ -28,6 +28,8 @@ pub const StringDetector = struct {
 pub const JsonDetector = struct {
     key: []const u8,
     value_pattern: []const u8,
+    field_str_buf: [256]u8 = undefined,
+    field_str_len: usize = 0,
 
     pub fn init(pattern: []const u8) JsonDetector {
         // Pattern format: "key:value_pattern"
@@ -39,23 +41,39 @@ pub const JsonDetector = struct {
         // Let's implement stricly "key:value". If no colon, key is pattern, value is empty (match existence)?
         // Let's go with: if no colon, key="message", value=pattern (common case).
 
+        var key: []const u8 = undefined;
+        var value_pattern: []const u8 = undefined;
+
         if (std.mem.indexOf(u8, pattern, ":")) |idx| {
-            return JsonDetector{
-                .key = pattern[0..idx],
-                .value_pattern = pattern[idx + 1 ..],
-            };
+            key = pattern[0..idx];
+            value_pattern = pattern[idx + 1 ..];
         } else {
              // Default to checking "message" field if no key specified, or fallback behavior.
              // But for safety/predictability, let's treat the whole string as key? No, that's weird.
              // Let's assume pattern is the value to search in "message" field.
-             return JsonDetector{
-                 .key = "message",
-                 .value_pattern = pattern,
-             };
+             key = "message";
+             value_pattern = pattern;
         }
+
+        var d = JsonDetector{
+            .key = key,
+            .value_pattern = value_pattern,
+        };
+        const field_str = std.fmt.bufPrint(&d.field_str_buf, "\"{s}\"", .{key}) catch "";
+        d.field_str_len = field_str.len;
+        return d;
     }
 
     pub fn match(self: JsonDetector, allocator: std.mem.Allocator, line: []const u8) bool {
+        // Fast-path byte sequence rejection: if the line doesn't even contain the target field,
+        // skip expensive JSON parsing entirely.
+        if (self.field_str_len > 0) {
+            const field_str = self.field_str_buf[0..self.field_str_len];
+            if (std.mem.indexOf(u8, line, field_str) == null) {
+                return false;
+            }
+        }
+
         // Parse JSON
         const parsed = std.json.parseFromSlice(std.json.Value, allocator, line, .{}) catch return false;
         defer parsed.deinit();

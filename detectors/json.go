@@ -11,8 +11,9 @@ import (
 )
 
 type JsonDetector struct {
-	Field    string
-	Pattern  *regexp.Regexp
+	Field      string
+	Pattern    *regexp.Regexp
+	FieldBytes []byte
 
 	mu       sync.Mutex
 	lastData map[string]interface{}
@@ -33,12 +34,23 @@ func NewJsonDetector(pattern string) (*JsonDetector, error) {
 	}
 
 	return &JsonDetector{
-		Field:   field,
-		Pattern: re,
+		Field:      field,
+		Pattern:    re,
+		FieldBytes: []byte(`"` + field + `"`),
 	}, nil
 }
 
 func (d *JsonDetector) Detect(line []byte) bool {
+	// Fast-path byte sequence rejection: if the line doesn't even contain the target field,
+	// skip expensive JSON unmarshaling entirely.
+	if !bytes.Contains(line, d.FieldBytes) {
+		d.mu.Lock()
+		d.lastData = nil
+		d.lastLine = nil
+		d.mu.Unlock()
+		return false
+	}
+
 	// We do not lock initially because Unmarshal is heavy and we don't want to block readers if possible.
 	// However, usually Detect is called before readers.
 
