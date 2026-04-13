@@ -44,3 +44,9 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2025-05-15 - Security Fix Language Parity
+**Vulnerability:** The application used a hardcoded path (`/tmp/sentrylogmon`) for its IPC socket directory in Rust and Zig ports, although Go was previously fixed. This allows a local DoS attack.
+**Learning:** Security fixes applied to one language implementation must be actively propagated to all other language ports. Overlooking ports causes security divergence and leaves the application vulnerable depending on the executed binary.
+**Prevention:**
+1. Apply security fixes across all supported language ports simultaneously.

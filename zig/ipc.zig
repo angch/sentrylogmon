@@ -115,6 +115,15 @@ fn handleConnection(allocator: std.mem.Allocator, stream: std.net.Stream, config
     }
 }
 
+pub fn getSocketDir(allocator: std.mem.Allocator) ![]const u8 {
+    if (@import("builtin").os.tag != .windows) {
+        const uid = std.posix.getuid();
+        return try std.fmt.allocPrint(allocator, "/tmp/sentrylogmon-{d}", .{uid});
+    } else {
+        return try std.fmt.allocPrint(allocator, "/tmp/sentrylogmon", .{});
+    }
+}
+
 pub fn listInstances(allocator: std.mem.Allocator, socket_dir: []const u8) !std.ArrayList(StatusResponse) {
     var list = std.ArrayList(StatusResponse).empty;
     errdefer list.deinit(allocator);
