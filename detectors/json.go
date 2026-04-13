@@ -39,6 +39,12 @@ func NewJsonDetector(pattern string) (*JsonDetector, error) {
 }
 
 func (d *JsonDetector) Detect(line []byte) bool {
+	// Fast-path rejection: if the line doesn't even contain the field name,
+	// it can't possibly match. This avoids heavy JSON unmarshaling for most lines.
+	if !bytes.Contains(line, []byte(d.Field)) {
+		return false
+	}
+
 	// We do not lock initially because Unmarshal is heavy and we don't want to block readers if possible.
 	// However, usually Detect is called before readers.
 
