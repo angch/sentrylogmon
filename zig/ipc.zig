@@ -1,6 +1,15 @@
 const std = @import("std");
 const config_mod = @import("config.zig");
 
+pub fn getSocketDir(allocator: std.mem.Allocator) ![]const u8 {
+    if (@import("builtin").os.tag != .windows) {
+        const uid = std.posix.getuid();
+        return std.fmt.allocPrint(allocator, "/tmp/sentrylogmon-{d}", .{uid});
+    } else {
+        return std.fmt.allocPrint(allocator, "/tmp/sentrylogmon", .{});
+    }
+}
+
 pub const StatusResponse = struct {
     pid: i32,
     start_time: []const u8,
