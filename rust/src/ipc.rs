@@ -12,6 +12,18 @@ use sysinfo::{Pid, System};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixListener;
 
+pub fn get_socket_dir() -> PathBuf {
+    #[cfg(unix)]
+    {
+        let uid = unsafe { libc::getuid() };
+        std::env::temp_dir().join(format!("sentrylogmon-{}", uid))
+    }
+    #[cfg(not(unix))]
+    {
+        std::env::temp_dir().join("sentrylogmon")
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StatusResponse {
     pub pid: u32,
