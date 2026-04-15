@@ -5,3 +5,6 @@
 ## 2026-01-27 - Regexp Allocation Limits
 **Learning:** Go's `regexp.FindSubmatchIndex` still allocates the `[]int` result slice. While it reduces memory usage compared to `FindSubmatch` (which allocates `[][]byte`), it doesn't eliminate allocations entirely. Zero-alloc regex capturing requires different libraries or manual parsing.
 **Action:** For hot paths requiring zero allocations, prefer manual parsing (`bytes.Index`, etc.) over `regexp` if feasible, otherwise accept the reduced but non-zero allocation of `FindSubmatchIndex`.
+## 2026-04-15 - Scanner Buffer Memory Churn
+**Learning:** bufio.Scanner buffer arrays (like `MaxScanTokenSize` which is 1MB here) allocated inside restart/stream loops or tight benchmark b.N loops cause massive memory churn and GC pressure.
+**Action:** Allocate large static buffers exactly once outside of the loop and reuse them with `scanner.Buffer()` to eliminate GC pressure.
