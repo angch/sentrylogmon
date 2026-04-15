@@ -578,14 +578,18 @@ fn sanitizeCommand(allocator: std.mem.Allocator, args: []const []const u8) ![]u8
                  }
             }
 
-            if (sensitive or sensitive_flags.has(key)) {
+            const lower_key_with_dash = try std.ascii.allocLowerString(allocator, key);
+            defer allocator.free(lower_key_with_dash);
+            if (sensitive or sensitive_flags.has(key) or sensitive_flags.has(lower_key_with_dash)) {
                 try out.appendSlice(allocator, key);
                 try out.appendSlice(allocator, "=[REDACTED]");
                 continue;
             }
         }
 
-        if (sensitive_flags.has(arg)) {
+        const lower_arg = try std.ascii.allocLowerString(allocator, arg);
+        defer allocator.free(lower_arg);
+        if (sensitive_flags.has(lower_arg)) {
             try out.appendSlice(allocator, arg);
             skip_next = true;
             continue;
@@ -610,4 +614,22 @@ test "sanitizeCommand" {
 
     // std.debug.print("Sanitized: {s}\n", .{res});
     // Expected: curl --user user:pass --token [REDACTED] --url=http://example.com?key=secret
+}
+test "sanitizeCommand extended" {
+    const allocator = std.testing.allocator;
+
+    const args1 = [_][]const u8{ "app", "--PASSWORD", "supersecret" };
+    const res1 = try sanitizeCommand(allocator, &args1);
+    defer allocator.free(res1);
+    try std.testing.expectEqualStrings("app --PASSWORD [REDACTED]", res1);
+
+    const args2 = [_][]const u8{ "app", "--API-KEY", "12345" };
+    const res2 = try sanitizeCommand(allocator, &args2);
+    defer allocator.free(res2);
+    try std.testing.expectEqualStrings("app --API-KEY [REDACTED]", res2);
+
+    const args3 = [_][]const u8{ "--ApiKey=secret123" };
+    const res3 = try sanitizeCommand(allocator, &args3);
+    defer allocator.free(res3);
+    try std.testing.expectEqualStrings("--ApiKey=[REDACTED]", res3);
 }

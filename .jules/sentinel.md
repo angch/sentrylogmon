@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-04-15 - Case-Insensitive Credential Redaction Parity
+**Vulnerability:** The Rust and Zig ports of the CLI arguments sanitizer missed the case-insensitive security fixes originally applied to the Go implementation. This caused variations of sensitive arguments (like `--PASSWORD` or `--API-KEY`) to leak credentials to Sentry.
+**Learning:** Security fixes involving string matching (like case-insensitive credential redaction) must be proactively propagated across all language ports (Go, Rust, Zig) to maintain strict security parity and avoid leaving some binaries vulnerable.
+**Prevention:**
+1. Always implement security redactions with case-insensitivity across all languages.
+2. Synchronize security test cases between language ports to ensure coverage parity.

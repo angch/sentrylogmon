@@ -48,7 +48,7 @@ pub fn sanitize_command(args: &[String]) -> String {
             }
 
             // Check if key matches a sensitive flag explicitly
-            if SENSITIVE_FLAGS.contains_key(key) {
+            if SENSITIVE_FLAGS.contains_key(key.to_lowercase().as_str()) {
                 sanitized.push(format!("{}=[REDACTED]", key));
                 continue;
             }
@@ -58,7 +58,7 @@ pub fn sanitize_command(args: &[String]) -> String {
         }
 
         // Check for sensitive flags that take the next argument
-        if let Some(&should_skip) = SENSITIVE_FLAGS.get(arg.as_str()) {
+        if let Some(&should_skip) = SENSITIVE_FLAGS.get(arg.to_lowercase().as_str()) {
             sanitized.push(arg.clone());
             if should_skip && i + 1 < args.len() {
                 skip_next = true;
@@ -127,6 +127,39 @@ mod tests {
             (
                 vec!["ssh", "-p", "2222"],
                 "ssh -p 2222", // -p is ambiguous, false in map
+            ),
+        ];
+
+        for (input, expected) in cases {
+            let input_vec: Vec<String> = input.iter().map(|s| s.to_string()).collect();
+            assert_eq!(
+                sanitize_command(&input_vec),
+                expected,
+                "Failed on input: {:?}",
+                input
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests_extended {
+    use super::*;
+
+    #[test]
+    fn test_sanitize_command_case_insensitive() {
+        let cases = vec![
+            (
+                vec!["app", "--PASSWORD", "supersecret"],
+                "app --PASSWORD [REDACTED]",
+            ),
+            (
+                vec!["app", "--API-KEY", "12345"],
+                "app --API-KEY [REDACTED]",
+            ),
+            (
+                vec!["--ApiKey=secret123"],
+                "--ApiKey=[REDACTED]",
             ),
         ];
 
