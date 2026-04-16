@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-03-01 - Rust TOCTOU via fs::create_dir_all and set_permissions
+**Vulnerability:** The Rust implementation used `fs::create_dir_all` which uses the default umask, leaving the directory momentarily vulnerable. Then it used `fs::set_permissions` which follows symlinks by default, leading to potential TOCTOU symlink attacks when securing a shared directory like `/tmp`.
+**Learning:** In Rust, Unix-specific filesystem extensions (`std::os::unix::fs::DirBuilderExt` and `OpenOptionsExt`) must be explicitly imported to set permissions atomically during directory creation (`.mode(0o700)`). To safely change permissions of an existing directory without following symlinks, use `OpenOptions` with `O_NOFOLLOW | O_DIRECTORY` and call `.set_permissions()` on the file handle.
+**Prevention:**
+1. Always use `DirBuilder` with `.mode()` instead of `create_dir_all` when secure permissions are required upon creation.
+2. Never use `fs::set_permissions` on paths in shared directories; open a handle securely with `O_NOFOLLOW` first.
