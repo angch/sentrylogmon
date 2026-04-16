@@ -291,6 +291,9 @@ func (m *Monitor) Start() {
 		go m.watchdog()
 	}
 
+	// Allocate buffer once to reduce GC pressure
+	buf := make([]byte, 0, MaxScanTokenSize)
+
 	for {
 		reader, err := m.Source.Stream()
 		if err != nil {
@@ -301,7 +304,6 @@ func (m *Monitor) Start() {
 
 		scanner := bufio.NewScanner(reader)
 		// Increase buffer size to handle long lines
-		buf := make([]byte, 0, MaxScanTokenSize)
 		scanner.Buffer(buf, MaxScanTokenSize)
 
 		var lastMetricUpdateTime time.Time
