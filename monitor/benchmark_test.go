@@ -31,11 +31,13 @@ func BenchmarkMonitorLoop(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
+	// Allocate buffer once to reduce GC pressure
+	buf := make([]byte, 0, MaxScanTokenSize)
+
 	for i := 0; i < b.N; i++ {
 		r := strings.NewReader(content)
 		scanner := bufio.NewScanner(r)
 		// Use the same buffer size logic as in monitor.go
-		buf := make([]byte, 0, MaxScanTokenSize)
 		scanner.Buffer(buf, MaxScanTokenSize)
 
 		for scanner.Scan() {
