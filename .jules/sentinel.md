@@ -44,3 +44,11 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-03-05 - Local DoS via Hardcoded IPC Path in Rust and Zig
+**Vulnerability:** The application used a hardcoded path (`/tmp/sentrylogmon`) for its IPC socket directory in Rust and Zig ports. While the directory was secured (0700 permissions), this allowed a local user to pre-create the directory and block other users from starting their own instances (Local Denial of Service) because the application would fail to secure/own the directory.
+**Learning:** Hardcoded paths in shared temporary directories (`/tmp`) create resource collision vulnerabilities in multi-user environments. Even if file permissions are secure, the *existence* of the directory owned by another user causes a conflict.
+**Prevention:**
+1. Avoid hardcoded paths in shared directories.
+2. Namespace temporary directories using the user's UID (e.g., `/tmp/app-<uid>`) or use `os.MkdirTemp`.
+3. On Windows, rely on `os.TempDir()` which is typically per-user.
