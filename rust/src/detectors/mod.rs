@@ -62,6 +62,12 @@ impl JsonDetector {
 
 impl Detector for JsonDetector {
     fn detect(&self, line: &[u8]) -> bool {
+        // Fast-path byte sequence rejection
+        let field_bytes = self.field.as_bytes();
+        if !line.windows(field_bytes.len()).any(|w| w == field_bytes) {
+            return false;
+        }
+
         let v: Value = match serde_json::from_slice(line) {
             Ok(v) => v,
             Err(_) => return false,
