@@ -44,3 +44,8 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-02-02 - User-isolated IPC directory implementation porting
+**Vulnerability:** Similar to previous finding on hardcoded `/tmp/sentrylogmon` for the Go implementation, the Rust and Zig ports also used the hardcoded `/tmp/sentrylogmon` which creates local DoS/collision vulnerabilities in multi-user environments.
+**Learning:** Hardcoded paths in `/tmp` create resource collision issues. Ensuring parity between Go, Rust, and Zig implementations requires explicitly adapting OS-specific UID fetching (e.g. `std.posix.getuid()` and `libc::getuid()`) taking into account cross-platform build constraints.
+**Prevention:** Use user-namespaced temporary directories in all ports. Ensure that conditional compilation is properly applied for different target OSes.

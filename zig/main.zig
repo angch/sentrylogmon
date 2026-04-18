@@ -210,7 +210,11 @@ pub fn main() !void {
     defer if (args.config) |c| allocator.free(c);
 
     // IPC Commands
-    const socket_dir = "/tmp/sentrylogmon";
+    const socket_dir = ipc.getSocketDir(allocator) catch |err| {
+        std.debug.print("Failed to get socket dir: {}\n", .{err});
+        std.process.exit(1);
+    };
+    defer allocator.free(socket_dir);
     if (args.status) {
         var instances = ipc.listInstances(allocator, socket_dir) catch |err| {
             std.debug.print("Error listing instances: {}\n", .{err});

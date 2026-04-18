@@ -21,6 +21,14 @@ pub struct StatusResponse {
     pub memory_alloc: u64,
 }
 
+pub fn get_socket_dir() -> PathBuf {
+    #[cfg(unix)]
+    let uid = unsafe { libc::getuid() };
+    #[cfg(not(unix))]
+    let uid = 0;
+    PathBuf::from(format!("/tmp/sentrylogmon-{}", uid))
+}
+
 pub fn ensure_secure_directory(path: &Path) -> Result<()> {
     if !path.exists() {
         fs::create_dir_all(path)
