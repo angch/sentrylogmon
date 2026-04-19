@@ -27,6 +27,7 @@ pub const StringDetector = struct {
 
 pub const JsonDetector = struct {
     key: []const u8,
+    key_bytes: []const u8,
     value_pattern: []const u8,
 
     pub fn init(pattern: []const u8) JsonDetector {
@@ -42,6 +43,7 @@ pub const JsonDetector = struct {
         if (std.mem.indexOf(u8, pattern, ":")) |idx| {
             return JsonDetector{
                 .key = pattern[0..idx],
+                .key_bytes = pattern[0..idx],
                 .value_pattern = pattern[idx + 1 ..],
             };
         } else {
@@ -50,12 +52,17 @@ pub const JsonDetector = struct {
              // Let's assume pattern is the value to search in "message" field.
              return JsonDetector{
                  .key = "message",
+                 .key_bytes = "message",
                  .value_pattern = pattern,
              };
         }
     }
 
     pub fn match(self: JsonDetector, allocator: std.mem.Allocator, line: []const u8) bool {
+        if (std.mem.indexOf(u8, line, self.key_bytes) == null) {
+            return false;
+        }
+
         // Parse JSON
         const parsed = std.json.parseFromSlice(std.json.Value, allocator, line, .{}) catch return false;
         defer parsed.deinit();
