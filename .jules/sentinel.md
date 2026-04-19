@@ -44,3 +44,8 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2025-04-19 - Fix TOCTOU vulnerability in directory creation
+**Vulnerability:** Insecure directory creation and permission setting using `fs::create_dir_all` and `fs::set_permissions` which follow symlinks, creating a TOCTOU window.
+**Learning:** Always use `DirBuilder` with explicit permissions to create directories safely, and use `OpenOptions` with `O_NOFOLLOW | O_DIRECTORY` to set permissions on open file handles securely to prevent symlink attacks.
+**Prevention:** Use OS-specific flags (`libc::O_NOFOLLOW`, `libc::O_DIRECTORY`) and safe directory builders (`fs::DirBuilder`) when handling shared temporary directories.
