@@ -44,3 +44,7 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+## 2026-02-27 - [Cross-Port Security Parity]
+**Vulnerability:** The Rust and Zig ports retained the hardcoded local IPC temp path (`/tmp/sentrylogmon`) vulnerability that was previously fixed in the Go implementation, allowing local DoS attacks in multi-user environments.
+**Learning:** When applying architectural or resource-level security fixes (like securing temp directories or handling symlink attacks), the fix must be proactively propagated across all language implementations (Go, Rust, Zig) to maintain cross-port security parity.
+**Prevention:** Treat security patches as cross-port requirements. Do not assume all ports share the same security posture unless explicitly verified.
