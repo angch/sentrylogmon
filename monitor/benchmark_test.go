@@ -31,12 +31,14 @@ func BenchmarkMonitorLoop(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
+	// Allocate buffer once, like the optimized monitor
+	scanBuf := make([]byte, 0, MaxScanTokenSize)
+
 	for i := 0; i < b.N; i++ {
 		r := strings.NewReader(content)
 		scanner := bufio.NewScanner(r)
 		// Use the same buffer size logic as in monitor.go
-		buf := make([]byte, 0, MaxScanTokenSize)
-		scanner.Buffer(buf, MaxScanTokenSize)
+		scanner.Buffer(scanBuf, MaxScanTokenSize)
 
 		for scanner.Scan() {
 			lineBytes := scanner.Bytes()
