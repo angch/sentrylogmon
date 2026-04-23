@@ -56,6 +56,14 @@ pub const JsonDetector = struct {
     }
 
     pub fn match(self: JsonDetector, allocator: std.mem.Allocator, line: []const u8) bool {
+        // Fast path check to avoid JSON parsing if the key doesn't even exist in the string
+        // We only check for the key as a string (with quotes)
+        // Since zig 0.11+ we can't easily allocate dynamically here without managing it,
+        // so we'll just check if the string contains the key without quotes as a heuristic fast-path.
+        if (std.mem.indexOf(u8, line, self.key) == null) {
+            return false;
+        }
+
         // Parse JSON
         const parsed = std.json.parseFromSlice(std.json.Value, allocator, line, .{}) catch return false;
         defer parsed.deinit();

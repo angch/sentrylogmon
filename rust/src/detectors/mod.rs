@@ -38,6 +38,7 @@ impl Detector for GenericDetector {
 pub struct JsonDetector {
     field: String,
     pattern: Regex,
+    field_bytes: Vec<u8>,
 }
 
 impl JsonDetector {
@@ -52,16 +53,34 @@ impl JsonDetector {
         let field = parts[0].trim().to_string();
         let regex_str = parts[1].trim();
         let regex = Regex::new(regex_str)?;
+        let field_bytes = format!("\"{}\"", field).into_bytes();
 
         Ok(Self {
             field,
             pattern: regex,
+            field_bytes,
         })
     }
 }
 
 impl Detector for JsonDetector {
     fn detect(&self, line: &[u8]) -> bool {
+        // Fast path check to avoid JSON unmarshalling if the key doesn't even exist in the string
+        // Use optimized twoway search if line is valid UTF-8, else fallback to windows search
+        let has_field = if let Ok(s) = std::str::from_utf8(line) {
+            if let Ok(fs) = std::str::from_utf8(&self.field_bytes) {
+                s.find(fs).is_some()
+            } else {
+                line.windows(self.field_bytes.len()).any(|w| w == self.field_bytes)
+            }
+        } else {
+            line.windows(self.field_bytes.len()).any(|w| w == self.field_bytes)
+        };
+
+        if !has_field {
+            return false;
+        }
+
         let v: Value = match serde_json::from_slice(line) {
             Ok(v) => v,
             Err(_) => return false,
