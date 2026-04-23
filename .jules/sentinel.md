@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-02-23 - Insecure IPC Directory Creation (Rust/Zig Ports)
+**Vulnerability:** The application used a hardcoded path (`/tmp/sentrylogmon`) for its IPC socket directory in the Rust and Zig ports, similar to the previous Go vulnerability. This allowed a local user to pre-create the directory and block other users from starting their own instances (Local Denial of Service).
+**Learning:** When applying architectural or resource-level security fixes (such as securing IPC directories), proactively propagate the fix across all language ports (Go, Rust, Zig) to maintain cross-port security parity, rather than assuming they share the same security posture.
+**Prevention:**
+1. Avoid hardcoded paths in shared directories across all language implementations.
+2. Propagate security fixes across all language ports.
