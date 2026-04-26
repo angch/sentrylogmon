@@ -44,3 +44,9 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+## 2025-04-26 - Cross-Port Security Parity
+**Vulnerability:** The Rust and Zig ports still used a hardcoded IPC directory (`/tmp/sentrylogmon`), introducing a Local DoS vulnerability via resource collision, despite the Go reference implementation being previously fixed.
+**Learning:** Architectural and resource-level security fixes (such as securing shared IPC directories) are rarely language-specific. They represent fundamental logic flaws that often exist across all ports of an application. Assuming other language ports are secure simply because they are implemented differently is a dangerous anti-pattern.
+**Prevention:**
+1. Proactively propagate any identified security fix across all language implementations (Go, Rust, Zig).
+2. Establish parity testing for security-sensitive paths (e.g., IPC directories).

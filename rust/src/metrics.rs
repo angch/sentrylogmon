@@ -62,20 +62,16 @@ async fn pprof_profile_handler(Query(params): Query<ProfileParams>) -> impl Into
 
         let mut body = Vec::new();
         use pprof::protos::Message;
-        profile
-            .write_to_vec(&mut body)
-            .map_err(|e| e.to_string())?;
+        profile.write_to_vec(&mut body).map_err(|e| e.to_string())?;
 
         Ok::<Vec<u8>, String>(body)
     })
     .await;
 
     match result {
-        Ok(Ok(body)) => (
-            [(header::CONTENT_TYPE, "application/octet-stream")],
-            body,
-        )
-            .into_response(),
+        Ok(Ok(body)) => {
+            ([(header::CONTENT_TYPE, "application/octet-stream")], body).into_response()
+        }
         Ok(Err(e)) => (StatusCode::INTERNAL_SERVER_ERROR, e).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     }
