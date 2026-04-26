@@ -54,7 +54,11 @@ func main() {
 		} else {
 			enc := json.NewEncoder(os.Stdout)
 			enc.SetIndent("", "  ")
-			enc.Encode(instances)
+			if len(instances) == 0 {
+				os.Stdout.Write([]byte("[]\n"))
+			} else {
+				enc.Encode(instances)
+			}
 		}
 		return
 	}
