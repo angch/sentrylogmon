@@ -578,14 +578,18 @@ fn sanitizeCommand(allocator: std.mem.Allocator, args: []const []const u8) ![]u8
                  }
             }
 
-            if (sensitive or sensitive_flags.has(key)) {
+            const lower_key_full = try std.ascii.allocLowerString(allocator, key);
+            defer allocator.free(lower_key_full);
+            if (sensitive or sensitive_flags.has(lower_key_full)) {
                 try out.appendSlice(allocator, key);
                 try out.appendSlice(allocator, "=[REDACTED]");
                 continue;
             }
         }
 
-        if (sensitive_flags.has(arg)) {
+        const lower_arg = try std.ascii.allocLowerString(allocator, arg);
+        defer allocator.free(lower_arg);
+        if (sensitive_flags.has(lower_arg)) {
             try out.appendSlice(allocator, arg);
             skip_next = true;
             continue;
