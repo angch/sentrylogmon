@@ -28,6 +28,7 @@ func BenchmarkMonitorLoop(b *testing.B) {
 		b.Fatalf("Failed to create detector: %v", err)
 	}
 
+	buf := make([]byte, 0, MaxScanTokenSize)
 	b.ResetTimer()
 	b.ReportAllocs()
 
@@ -35,7 +36,6 @@ func BenchmarkMonitorLoop(b *testing.B) {
 		r := strings.NewReader(content)
 		scanner := bufio.NewScanner(r)
 		// Use the same buffer size logic as in monitor.go
-		buf := make([]byte, 0, MaxScanTokenSize)
 		scanner.Buffer(buf, MaxScanTokenSize)
 
 		for scanner.Scan() {
