@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-04-28 - Local DoS via Hardcoded IPC Path across Language Ports
+**Vulnerability:** The application used a hardcoded path (`/tmp/sentrylogmon`) for its IPC socket directory in Rust and Zig ports, which allowed a local user to pre-create the directory and block other users from starting their instances, similar to the previously fixed issue in Go.
+**Learning:** Security fixes applied to one component (e.g., Go implementation) must be proactively propagated across all other language ports (Rust, Zig) to maintain cross-port security parity.
+**Prevention:**
+1. Use namespaced temporary directories by user ID (`/tmp/sentrylogmon-<uid>`) across all platforms.
+2. Ensure OS-specific calls like `getuid` are wrapped in conditional compilation to maintain cross-platform build compatibility.
