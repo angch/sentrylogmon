@@ -225,32 +225,36 @@ pub fn main() !void {
 
         const stdout = std.fs.File.stdout();
         if (stdout.isTty()) {
-            var buf: [4096]u8 = undefined;
-            const w = stdout.writer(&buf);
-            var tw = tabwriter.TabWriter(@TypeOf(w.interface)).init(allocator, w.interface);
-            defer tw.deinit();
+            if (instances.items.len == 0) {
+                try stdout.writeAll("No running instances found.\n");
+            } else {
+                var buf: [4096]u8 = undefined;
+                const w = stdout.writer(&buf);
+                var tw = tabwriter.TabWriter(@TypeOf(w.interface)).init(allocator, w.interface);
+                defer tw.deinit();
 
-            try tw.print("PID\tSTARTED\tUPTIME\tMEM\tVERSION\tDETAILS\n", .{});
-            for (instances.items) |inst| {
-                const start_ts = std.fmt.parseInt(i64, inst.start_time, 10) catch 0;
-                const now = std.time.timestamp();
-                const uptime_sec = if (now > start_ts) now - start_ts else 0;
+                try tw.print("PID\tSTARTED\tUPTIME\tMEM\tVERSION\tDETAILS\n", .{});
+                for (instances.items) |inst| {
+                    const start_ts = std.fmt.parseInt(i64, inst.start_time, 10) catch 0;
+                    const now = std.time.timestamp();
+                    const uptime_sec = if (now > start_ts) now - start_ts else 0;
 
-                const started_str = formatDate(allocator, start_ts) catch "unknown";
-                defer if (!std.mem.eql(u8, started_str, "unknown")) allocator.free(started_str);
+                    const started_str = formatDate(allocator, start_ts) catch "unknown";
+                    defer if (!std.mem.eql(u8, started_str, "unknown")) allocator.free(started_str);
 
-                const uptime_str = formatDuration(allocator, uptime_sec) catch "unknown";
-                defer if (!std.mem.eql(u8, uptime_str, "unknown")) allocator.free(uptime_str);
+                    const uptime_str = formatDuration(allocator, uptime_sec) catch "unknown";
+                    defer if (!std.mem.eql(u8, uptime_str, "unknown")) allocator.free(uptime_str);
 
-                const mem_str = formatBytes(allocator, inst.memory_alloc) catch "unknown";
-                defer if (!std.mem.eql(u8, mem_str, "unknown")) allocator.free(mem_str);
+                    const mem_str = formatBytes(allocator, inst.memory_alloc) catch "unknown";
+                    defer if (!std.mem.eql(u8, mem_str, "unknown")) allocator.free(mem_str);
 
-                const details = getDetails(allocator, inst) catch "error";
-                defer if (!std.mem.eql(u8, details, "error")) allocator.free(details);
+                    const details = getDetails(allocator, inst) catch "error";
+                    defer if (!std.mem.eql(u8, details, "error")) allocator.free(details);
 
-                try tw.print("{d}\t{s}\t{s}\t{s}\t{s}\t{s}\n", .{ inst.pid, started_str, uptime_str, mem_str, inst.version, details });
+                    try tw.print("{d}\t{s}\t{s}\t{s}\t{s}\t{s}\n", .{ inst.pid, started_str, uptime_str, mem_str, inst.version, details });
+                }
+                try tw.flush();
             }
-            try tw.flush();
         } else {
             var buf: [4096]u8 = undefined;
             var w = stdout.writer(&buf);
