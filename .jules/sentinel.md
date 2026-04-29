@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2025-02-21 - Propagation of IPC socket path security fixes
+**Vulnerability:** The hardcoded IPC socket directory (`/tmp/sentrylogmon`) vulnerability was only fixed in the Go port, leaving the Rust and Zig ports vulnerable to Local Denial of Service.
+**Learning:** Security fixes involving architectural or resource-level configuration (like IPC socket paths) must be explicitly propagated across all language ports (Go, Rust, Zig). Assuming one language port has been secured does not guarantee the others have identical security postures.
+**Prevention:**
+1. Proactively inspect all language implementations for the same vulnerable pattern when fixing an architectural issue.
+2. Propagate fixes uniformly across Go, Rust, and Zig to maintain cross-port security parity.
