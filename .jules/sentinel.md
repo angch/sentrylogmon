@@ -44,3 +44,11 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-05-01 - Case-Sensitive Redaction & Space-Separated Heuristic Bypass in Rust/Zig
+**Vulnerability:** The Rust and Zig ports of the CLI sanitizer had incomplete logic compared to Go. They failed to lowercase exact flag matches, allowing bypasses like `--PASSWORD`. They also missed heuristic matching for space-separated flags (e.g. `--db_password secret`), only checking the explicit mapping, and had an incomplete list of suffixes (missing `.key`, `-key`, etc.).
+**Learning:** When porting security logic across languages, ensure that the precise evaluation order (lowercasing, strict matching vs heuristic suffix matching), format variants (key=value vs key value), and constant definitions (like suffix lists) are fully replicated.
+**Prevention:**
+1. Ensure `to_lowercase` is applied to all map lookups for security checks.
+2. Mirror full heuristic logic for space-separated args, ensuring false-positives are managed by checking the subsequent arg.
+3. Verify that security constants (e.g. wordlists) are identical across ports.

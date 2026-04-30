@@ -540,7 +540,7 @@ fn sanitizeCommand(allocator: std.mem.Allocator, args: []const []const u8) ![]u8
     });
 
     const sensitive_suffixes = [_][]const u8{
-        "password", "token", "secret", "_key",
+        "password", "token", "secret", "_key", "-key", ".key", "signature", "credential", "cookie", "session",
     };
 
     for (args, 0..) |arg, i| {
@@ -578,16 +578,64 @@ fn sanitizeCommand(allocator: std.mem.Allocator, args: []const []const u8) ![]u8
                  }
             }
 
-            if (sensitive or sensitive_flags.has(key)) {
+            const lower_full_key = try std.ascii.allocLowerString(allocator, key);
+            defer allocator.free(lower_full_key);
+
+            if (sensitive or sensitive_flags.has(lower_full_key)) {
                 try out.appendSlice(allocator, key);
                 try out.appendSlice(allocator, "=[REDACTED]");
                 continue;
             }
+
+            try out.appendSlice(allocator, arg);
+            continue;
         }
 
-        if (sensitive_flags.has(arg)) {
+        const lower_arg = try std.ascii.allocLowerString(allocator, arg);
+        defer allocator.free(lower_arg);
+
+        if (sensitive_flags.has(lower_arg)) {
             try out.appendSlice(allocator, arg);
             skip_next = true;
+            continue;
+        }
+
+        const clean_arg = std.mem.trimLeft(u8, lower_arg, "-");
+        var heuristic_match = false;
+        if (std.mem.eql(u8, clean_arg, "password") or
+            std.mem.eql(u8, clean_arg, "token") or
+            std.mem.eql(u8, clean_arg, "secret") or
+            std.mem.eql(u8, clean_arg, "key") or
+            std.mem.eql(u8, clean_arg, "auth")) {
+            heuristic_match = true;
+        } else {
+             for (sensitive_suffixes) |suffix| {
+                 if (std.mem.endsWith(u8, clean_arg, suffix)) {
+                     if (clean_arg.len == suffix.len) {
+                         heuristic_match = true;
+                         break;
+                     }
+                     if (suffix[0] == '-' or suffix[0] == '_' or suffix[0] == '.') {
+                         heuristic_match = true;
+                         break;
+                     }
+                     const match_idx = clean_arg.len - suffix.len;
+                     if (match_idx > 0) {
+                         const char_before = clean_arg[match_idx - 1];
+                         if (char_before == '-' or char_before == '_' or char_before == '.') {
+                             heuristic_match = true;
+                             break;
+                         }
+                     }
+                 }
+             }
+        }
+
+        if (heuristic_match) {
+            try out.appendSlice(allocator, arg);
+            if (i + 1 < args.len and !(args[i + 1].len > 0 and args[i + 1][0] == '-')) {
+                skip_next = true;
+            }
             continue;
         }
 
