@@ -38,6 +38,7 @@ impl Detector for GenericDetector {
 pub struct JsonDetector {
     field: String,
     pattern: Regex,
+    field_bytes: Vec<u8>,
 }
 
 impl JsonDetector {
@@ -54,6 +55,7 @@ impl JsonDetector {
         let regex = Regex::new(regex_str)?;
 
         Ok(Self {
+            field_bytes: field.clone().into_bytes(),
             field,
             pattern: regex,
         })
@@ -62,6 +64,10 @@ impl JsonDetector {
 
 impl Detector for JsonDetector {
     fn detect(&self, line: &[u8]) -> bool {
+        if !self.field_bytes.is_empty() && !line.windows(self.field_bytes.len()).any(|w| w == self.field_bytes) {
+            return false;
+        }
+
         let v: Value = match serde_json::from_slice(line) {
             Ok(v) => v,
             Err(_) => return false,
