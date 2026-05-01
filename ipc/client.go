@@ -28,7 +28,7 @@ func ListInstances(socketDir string) ([]StatusResponse, error) {
 		return nil, err
 	}
 
-	var instances []StatusResponse
+	instances := []StatusResponse{}
 
 	for _, socketPath := range matches {
 		func() {
