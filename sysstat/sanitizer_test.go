@@ -140,6 +140,11 @@ func TestSanitizeCommand(t *testing.T) {
 			input:    []string{"--Session-Id=secret123"},
 			expected: "--Session-Id=[REDACTED]",
 		},
+		{
+			name:     "Case mismatch for sensitive flag with equals 3",
+			input:    []string{"--DB-PASSWORD=secret"},
+			expected: "--DB-PASSWORD=[REDACTED]",
+		},
 	}
 
 	for _, tt := range tests {

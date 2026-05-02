@@ -28,6 +28,8 @@ var sensitiveSuffixes = []string{
 	"credential",
 	"cookie",
 	"session",
+	"-key",
+	".key",
 }
 
 // SanitizeCommand joins command arguments into a string, redacting sensitive information.
@@ -89,15 +91,17 @@ func SanitizeCommand(args []string) string {
 
 		// 2. Check heuristics (suffix matching)
 		// Clean the arg (remove leading dashes)
-		cleanArg := strings.TrimLeft(arg, "-")
-		if isSensitiveKey(cleanArg) {
-			sanitized = append(sanitized, arg)
-			// Only redact next if it doesn't look like another flag
-			// This prevents false positives for boolean flags (e.g., --enable-password-auth --verbose)
-			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-				skipNext = true
+		if strings.HasPrefix(arg, "-") {
+			cleanArg := strings.TrimLeft(arg, "-")
+			if isSensitiveKey(cleanArg) {
+				sanitized = append(sanitized, arg)
+				// Only redact next if it doesn't look like another flag
+				// This prevents false positives for boolean flags (e.g., --enable-password-auth --verbose)
+				if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+					skipNext = true
+				}
+				continue
 			}
-			continue
 		}
 
 		sanitized = append(sanitized, arg)
@@ -123,6 +127,10 @@ func isSensitiveKey(key string) bool {
 			}
 
 			// If the suffix itself starts with a separator, it implies a boundary
+			if suffix[0] == '-' || suffix[0] == '_' || suffix[0] == '.' {
+				return true
+			}
+
 			if suffix[0] == '-' || suffix[0] == '_' || suffix[0] == '.' {
 				return true
 			}
