@@ -540,7 +540,8 @@ fn sanitizeCommand(allocator: std.mem.Allocator, args: []const []const u8) ![]u8
     });
 
     const sensitive_suffixes = [_][]const u8{
-        "password", "token", "secret", "_key",
+        "password", "token", "secret", "_key", "-key", ".key",
+        "signature", "credential", "cookie", "session",
     };
 
     for (args, 0..) |arg, i| {
@@ -572,8 +573,22 @@ fn sanitizeCommand(allocator: std.mem.Allocator, args: []const []const u8) ![]u8
             } else {
                  for (sensitive_suffixes) |suffix| {
                      if (std.mem.endsWith(u8, lower_key, suffix)) {
-                         sensitive = true;
-                         break;
+                         if (lower_key.len == suffix.len) {
+                             sensitive = true;
+                             break;
+                         }
+                         if (suffix[0] == '-' or suffix[0] == '_' or suffix[0] == '.') {
+                             sensitive = true;
+                             break;
+                         }
+                         const match_index = lower_key.len - suffix.len;
+                         if (match_index > 0) {
+                             const char_before = lower_key[match_index - 1];
+                             if (char_before == '-' or char_before == '_' or char_before == '.') {
+                                 sensitive = true;
+                                 break;
+                             }
+                         }
                      }
                  }
             }
@@ -585,10 +600,58 @@ fn sanitizeCommand(allocator: std.mem.Allocator, args: []const []const u8) ![]u8
             }
         }
 
-        if (sensitive_flags.has(arg)) {
+        const lower_arg = try std.ascii.allocLowerString(allocator, arg);
+        defer allocator.free(lower_arg);
+
+        if (sensitive_flags.has(lower_arg)) {
             try out.appendSlice(allocator, arg);
-            skip_next = true;
+            if (i + 1 < args.len) {
+                skip_next = true;
+            }
             continue;
+        }
+
+        if (std.mem.startsWith(u8, arg, "-")) {
+            const clean_arg = std.mem.trimLeft(u8, arg, "-");
+            const lower_clean_arg = try std.ascii.allocLowerString(allocator, clean_arg);
+            defer allocator.free(lower_clean_arg);
+
+            var arg_sensitive = false;
+            if (std.mem.eql(u8, lower_clean_arg, "password") or
+                std.mem.eql(u8, lower_clean_arg, "token") or
+                std.mem.eql(u8, lower_clean_arg, "secret") or
+                std.mem.eql(u8, lower_clean_arg, "key") or
+                std.mem.eql(u8, lower_clean_arg, "auth")) {
+                arg_sensitive = true;
+            } else {
+                for (sensitive_suffixes) |suffix| {
+                    if (std.mem.endsWith(u8, lower_clean_arg, suffix)) {
+                        if (lower_clean_arg.len == suffix.len) {
+                            arg_sensitive = true;
+                            break;
+                        }
+                        if (suffix[0] == '-' or suffix[0] == '_' or suffix[0] == '.') {
+                            arg_sensitive = true;
+                            break;
+                        }
+                        const match_index = lower_clean_arg.len - suffix.len;
+                        if (match_index > 0) {
+                            const char_before = lower_clean_arg[match_index - 1];
+                            if (char_before == '-' or char_before == '_' or char_before == '.') {
+                                arg_sensitive = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            if (arg_sensitive) {
+                try out.appendSlice(allocator, arg);
+                if (i + 1 < args.len and !std.mem.startsWith(u8, args[i+1], "-")) {
+                    skip_next = true;
+                }
+                continue;
+            }
         }
 
         try out.appendSlice(allocator, arg);

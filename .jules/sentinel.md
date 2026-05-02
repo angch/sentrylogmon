@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-05-02 - Unifying CLI Argument Redaction Formats
+**Vulnerability:** The command-line sanitizer correctly implemented heuristic redaction (like checking for "-key" suffixes and ignoring "--boolean-flag") for arguments structured as `--key=value`, but was missing equivalent protections for space-separated arguments (`--key value`) across Rust and Zig ports, and had mismatched suffix sets. This caused keys like `--PASSWORD secret` or `--ssh-key value` to leak in Rust and Zig, while Go correctly redacted them.
+**Learning:** Heuristic security logic (suffix matching, word boundaries) applied to parsed structures must be consistently applied to all input shapes. Implementing complex protections for one format (equals-separated) while falling back to a simplistic map lookup for another (space-separated) creates a dangerous false sense of security.
+**Prevention:**
+1. Unified logic: The same boundary-checking logic and suffix allow/block lists should be applied regardless of how arguments are separated (space vs. equals).
+2. Cross-port parity: When propagating security fixes across multiple language implementations, ensure all data structures (e.g., list of suffixes) are identical.
