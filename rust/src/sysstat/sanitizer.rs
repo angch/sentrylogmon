@@ -48,7 +48,7 @@ pub fn sanitize_command(args: &[String]) -> String {
             }
 
             // Check if key matches a sensitive flag explicitly
-            if SENSITIVE_FLAGS.contains_key(key) {
+            if SENSITIVE_FLAGS.contains_key(key.to_lowercase().as_str()) {
                 sanitized.push(format!("{}=[REDACTED]", key));
                 continue;
             }
@@ -58,12 +58,25 @@ pub fn sanitize_command(args: &[String]) -> String {
         }
 
         // Check for sensitive flags that take the next argument
-        if let Some(&should_skip) = SENSITIVE_FLAGS.get(arg.as_str()) {
+        let lower_arg = arg.to_lowercase();
+        if let Some(&should_skip) = SENSITIVE_FLAGS.get(lower_arg.as_str()) {
             sanitized.push(arg.clone());
             if should_skip && i + 1 < args.len() {
                 skip_next = true;
             }
             continue;
+        }
+
+        // Check heuristics (suffix matching) like Go
+        if arg.starts_with('-') {
+            let clean_arg = arg.trim_start_matches('-');
+            if is_sensitive_key(clean_arg) {
+                sanitized.push(arg.clone());
+                if i + 1 < args.len() && !args[i+1].starts_with('-') {
+                    skip_next = true;
+                }
+                continue;
+            }
         }
 
         sanitized.push(arg.clone());
