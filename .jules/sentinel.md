@@ -44,3 +44,8 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-05-04 - Case-Sensitivity and Heuristic Bypasses in Sanitization
+**Vulnerability:** The CLI argument redaction allowed bypasses via mixed-casing (e.g., `--PASSWORD` bypasses `--password` blocklist) and incorrectly applied suffix-based redaction heuristics to normal space-separated strings (e.g., `PASSWORD` caused the next normal argument to be redacted or deleted).
+**Learning:** Hardcoded dictionaries for flag matching must always be checked using case-insensitive strings to avoid bypasses. Furthermore, heuristics targeting flag names must strictly verify the presence of flag indicators (like a leading `-`) before attempting suffix matches, to prevent malicious mutations of normal arguments into sensitive flags.
+**Prevention:** Use `.to_lowercase()` or `std.ascii.allocLowerString` prior to checking sensitive flag blocklists. Always wrap broad heuristic checks like `trim_start_matches('-')` within an explicit `arg.starts_with('-')` guard.
