@@ -56,6 +56,11 @@ pub const JsonDetector = struct {
     }
 
     pub fn match(self: JsonDetector, allocator: std.mem.Allocator, line: []const u8) bool {
+        // Fast path: avoid expensive JSON parsing if key is not present
+        if (std.mem.indexOf(u8, line, self.key) == null) {
+            return false;
+        }
+
         // Parse JSON
         const parsed = std.json.parseFromSlice(std.json.Value, allocator, line, .{}) catch return false;
         defer parsed.deinit();
