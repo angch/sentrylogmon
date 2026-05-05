@@ -5,3 +5,7 @@
 ## 2026-01-27 - Regexp Allocation Limits
 **Learning:** Go's `regexp.FindSubmatchIndex` still allocates the `[]int` result slice. While it reduces memory usage compared to `FindSubmatch` (which allocates `[][]byte`), it doesn't eliminate allocations entirely. Zero-alloc regex capturing requires different libraries or manual parsing.
 **Action:** For hot paths requiring zero allocations, prefer manual parsing (`bytes.Index`, etc.) over `regexp` if feasible, otherwise accept the reduced but non-zero allocation of `FindSubmatchIndex`.
+
+## 2026-05-05 - JSON Parsing Fast Path
+**Learning:** In log processing hot paths, heavy JSON parsing (`json.Unmarshal`, `serde_json`, `std.json`) introduces significant CPU and allocation overhead for non-matching lines. A fast-path string or byte-sequence rejection (e.g., `bytes.Contains` or `slice.windows`) before JSON parsing dramatically reduces latency and memory churn.
+**Action:** Always apply fast-path byte sequence rejection before expensive JSON parsing in log processing hot paths, ensuring the optimization is replicated across all language ports (Go, Rust, Zig) to maintain performance parity.
