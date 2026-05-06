@@ -172,6 +172,7 @@ type Monitor struct {
 	metricSentrySent     prometheus.Counter
 	metricSentryDropped  prometheus.Counter
 	metricLastActivity   prometheus.Gauge
+	metricProcessLag     prometheus.Gauge
 
 	// Buffering
 	buffer           strings.Builder
@@ -214,6 +215,7 @@ func New(ctx context.Context, source sources.LogSource, detector detectors.Detec
 	m.metricSentrySent = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "sent"})
 	m.metricSentryDropped = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "dropped"})
 	m.metricLastActivity = metrics.LastActivityTimestamp.With(prometheus.Labels{"source": source.Name()})
+	m.metricProcessLag = metrics.ProcessLagSeconds.With(prometheus.Labels{"source": source.Name()})
 
 	// Initialize Sentry Hub
 	if opts.SentryDSN != "" {
@@ -318,6 +320,21 @@ func (m *Monitor) Start() {
 			}
 
 			lineBytes := scanner.Bytes()
+
+			// Extract timestamp and calculate process lag
+			var timestamp float64
+			var tsOk bool
+			if extractor, isExtractor := m.Detector.(detectors.TimestampExtractor); isExtractor {
+				timestamp, _, tsOk = extractor.ExtractTimestamp(lineBytes)
+			}
+			if !tsOk {
+				timestamp, _ = extractTimestamp(lineBytes)
+			}
+			if timestamp > 0 {
+				lag := float64(now.Unix()) - timestamp
+				m.metricProcessLag.Set(lag)
+			}
+
 			if m.Detector.Detect(lineBytes) {
 				if m.ExclusionDetector != nil && m.ExclusionDetector.Detect(lineBytes) {
 					if m.Verbose {
