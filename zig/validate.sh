@@ -54,7 +54,7 @@ else
 fi
 
 # Check for pattern matching
-if grep -q "containsPattern" main.zig; then
+if grep -q "createDetector" main.zig; then
     echo "✓ Pattern matching function found"
 else
     echo "✗ Pattern matching function not found"
