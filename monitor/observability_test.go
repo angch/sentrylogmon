@@ -55,3 +55,35 @@ func TestLastActivityMetric(t *testing.T) {
 		t.Errorf("Metric value in future. Got %v, expected ~%v", val, now)
 	}
 }
+
+func TestMonitorLagMetric(t *testing.T) {
+	metrics.MonitorLag.Reset()
+
+	// Use a relatively recent timestamp for testing
+	nowStr := time.Now().Add(-5 * time.Second).Format("2006-01-02T15:04:05Z")
+	input := nowStr + " [error] test message\n"
+	source := &MockSource{content: input}
+	detector := &MockDetector{}
+
+	mon, err := New(context.Background(), source, detector, nil, Options{})
+	if err != nil {
+		t.Fatalf("Failed to create monitor: %v", err)
+	}
+	mon.StopOnEOF = true
+
+	mon.Start()
+
+	m := metrics.MonitorLag.With(prometheus.Labels{"source": "mock"})
+	var metric dto.Metric
+	err = m.Write(&metric)
+	if err != nil {
+		t.Fatalf("Failed to read metric: %v", err)
+	}
+
+	val := metric.GetGauge().GetValue()
+
+	// Lag should be around 5 seconds
+	if val < 4 || val > 6 {
+		t.Errorf("Metric value for lag is not 5. Got %v", val)
+	}
+}
