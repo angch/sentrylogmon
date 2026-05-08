@@ -58,12 +58,24 @@ pub fn sanitize_command(args: &[String]) -> String {
         }
 
         // Check for sensitive flags that take the next argument
-        if let Some(&should_skip) = SENSITIVE_FLAGS.get(arg.as_str()) {
+        let lower_arg = arg.to_lowercase();
+        if let Some(&should_skip) = SENSITIVE_FLAGS.get(lower_arg.as_str()) {
             sanitized.push(arg.clone());
             if should_skip && i + 1 < args.len() {
                 skip_next = true;
             }
             continue;
+        }
+
+        if arg.starts_with('-') {
+            let clean_arg = arg.trim_start_matches('-');
+            if is_sensitive_key(clean_arg) {
+                sanitized.push(arg.clone());
+                if i + 1 < args.len() && !args[i + 1].starts_with('-') {
+                    skip_next = true;
+                }
+                continue;
+            }
         }
 
         sanitized.push(arg.clone());
@@ -127,6 +139,10 @@ mod tests {
             (
                 vec!["ssh", "-p", "2222"],
                 "ssh -p 2222", // -p is ambiguous, false in map
+            ),
+            (
+                vec!["echo", "password", "mysecret"],
+                "echo password mysecret",
             ),
         ];
 

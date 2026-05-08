@@ -140,6 +140,11 @@ func TestSanitizeCommand(t *testing.T) {
 			input:    []string{"--Session-Id=secret123"},
 			expected: "--Session-Id=[REDACTED]",
 		},
+		{
+			name:     "Positional argument false positive",
+			input:    []string{"echo", "password", "mysecret"},
+			expected: "echo password mysecret",
+		},
 	}
 
 	for _, tt := range tests {

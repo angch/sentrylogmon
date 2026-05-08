@@ -585,10 +585,45 @@ fn sanitizeCommand(allocator: std.mem.Allocator, args: []const []const u8) ![]u8
             }
         }
 
-        if (sensitive_flags.has(arg)) {
+        const lower_arg = try std.ascii.allocLowerString(allocator, arg);
+        defer allocator.free(lower_arg);
+
+        if (sensitive_flags.has(lower_arg)) {
             try out.appendSlice(allocator, arg);
-            skip_next = true;
+            if (i + 1 < args.len and !std.mem.startsWith(u8, args[i + 1], "-")) {
+                skip_next = true;
+            }
             continue;
+        }
+
+        if (std.mem.startsWith(u8, arg, "-")) {
+            const clean_arg = std.mem.trimLeft(u8, arg, "-");
+            const lower_clean = try std.ascii.allocLowerString(allocator, clean_arg);
+            defer allocator.free(lower_clean);
+
+            var sensitive = false;
+            if (std.mem.eql(u8, lower_clean, "password") or
+                std.mem.eql(u8, lower_clean, "token") or
+                std.mem.eql(u8, lower_clean, "secret") or
+                std.mem.eql(u8, lower_clean, "key") or
+                std.mem.eql(u8, lower_clean, "auth")) {
+                sensitive = true;
+            } else {
+                 for (sensitive_suffixes) |suffix| {
+                     if (std.mem.endsWith(u8, lower_clean, suffix)) {
+                         sensitive = true;
+                         break;
+                     }
+                 }
+            }
+
+            if (sensitive) {
+                try out.appendSlice(allocator, arg);
+                if (i + 1 < args.len and !std.mem.startsWith(u8, args[i + 1], "-")) {
+                    skip_next = true;
+                }
+                continue;
+            }
         }
 
         try out.appendSlice(allocator, arg);
@@ -600,14 +635,11 @@ fn sanitizeCommand(allocator: std.mem.Allocator, args: []const []const u8) ![]u8
 test "sanitizeCommand" {
     const allocator = std.testing.allocator;
     const args = [_][]const u8{ "curl", "--user", "user:pass", "--token", "123", "--url=http://example.com?key=secret" };
-    // Note: our logic redacts next arg for --token, but key=value for --url (if key is sensitive).
-    // wait, --url=... key is --url. --url is not sensitive.
-    // user:pass is not flagged by simple logic unless it matches something.
-    // The current Go implementation handles --flag=value.
-
     const res = try sanitizeCommand(allocator, &args);
     defer allocator.free(res);
 
-    // std.debug.print("Sanitized: {s}\n", .{res});
-    // Expected: curl --user user:pass --token [REDACTED] --url=http://example.com?key=secret
+    const args2 = [_][]const u8{ "echo", "password", "mysecret" };
+    const res2 = try sanitizeCommand(allocator, &args2);
+    defer allocator.free(res2);
+    try std.testing.expectEqualStrings("echo password mysecret", res2);
 }

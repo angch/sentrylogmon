@@ -44,3 +44,8 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## YYYY-MM-DD - Fix CLI argument redaction bypass and false positives
+**Vulnerability:** The `sanitizeCommand` heuristic space-separated CLI argument redaction unconditionally stripped dashes from all arguments, potentially causing ordinary positional arguments (like `password`) to falsely trigger redaction of the following word, and failing to handle case-insensitive checks on sensitive flags causing bypasses.
+**Learning:** When implementing heuristic space-separated CLI argument redaction, ensure that trimming leading dashes is strictly guarded by checking if the argument actually starts with a dash (`if arg.starts_with('-')`), and always apply case-insensitivity against the flag match list.
+**Prevention:** Strictly type-check and prefix-check arguments before processing them as flags in CLI sanitization logic.
