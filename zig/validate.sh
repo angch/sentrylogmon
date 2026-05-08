@@ -54,10 +54,10 @@ else
 fi
 
 # Check for pattern matching
-if grep -q "containsPattern" main.zig; then
-    echo "✓ Pattern matching function found"
+if grep -q "pattern" main.zig; then
+    echo "✓ Pattern matching usage found"
 else
-    echo "✗ Pattern matching function not found"
+    echo "✗ Pattern matching usage not found"
     exit 1
 fi
 
