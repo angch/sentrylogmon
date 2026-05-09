@@ -4,7 +4,7 @@ This file tracks active work items.
 
 ## Wish List
 
-- [ ] **Prometheus Metrics for Monitor Lag**: Track time difference between log timestamp and processing time.
+- [x] **Prometheus Metrics for Monitor Lag**: Track time difference between log timestamp and processing time.
 - [ ] **Dynamic Configuration Reloading**: Support full config reload without restart (add/remove monitors).
 - [ ] **Structured Logging**: support JSON output for the agent's own logs.
 - [ ] **Health Check Endpoint**: Dedicated /healthz endpoint checking internal component status.
