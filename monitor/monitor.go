@@ -172,6 +172,7 @@ type Monitor struct {
 	metricSentrySent     prometheus.Counter
 	metricSentryDropped  prometheus.Counter
 	metricLastActivity   prometheus.Gauge
+	metricProcessingLag  prometheus.Gauge
 
 	// Buffering
 	buffer           strings.Builder
@@ -214,6 +215,7 @@ func New(ctx context.Context, source sources.LogSource, detector detectors.Detec
 	m.metricSentrySent = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "sent"})
 	m.metricSentryDropped = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "dropped"})
 	m.metricLastActivity = metrics.LastActivityTimestamp.With(prometheus.Labels{"source": source.Name()})
+	m.metricProcessingLag = metrics.ProcessingLagSeconds.With(prometheus.Labels{"source": source.Name()})
 
 	// Initialize Sentry Hub
 	if opts.SentryDSN != "" {
@@ -312,12 +314,18 @@ func (m *Monitor) Start() {
 			// Update lastReadTime for inactivity detection
 			atomic.StoreInt64(&m.lastReadTime, now.UnixNano())
 
+			lineBytes := scanner.Bytes()
+
 			if now.Sub(lastMetricUpdateTime) > 1*time.Second {
 				m.metricLastActivity.Set(float64(now.Unix()))
+				if timestamp, _ := extractTimestamp(lineBytes); timestamp > 0 {
+					lag := float64(now.Unix()) - timestamp
+					if lag >= 0 {
+						m.metricProcessingLag.Set(lag)
+					}
+				}
 				lastMetricUpdateTime = now
 			}
-
-			lineBytes := scanner.Bytes()
 			if m.Detector.Detect(lineBytes) {
 				if m.ExclusionDetector != nil && m.ExclusionDetector.Detect(lineBytes) {
 					if m.Verbose {
