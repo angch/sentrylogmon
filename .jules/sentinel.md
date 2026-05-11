@@ -44,3 +44,8 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2024-05-24 - Case-insensitive flag redaction in CLI command sanitizer
+**Vulnerability:** The `sanitizeCommand` implementations across Rust and Zig only redacted explicitly defined sensitive flags (e.g. `--password`) if they exactly matched the lowercased map keys. If the argument was mixed case (e.g. `--PASSWORD`), the check bypassed the static string map, leaving the next argument (the actual password) unredacted in process logs or sysstat output.
+**Learning:** Hardcoded literal maps/sets of sensitive fields must be matched case-insensitively when dealing with user-controlled input such as CLI arguments, as some parsers are lenient or users may bypass them maliciously.
+**Prevention:** Always downcase CLI flags before looking them up in an exact-match blocklist or allowlist.
