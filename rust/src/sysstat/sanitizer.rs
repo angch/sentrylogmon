@@ -48,7 +48,7 @@ pub fn sanitize_command(args: &[String]) -> String {
             }
 
             // Check if key matches a sensitive flag explicitly
-            if SENSITIVE_FLAGS.contains_key(key) {
+            if SENSITIVE_FLAGS.contains_key(key.to_lowercase().as_str()) {
                 sanitized.push(format!("{}=[REDACTED]", key));
                 continue;
             }
@@ -58,7 +58,7 @@ pub fn sanitize_command(args: &[String]) -> String {
         }
 
         // Check for sensitive flags that take the next argument
-        if let Some(&should_skip) = SENSITIVE_FLAGS.get(arg.as_str()) {
+        if let Some(&should_skip) = SENSITIVE_FLAGS.get(arg.to_lowercase().as_str()) {
             sanitized.push(arg.clone());
             if should_skip && i + 1 < args.len() {
                 skip_next = true;
