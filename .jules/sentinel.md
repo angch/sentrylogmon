@@ -44,3 +44,7 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+## 2024-05-24 - Unconditional Dash Trimming in Sanitizer
+**Vulnerability:** Heuristic space-separated CLI argument redaction could incorrectly match regular text arguments because leading dashes were trimmed unconditionally. This would result in regular text arguments, if containing sensitive keywords, being incorrectly identified as sensitive flags and redacting the subsequent arguments. Or conversely, attackers might exploit this logic if regular strings are mutated into flags, causing unpredictable redaction or argument swallowing.
+**Learning:** Trimming characters meant for flags (like leading dashes) from all arguments unconditionally is unsafe, because it applies flag-specific logic to non-flag positional arguments.
+**Prevention:** Always check if an argument actually represents a flag (e.g., `if strings.HasPrefix(arg, "-")`) before applying flag-specific string manipulation like dash trimming.
