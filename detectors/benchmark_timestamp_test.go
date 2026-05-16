@@ -63,3 +63,28 @@ func BenchmarkNginxAccessTimestamp_Manual(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkNginxErrorTimestamp_Regex(b *testing.B) {
+	line := []byte(`2023/10/27 10:00:00 [error] 1234#5678: *9012 connect() failed`)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		tsStr := string(line[:19])
+		if _, err := time.Parse("2006/01/02 15:04:05", tsStr); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkNginxErrorTimestamp_Manual(b *testing.B) {
+	line := []byte(`2023/10/27 10:00:00 [error] 1234#5678: *9012 connect() failed`)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if _, _, ok := ParseNginxError(line); !ok {
+			b.Fatal("should match")
+		}
+	}
+}
