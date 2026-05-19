@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2025-05-19 - Heuristic Redaction Missing Prefix Check
+**Vulnerability:** The CLI sanitizer applied heuristic suffix matching (`isSensitiveKey`) to all arguments without verifying they were actually flags (started with a `-`). This allowed positional arguments matching sensitive keywords (e.g., `grep password file.txt`) to trigger redaction of the subsequent argument, destroying valid command data and potentially causing confusion in incident response or debugging.
+**Learning:** Heuristic rules for flag detection must strictly require the input to have a flag-like format (e.g., starting with `-`). Without this boundary, the heuristic bleeds into regular arguments and user data.
+**Prevention:**
+1. Always gate CLI flag heuristics by ensuring `strings.HasPrefix(arg, "-")`.
+2. Do not apply flag redaction logic to positional arguments or general command components.
