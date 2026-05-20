@@ -121,6 +121,11 @@ func TestSanitizeCommand(t *testing.T) {
 			expected: "mysql -pSecret production_db",
 		},
 		{
+			name:     "Regular arg matching sensitive suffix",
+			input:    []string{"command", "my-password", "regular_arg"},
+			expected: "command my-password regular_arg",
+		},
+		{
 			name:     "Session ID flag",
 			input:    []string{"app", "--session-id", "sess_123"},
 			expected: "app --session-id [REDACTED]",

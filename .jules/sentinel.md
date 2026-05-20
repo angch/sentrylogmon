@@ -44,3 +44,9 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-02-21 - Heuristic Redaction False Positives
+**Vulnerability:** The command line sanitizer used suffix matching without checking if the argument is actually a flag (starting with a dash). This caused arguments like `my-password` to be incorrectly identified as a sensitive flag name. This resulted in the redaction of the *next* argument (often legitimate data) while leaving the sensitive value itself exposed.
+**Learning:** Heuristic suffix matching for security redaction must enforce boundaries. Simply ending with "secret" or "password" is insufficient for short flags or attached values. Requiring the argument to start with a dash (`-`) ensures that only likely flag names are targeted.
+**Prevention:**
+1. When using suffix matching for flag detection, enforce that the argument starts with a dash (`-`).
