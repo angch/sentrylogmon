@@ -140,6 +140,11 @@ func TestSanitizeCommand(t *testing.T) {
 			input:    []string{"--Session-Id=secret123"},
 			expected: "--Session-Id=[REDACTED]",
 		},
+		{
+			name:     "Regular argument matching sensitive keyword",
+			input:    []string{"echo", "password", "my-secret-data"},
+			expected: "echo password my-secret-data",
+		},
 	}
 
 	for _, tt := range tests {

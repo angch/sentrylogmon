@@ -128,6 +128,10 @@ mod tests {
                 vec!["ssh", "-p", "2222"],
                 "ssh -p 2222", // -p is ambiguous, false in map
             ),
+            (
+                vec!["echo", "password", "my-secret-data"],
+                "echo password my-secret-data", // Regular argument
+            ),
         ];
 
         for (input, expected) in cases {
