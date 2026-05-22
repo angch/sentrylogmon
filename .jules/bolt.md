@@ -1,7 +1,6 @@
-## 2026-01-27 - Benchmarking Allocation Optimizations
-**Learning:** When benchmarking optimizations that avoid allocations (like using `[]byte` instead of `string`), ensure the benchmark includes the cost of the allocation being removed. Benchmarking only the processing function might show a regression if the allocation happened in the caller.
-**Action:** Always benchmark the full path or simulate the inputs realistically (e.g. including conversions) to prove the benefit of reducing allocations.
-
-## 2026-01-27 - Regexp Allocation Limits
-**Learning:** Go's `regexp.FindSubmatchIndex` still allocates the `[]int` result slice. While it reduces memory usage compared to `FindSubmatch` (which allocates `[][]byte`), it doesn't eliminate allocations entirely. Zero-alloc regex capturing requires different libraries or manual parsing.
-**Action:** For hot paths requiring zero allocations, prefer manual parsing (`bytes.Index`, etc.) over `regexp` if feasible, otherwise accept the reduced but non-zero allocation of `FindSubmatchIndex`.
+## 2026-02-09 - Prometheus Metrics for Monitor Lag
+**Learning:** Understanding parsing and monitoring lag for lines is useful to assess system performance.
+**Action:** Always extract timestamps correctly to calculate lags if needed for logging.
+## 2026-05-22 - Prometheus Metrics for Monitor Lag
+**Learning:** Calculating processing lag accurately requires matching time precision. When lag values can be sub-second (especially with Prometheus DefBuckets), `float64(time.Now().UnixNano()) / 1e9` should be used instead of `time.Now().Unix()` to avoid loss of precision and unintuitive histogram clustering.
+**Action:** Always verify timestamp granularity when generating metrics comparing timestamps, avoiding accidental truncation to whole seconds.

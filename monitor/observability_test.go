@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/angch/sentrylogmon/metrics"
+	"github.com/angch/sentrylogmon/detectors"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 )
@@ -53,5 +54,36 @@ func TestLastActivityMetric(t *testing.T) {
 	}
 	if val > now+1 {
 		t.Errorf("Metric value in future. Got %v, expected ~%v", val, now)
+	}
+}
+
+func TestMonitorLagMetric(t *testing.T) {
+	metrics.MonitorLag.Reset()
+
+	now := time.Now()
+	input := "192.168.1.1 - - [" + now.Format("02/Jan/2006:15:04:05 -0700") + "] \"GET / HTTP/1.1\" 500 123\n"
+
+	source := &MockSource{content: input}
+	detector, _ := detectors.NewGenericDetector("500")
+
+	mon, err := New(context.Background(), source, detector, nil, Options{})
+	if err != nil {
+		t.Fatalf("Failed to create monitor: %v", err)
+	}
+	mon.StopOnEOF = true
+
+	mon.Start()
+
+	o, _ := metrics.MonitorLag.GetMetricWith(prometheus.Labels{"source": "mock"})
+	m := o.(prometheus.Metric)
+	var metric dto.Metric
+	err = m.Write(&metric)
+	if err != nil {
+		t.Fatalf("Failed to read metric: %v", err)
+	}
+
+	hist := metric.GetHistogram()
+	if hist == nil || hist.GetSampleCount() == 0 {
+		t.Errorf("Histogram metric should have samples")
 	}
 }
