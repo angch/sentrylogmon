@@ -140,6 +140,11 @@ func TestSanitizeCommand(t *testing.T) {
 			input:    []string{"--Session-Id=secret123"},
 			expected: "--Session-Id=[REDACTED]",
 		},
+		{
+			name:     "Heuristic False Positive for non-flag arguments",
+			input:    []string{"mysql", "password", "production_db"},
+			expected: "mysql password production_db",
+		},
 	}
 
 	for _, tt := range tests {

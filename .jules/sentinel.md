@@ -44,3 +44,9 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-03-08 - Overly Permissive Heuristic CLI Argument Redaction
+**Vulnerability:** The CLI sanitizer heuristic for space-separated flags trimmed all leading dashes from arguments before checking if they matched a sensitive key pattern (e.g. "password"). This caused regular arguments like "password" to be incorrectly identified as sensitive flags, leading to the redaction of the *subsequent* argument (e.g. database names) instead of the actual secret, potentially leaking sensitive data or modifying intended commands while redacting harmless data.
+**Learning:** Heuristics that process flags must first verify that the input is actually a flag (e.g. starts with a dash). Trimming dashes unconditionally allows regular arguments to maliciously or accidentally mutate into sensitive flags during parsing.
+**Prevention:**
+1. Always guard flag-specific string manipulation (like trimming leading dashes) with a check that the argument is indeed a flag (`strings.HasPrefix(arg, "-")`).
