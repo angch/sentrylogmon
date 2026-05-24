@@ -55,3 +55,64 @@ func TestLastActivityMetric(t *testing.T) {
 		t.Errorf("Metric value in future. Got %v, expected ~%v", val, now)
 	}
 }
+
+func TestMonitorLagMetric(t *testing.T) {
+	metrics.MonitorLag.Reset()
+
+	input := "[12345.67890] Error occurred\n"
+	source := &MockSource{content: input}
+
+	// Create a detector that returns true for the input and also extracts a mock timestamp
+	detector := &MockLagDetector{
+		detectReturns: true,
+		timestamp:     float64(time.Now().UnixNano())/1e9 - 2.5, // simulate 2.5 seconds lag
+	}
+
+	mon, err := New(context.Background(), source, detector, nil, Options{})
+	if err != nil {
+		t.Fatalf("Failed to create monitor: %v", err)
+	}
+	mon.StopOnEOF = true
+
+	mon.Start()
+
+	// Use GetMetricWith to fetch the metric from the vector
+	observer, err := metrics.MonitorLag.GetMetricWith(prometheus.Labels{"source": "mock"})
+	if err != nil {
+		t.Fatalf("Failed to get metric: %v", err)
+	}
+	m := observer.(prometheus.Metric)
+
+	var metric dto.Metric
+	err = m.Write(&metric)
+	if err != nil {
+		t.Fatalf("Failed to write metric: %v", err)
+	}
+
+	histogram := metric.GetHistogram()
+	if histogram.GetSampleCount() != 1 {
+		t.Errorf("Expected 1 sample, got %v", histogram.GetSampleCount())
+	}
+
+	sum := histogram.GetSampleSum()
+	if sum < 2.4 || sum > 2.6 {
+		t.Errorf("Expected lag around 2.5s, got %v", sum)
+	}
+}
+
+type MockLagDetector struct {
+	detectReturns bool
+	timestamp     float64
+}
+
+func (d *MockLagDetector) Detect(line []byte) bool {
+	return d.detectReturns
+}
+
+func (d *MockLagDetector) Name() string {
+	return "MockLagDetector"
+}
+
+func (d *MockLagDetector) ExtractTimestamp(line []byte) (float64, string, bool) {
+	return d.timestamp, "mock_ts", true
+}
