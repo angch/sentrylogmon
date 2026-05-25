@@ -29,6 +29,14 @@ var (
 		[]string{"source", "status"},
 	)
 
+	MonitorLag = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "sentrylogmon_monitor_lag_seconds",
+			Help: "Time difference in seconds between log timestamp and processing time.",
+		},
+		[]string{"source"},
+	)
+
 	LastActivityTimestamp = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "sentrylogmon_last_activity_timestamp_seconds",
@@ -43,4 +51,5 @@ func init() {
 	prometheus.MustRegister(IssuesDetectedTotal)
 	prometheus.MustRegister(SentryEventsTotal)
 	prometheus.MustRegister(LastActivityTimestamp)
+	prometheus.MustRegister(MonitorLag)
 }
