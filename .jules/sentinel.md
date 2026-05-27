@@ -44,3 +44,9 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2025-05-27 - Log Evasion via Unbound Redaction Heuristics
+**Vulnerability:** The command sanitizer applied suffix-matching heuristics to all command arguments, not just flags (those starting with `-`). An attacker could supply an argument like `password` followed by a malicious payload, tricking the sanitizer into redacting the payload (Log Evasion).
+**Learning:** Heuristics designed for flags must strictly verify that the input is actually a flag before processing. Otherwise, normal arguments can maliciously trigger security features.
+**Prevention:**
+1. Explicitly check for expected prefixes (e.g., `strings.HasPrefix(arg, "-")`) before stripping them or applying flag-based heuristics.
