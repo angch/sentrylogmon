@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/angch/sentrylogmon/sysstat"
+	"github.com/kballard/go-shellquote"
 	"gopkg.in/yaml.v3"
 )
 
@@ -253,7 +254,11 @@ func (c *Config) Redacted() *Config {
 			newC.Monitors[i].Sentry.DSN = "***"
 		}
 		if newC.Monitors[i].Args != "" {
-			parts := strings.Fields(newC.Monitors[i].Args)
+			parts, err := shellquote.Split(newC.Monitors[i].Args)
+			if err != nil {
+				// Fallback to Fields if quotes are unbalanced
+				parts = strings.Fields(newC.Monitors[i].Args)
+			}
 			newC.Monitors[i].Args = sysstat.SanitizeCommand(parts)
 		}
 	}
