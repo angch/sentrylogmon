@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-03-01 - Command Injection Splitting Logic
+**Vulnerability:** The application used `strings.Fields` to parse command line arguments specified in `config.yaml` for custom commands and `journalctl` sources. This simplistic splitting breaks arguments containing spaces (like regexes, quoted strings, awk commands) into separate arguments, potentially altering the intended command execution and causing unexpected behavior or security risks.
+**Learning:** Naive space splitting (`strings.Fields`) is insufficient for parsing shell commands that may contain quoted strings. It is critical to use proper shell quoting logic (like `shellquote.Split`) to preserve intended argument boundaries and prevent injection or logical execution errors.
+**Prevention:**
+1. Always parse command arguments using libraries that respect quotes and shell escaping (e.g., `go-shellquote`).
+2. Avoid using `strings.Fields` for parsing complex command strings.

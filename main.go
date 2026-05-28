@@ -25,6 +25,7 @@ import (
 	"github.com/angch/sentrylogmon/sources"
 	"github.com/angch/sentrylogmon/sysstat"
 	"github.com/getsentry/sentry-go"
+	"github.com/kballard/go-shellquote"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -230,7 +231,11 @@ func main() {
 			src := sources.NewDmesgSource(monCfg.Name)
 			addMonitor(src, monCfg)
 		case "command":
-			parts := strings.Fields(monCfg.Args)
+			parts, err := shellquote.Split(monCfg.Args)
+			if err != nil {
+				log.Printf("Warning: failed to parse command args for '%s', falling back to simple split: %v", monCfg.Name, err)
+				parts = strings.Fields(monCfg.Args)
+			}
 			if len(parts) > 0 {
 				src := sources.NewCommandSource(monCfg.Name, parts[0], parts[1:]...)
 				addMonitor(src, monCfg)
