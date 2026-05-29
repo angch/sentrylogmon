@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-10-27 - Cross-Port Vulnerability Propagation
+**Vulnerability:** Security fixes applied to the main implementation (Go) for CLI redaction (e.g., case-sensitivity bypasses, missing space-separated heuristics, and word-boundary false positives) were not propagated to the Rust port, leaving it vulnerable to the same issues.
+**Learning:** Security vulnerabilities often stem from logic flaws that are easily replicated when porting code to new languages. A fix in one codebase does not guarantee safety in another if they share the same flawed architectural assumptions or if patches are not actively synchronized.
+**Prevention:**
+1. When fixing a vulnerability in a multi-language project, always audit all language ports (Go, Rust, Zig) for the same flaw.
+2. Ensure test suites covering security edge-cases are synchronized across all implementations.
