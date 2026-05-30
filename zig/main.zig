@@ -96,12 +96,12 @@ fn getDetails(allocator: std.mem.Allocator, inst: ipc.StatusResponse) ![]u8 {
         var details = std.ArrayList(u8).empty;
         defer details.deinit(allocator);
 
+        const limit: usize = 60;
         const count = cfg.monitors.items.len;
-        try details.writer(allocator).print("{d} monitors: ", .{count});
 
         for (cfg.monitors.items, 0..) |m, i| {
-            if (i > 0) try details.writer(allocator).writeAll(", ");
-            try details.writer(allocator).print("{s}", .{m.name});
+            var part_list = std.ArrayList(u8).empty;
+            defer part_list.deinit(allocator);
 
             const type_str = switch (m.type) {
                 .file => "file",
@@ -111,12 +111,44 @@ fn getDetails(allocator: std.mem.Allocator, inst: ipc.StatusResponse) ![]u8 {
                 .syslog => "syslog",
                 .unknown => "unknown",
             };
-            try details.writer(allocator).print("({s})", .{type_str});
+            try part_list.writer(allocator).print("{s}({s})", .{m.name, type_str});
+            const part = part_list.items;
 
-            if (details.items.len > 100) {
-                try details.writer(allocator).writeAll("...");
+            const sep = if (i > 0) ", " else "";
+
+            if (i == 0) {
+                const remaining = count - 1;
+                const suffix_len = if (remaining > 0) @as(usize, 12) else @as(usize, 0); // " (+NN more)"
+
+                if (part.len + suffix_len > limit) {
+                    var avail = if (limit > suffix_len + 3) limit - suffix_len - 3 else 0;
+                    if (avail < 10) avail = 10;
+
+                    if (part.len > avail) {
+                        try details.writer(allocator).print("{s}...", .{part[0..avail]});
+                    } else {
+                        try details.writer(allocator).writeAll(part);
+                    }
+                } else {
+                    try details.writer(allocator).writeAll(part);
+                }
+                continue;
+            }
+
+            const reserved = if (i == count - 1) @as(usize, 0) else @as(usize, 12);
+
+            if (details.items.len + sep.len + part.len + reserved <= limit) {
+                try details.writer(allocator).writeAll(sep);
+                try details.writer(allocator).writeAll(part);
+            } else {
+                const remaining = count - i;
+                try details.writer(allocator).print(" (+{d} more)", .{remaining});
                 break;
             }
+        }
+
+        if (details.items.len == 0) {
+            return allocator.dupe(u8, "-");
         }
         return details.toOwnedSlice(allocator);
     } else {
