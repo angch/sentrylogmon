@@ -1,6 +1,7 @@
 package sysstat
 
 import (
+	"net/url"
 	"strings"
 )
 
@@ -28,6 +29,42 @@ var sensitiveSuffixes = []string{
 	"credential",
 	"cookie",
 	"session",
+}
+
+func redactURLIfPresent(arg string) string {
+	if !strings.Contains(arg, "://") {
+		return arg
+	}
+	if strings.Contains(arg, "=") {
+		parts := strings.SplitN(arg, "=", 2)
+		if strings.Contains(parts[1], "://") {
+			return parts[0] + "=" + redactURLIfPresent(parts[1])
+		}
+	}
+	u, err := url.Parse(arg)
+	if err != nil || u.Scheme == "" {
+		return arg
+	}
+	changed := false
+	if u.User != nil {
+		if _, hasPassword := u.User.Password(); hasPassword {
+			u.User = url.UserPassword(u.User.Username(), "[REDACTED]")
+			changed = true
+		}
+	}
+	q := u.Query()
+	for k := range q {
+		if isSensitiveKey(k) {
+			q[k] = []string{"[REDACTED]"}
+			changed = true
+		}
+	}
+	if changed {
+		u.RawQuery = q.Encode()
+		res := u.String()
+		return strings.ReplaceAll(res, "%5BREDACTED%5D", "[REDACTED]")
+	}
+	return arg
 }
 
 // SanitizeCommand joins command arguments into a string, redacting sensitive information.
@@ -72,7 +109,7 @@ func SanitizeCommand(args []string) string {
 			}
 
 			// If not sensitive, keep as is
-			sanitized = append(sanitized, arg)
+			sanitized = append(sanitized, redactURLIfPresent(arg))
 			continue
 		}
 
@@ -91,7 +128,7 @@ func SanitizeCommand(args []string) string {
 		// Clean the arg (remove leading dashes)
 		cleanArg := strings.TrimLeft(arg, "-")
 		if isSensitiveKey(cleanArg) {
-			sanitized = append(sanitized, arg)
+			sanitized = append(sanitized, redactURLIfPresent(arg))
 			// Only redact next if it doesn't look like another flag
 			// This prevents false positives for boolean flags (e.g., --enable-password-auth --verbose)
 			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
@@ -100,7 +137,7 @@ func SanitizeCommand(args []string) string {
 			continue
 		}
 
-		sanitized = append(sanitized, arg)
+		sanitized = append(sanitized, redactURLIfPresent(arg))
 	}
 
 	return strings.Join(sanitized, " ")

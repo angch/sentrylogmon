@@ -140,6 +140,26 @@ func TestSanitizeCommand(t *testing.T) {
 			input:    []string{"--Session-Id=secret123"},
 			expected: "--Session-Id=[REDACTED]",
 		},
+		{
+			name:     "URL with credentials",
+			input:    []string{"curl", "http://user:password@example.com"},
+			expected: "curl http://user:[REDACTED]@example.com",
+		},
+		{
+			name:     "URL with sensitive query",
+			input:    []string{"curl", "https://example.com/api?token=1234&other=abc"},
+			expected: "curl https://example.com/api?other=abc&token=[REDACTED]",
+		},
+		{
+			name:     "URL with both credentials and query",
+			input:    []string{"curl", "mysql://root:secret@localhost/db?session=xyz"},
+			expected: "curl mysql://root:[REDACTED]@localhost/db?session=[REDACTED]",
+		},
+		{
+			name:     "Flag with URL",
+			input:    []string{"--url=http://user:pass@test.com"},
+			expected: "--url=http://user:[REDACTED]@test.com",
+		},
 	}
 
 	for _, tt := range tests {

@@ -44,3 +44,9 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+## 2026-02-23 - Command Line URL Credential Leak
+**Vulnerability:** The command-line sanitizer (`SanitizeCommand`) effectively redacted known sensitive flags (like `--password=xxx`) but failed to redact sensitive components embedded within URLs passed as arguments (e.g., `http://user:password@example.com` or `--url=https://api.com?token=secret`). These URLs would be logged or sent to Sentry in plain text, exposing credentials and API keys.
+**Learning:** General flag redaction algorithms are insufficient for complex data structures like URLs, which have their own conventions for embedding secrets (Basic Auth, query parameters). Input sanitization must inspect the structure of the data itself if it expects complex formats.
+**Prevention:**
+1. Whenever processing potentially untrusted or sensitive command-line arguments, explicitly check for and parse URLs (`://`) to redact `.User.Password()` and sensitive `.Query()` parameters.
+2. Apply URL redaction globally across all non-flag arguments and flag values as a defense-in-depth measure.
