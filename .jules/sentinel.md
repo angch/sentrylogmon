@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-02-21 - Non-Flag Argument Redaction False Positives
+**Vulnerability:** The CLI sanitizer heuristic matching was applying to arguments without a leading dash. This incorrectly identified simple arguments like `password` as sensitive keys, resulting in normal arguments getting incorrectly redacted (e.g., `curl -o password malicious.com` became `curl -o password [REDACTED]`).
+**Learning:** Heuristics designed for identifying flag names (e.g. `--password` or `--token`) MUST only be applied to arguments that actually start with a flag indicator (a dash). Otherwise, normal file names, values, or standard command arguments could mistakenly trigger redaction algorithms and cause false positives, potentially masking the real arguments passed to the system.
+**Prevention:**
+1. Always condition the heuristic path upon the input starting with `-`.
+2. Apply stricter boundary condition matching during heuristic processing.

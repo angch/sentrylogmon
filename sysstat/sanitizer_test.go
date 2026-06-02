@@ -140,6 +140,11 @@ func TestSanitizeCommand(t *testing.T) {
 			input:    []string{"--Session-Id=secret123"},
 			expected: "--Session-Id=[REDACTED]",
 		},
+		{
+			name:     "Non-flag argument named password",
+			input:    []string{"curl", "-o", "password", "http://malicious.com"},
+			expected: "curl -o password http://malicious.com",
+		},
 	}
 
 	for _, tt := range tests {
