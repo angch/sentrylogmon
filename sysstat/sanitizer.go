@@ -88,16 +88,19 @@ func SanitizeCommand(args []string) string {
 		}
 
 		// 2. Check heuristics (suffix matching)
-		// Clean the arg (remove leading dashes)
-		cleanArg := strings.TrimLeft(arg, "-")
-		if isSensitiveKey(cleanArg) {
-			sanitized = append(sanitized, arg)
-			// Only redact next if it doesn't look like another flag
-			// This prevents false positives for boolean flags (e.g., --enable-password-auth --verbose)
-			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-				skipNext = true
+		// Only apply heuristics to actual flags (starting with dash) to avoid false positives on normal arguments
+		if strings.HasPrefix(arg, "-") {
+			// Clean the arg (remove leading dashes)
+			cleanArg := strings.TrimLeft(arg, "-")
+			if isSensitiveKey(cleanArg) {
+				sanitized = append(sanitized, arg)
+				// Only redact next if it doesn't look like another flag
+				// This prevents false positives for boolean flags (e.g., --enable-password-auth --verbose)
+				if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+					skipNext = true
+				}
+				continue
 			}
-			continue
 		}
 
 		sanitized = append(sanitized, arg)
