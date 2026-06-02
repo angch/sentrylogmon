@@ -5,3 +5,6 @@
 ## 2026-02-02 - [Human-Readable Durations]
 **Learning:** For long-running processes, displaying uptime in raw hours (e.g., "50h") forces users to do mental math. Breaking it down into days (e.g., "2d 2h") respects the user's cognitive load and aligns with standard CLI patterns.
 **Action:** Use a day-aware duration formatter for time spans >= 24 hours.
+## 2026-06-02 - [Empty States for Action Commands]
+**Learning:** When a command like `--update` has no instances to act upon, exiting silently leaves the user wondering if the command failed or if there was simply nothing to do. Providing clear feedback (e.g., "No running instances found.") eliminates this ambiguity and improves the CLI experience.
+**Action:** Always provide informative empty states for action-oriented commands.
