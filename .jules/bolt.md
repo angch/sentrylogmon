@@ -5,3 +5,7 @@
 ## 2026-01-27 - Regexp Allocation Limits
 **Learning:** Go's `regexp.FindSubmatchIndex` still allocates the `[]int` result slice. While it reduces memory usage compared to `FindSubmatch` (which allocates `[][]byte`), it doesn't eliminate allocations entirely. Zero-alloc regex capturing requires different libraries or manual parsing.
 **Action:** For hot paths requiring zero allocations, prefer manual parsing (`bytes.Index`, etc.) over `regexp` if feasible, otherwise accept the reduced but non-zero allocation of `FindSubmatchIndex`.
+
+## 2023-11-01 - Avoid time.Parse for static log timestamp formats
+**Learning:** `time.Parse` is convenient but heavily allocates and executes generic parsing logic which hurts hot-path log processing loops.
+**Action:** Replace `time.Parse` with manual byte index checks (e.g. `atoi4`, `atoi2`) and direct instantiation via `time.Date` for strict, known log timestamp formats.
