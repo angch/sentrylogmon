@@ -44,3 +44,9 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-03-05 - Heuristic Redaction False Positives on Non-Flags
+**Vulnerability:** The command-line sanitizer's heuristic suffix matching (e.g., checking for "password") was applied to all arguments, not just flags. If a regular argument matched a sensitive keyword (like `password`), the sanitizer would incorrectly redact the *next* argument, potentially altering the command's semantics or dropping important context while not actually securing anything.
+**Learning:** Security heuristics designed to detect flags must strictly verify that the input actually represents a flag (e.g., starts with `-` or `--`) before applying matching logic. Applying flag heuristics to regular arguments causes false positives and data corruption.
+**Prevention:**
+1. Always check if an argument has the expected prefix (e.g., `strings.HasPrefix(arg, "-")`) before applying flag-specific heuristic logic.

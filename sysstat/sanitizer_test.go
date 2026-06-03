@@ -140,6 +140,11 @@ func TestSanitizeCommand(t *testing.T) {
 			input:    []string{"--Session-Id=secret123"},
 			expected: "--Session-Id=[REDACTED]",
 		},
+		{
+			name:     "Regular argument heuristics false positive",
+			input:    []string{"app", "user", "password", "reset"},
+			expected: "app user password reset",
+		},
 	}
 
 	for _, tt := range tests {
