@@ -5,3 +5,7 @@
 ## 2026-02-02 - [Human-Readable Durations]
 **Learning:** For long-running processes, displaying uptime in raw hours (e.g., "50h") forces users to do mental math. Breaking it down into days (e.g., "2d 2h") respects the user's cognitive load and aligns with standard CLI patterns.
 **Action:** Use a day-aware duration formatter for time spans >= 24 hours.
+
+## 2026-06-03 - [Empty States in CLI Tooling]
+**Learning:** When listing active instances, outputting absolutely nothing leaves users uncertain whether the command succeeded but found no items, or if it silently failed. Returning a clear message like "No running instances found." removes this ambiguity and improves confidence.
+**Action:** Always provide explicit feedback for zero-state list results instead of failing silently or printing empty tables.
