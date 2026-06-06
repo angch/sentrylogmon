@@ -140,7 +140,11 @@ func main() {
 				w.WriteHeader(http.StatusOK)
 				w.Write([]byte("OK"))
 			})
-			if err := http.ListenAndServe(addr, nil); err != nil {
+			srv := &http.Server{
+				Addr:              addr,
+				ReadHeaderTimeout: 5 * time.Second,
+			}
+			if err := srv.ListenAndServe(); err != nil {
 				log.Printf("Failed to start metrics server: %v", err)
 			}
 		}()
@@ -524,5 +528,5 @@ monitors:
   #   path: /var/log/nginx/error.log
   #   format: nginx
 `
-	return os.WriteFile(filename, []byte(content), 0644)
+	return os.WriteFile(filename, []byte(content), 0600)
 }
