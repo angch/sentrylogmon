@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-06-06 - Insecure Config Defaults and Missing HTTP Timeouts
+**Vulnerability:** The application generated config templates with `0644` permissions, allowing local users to read sensitive Sentry DSNs. Additionally, HTTP servers were initialized without `ReadHeaderTimeout`, enabling Slowloris Denial of Service (DoS) attacks.
+**Learning:** Default permissions for configuration files that are designed to hold secrets MUST be restrictive (`0600`) from the moment of creation. For HTTP servers, `http.ListenAndServe` or unconfigured `http.Server` structs leave applications vulnerable to resource exhaustion.
+**Prevention:**
+1. Always use `0600` for configuration file creation (`os.WriteFile`).
+2. Never use `http.ListenAndServe`. Explicitly construct `http.Server` with `ReadHeaderTimeout` set (e.g., 5 seconds).

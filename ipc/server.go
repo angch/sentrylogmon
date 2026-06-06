@@ -72,7 +72,8 @@ func StartServer(socketPath string, cfg *config.Config, restartFunc func()) erro
 	})
 
 	server := &http.Server{
-		Handler: mux,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	if cfg.Verbose {
