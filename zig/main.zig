@@ -93,16 +93,13 @@ fn formatDate(allocator: std.mem.Allocator, timestamp: i64) ![]u8 {
 
 fn getDetails(allocator: std.mem.Allocator, inst: ipc.StatusResponse) ![]u8 {
     if (inst.config) |cfg| {
-        var details = std.ArrayList(u8).empty;
-        defer details.deinit(allocator);
+        const limit = 60;
+        var buffer = std.ArrayList(u8).empty;
+        defer buffer.deinit(allocator);
 
-        const count = cfg.monitors.items.len;
-        try details.writer(allocator).print("{d} monitors: ", .{count});
+        const monitors = cfg.monitors.items;
 
-        for (cfg.monitors.items, 0..) |m, i| {
-            if (i > 0) try details.writer(allocator).writeAll(", ");
-            try details.writer(allocator).print("{s}", .{m.name});
-
+        for (monitors, 0..) |m, i| {
             const type_str = switch (m.type) {
                 .file => "file",
                 .journalctl => "journalctl",
@@ -111,14 +108,47 @@ fn getDetails(allocator: std.mem.Allocator, inst: ipc.StatusResponse) ![]u8 {
                 .syslog => "syslog",
                 .unknown => "unknown",
             };
-            try details.writer(allocator).print("({s})", .{type_str});
+            const part = try std.fmt.allocPrint(allocator, "{s}({s})", .{ m.name, type_str });
+            defer allocator.free(part);
 
-            if (details.items.len > 100) {
-                try details.writer(allocator).writeAll("...");
+            const sep = if (i > 0) ", " else "";
+
+            if (i == 0) {
+                const remaining = monitors.len - 1;
+                const suffix_len: usize = if (remaining > 0) 12 else 0;
+
+                if (part.len + suffix_len > limit) {
+                    var avail = limit - suffix_len - 3;
+                    if (avail < 10) avail = 10;
+
+                    if (part.len > avail) {
+                        try buffer.writer(allocator).writeAll(part[0..avail]);
+                        try buffer.writer(allocator).writeAll("...");
+                    } else {
+                        try buffer.writer(allocator).writeAll(part);
+                    }
+                } else {
+                    try buffer.writer(allocator).writeAll(part);
+                }
+                continue;
+            }
+
+            const reserved: usize = if (i == monitors.len - 1) 0 else 12;
+
+            if (buffer.items.len + sep.len + part.len + reserved <= limit) {
+                try buffer.writer(allocator).writeAll(sep);
+                try buffer.writer(allocator).writeAll(part);
+            } else {
+                const remaining = monitors.len - i;
+                try buffer.writer(allocator).print(" (+{d} more)", .{remaining});
                 break;
             }
         }
-        return details.toOwnedSlice(allocator);
+
+        if (buffer.items.len == 0) {
+            return allocator.dupe(u8, "-");
+        }
+        return buffer.toOwnedSlice(allocator);
     } else {
         if (inst.command_line.len > 0) {
             var details = std.ArrayList(u8).empty;
