@@ -44,3 +44,16 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2025-10-24 - Namespaced IPC Directory in Ports
+**Vulnerability:** The Rust and Zig ports of the application used a hardcoded path (`/tmp/sentrylogmon`) for the IPC socket directory. This allowed a local user to pre-create the directory and block other users from starting their own instances (Local Denial of Service) because the application would fail to secure/own the directory.
+**Learning:** Hardcoded paths in shared temporary directories (`/tmp`) create resource collision vulnerabilities in multi-user environments. The Go implementation was previously patched to use a user-specific namespace, but the Rust and Zig ports were missed.
+**Prevention:**
+1. Avoid hardcoded paths in shared directories like `/tmp`.
+2. Namespace temporary directories using the user's UID (e.g., `/tmp/sentrylogmon-<uid>`) across all language implementations.
+
+## 2025-10-24 - Cross-Platform Compilation Errors with libc::getuid
+**Vulnerability:** Not a vulnerability, but a critical learning related to the IPC DoS fix. While namespacing the temp directory with the user's UID (e.g., `sentrylogmon-<uid>`) prevents local DoS on Unix systems, the Rust fix initially broke cross-platform compilation because `libc::getuid()` is not available on Windows.
+**Learning:** Security fixes must account for platform differences. Code utilizing OS-specific APIs like POSIX `getuid` must be conditionally compiled using `#[cfg(unix)]` or `//go:build unix` to ensure the codebase remains portable.
+**Prevention:**
+1. Always test security features on target platforms or use configuration directives (like `#[cfg]`) to provide fallbacks for platforms where specific security APIs do not exist.
