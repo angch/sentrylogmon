@@ -5,3 +5,7 @@
 ## 2026-02-02 - [Human-Readable Durations]
 **Learning:** For long-running processes, displaying uptime in raw hours (e.g., "50h") forces users to do mental math. Breaking it down into days (e.g., "2d 2h") respects the user's cognitive load and aligns with standard CLI patterns.
 **Action:** Use a day-aware duration formatter for time spans >= 24 hours.
+
+## 2026-02-02 - [Standardize Empty State Data Format]
+**Learning:** Returning `null` instead of an empty array `[]` for lists (e.g., in JSON outputs) breaks downstream CLI tools like `jq` that expect iterable arrays. Consistent empty states improve the developer/operator experience and prevent pipeline errors.
+**Action:** Always initialize empty slices/arrays explicitly (e.g., `make([]Type, 0)` in Go) so they serialize to `[]` rather than `null`.
