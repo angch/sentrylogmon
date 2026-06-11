@@ -155,12 +155,20 @@ func ParseNginxError(line []byte) (float64, string, bool) {
 		return 0, "", false
 	}
 
-	tsStr := string(line[:19])
-	t, err := time.Parse("2006/01/02 15:04:05", tsStr)
-	if err == nil {
-		return float64(t.Unix()) + float64(t.Nanosecond())/1e9, tsStr, true
+	year := atoi4(line[0:4])
+	month := atoi2(line[5:7])
+	day := atoi2(line[8:10])
+	hour := atoi2(line[11:13])
+	min := atoi2(line[14:16])
+	sec := atoi2(line[17:19])
+
+	if year < 0 || month < 1 || month > 12 || day < 1 || day > 31 || hour < 0 || hour > 23 || min < 0 || min > 59 || sec < 0 || sec > 59 {
+		return 0, "", false
 	}
-	return 0, "", false
+
+	t := time.Date(year, time.Month(month), day, hour, min, sec, 0, time.UTC)
+	tsStr := string(line[:19])
+	return float64(t.Unix()) + float64(t.Nanosecond())/1e9, tsStr, true
 }
 
 func ParseDmesgTimestamp(line []byte) (float64, string, bool) {
