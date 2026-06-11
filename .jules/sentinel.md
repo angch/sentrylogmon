@@ -44,3 +44,8 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2025-03-05 - Fix Hardcoded IPC Socket Directory Local DoS (Zig and Rust Ports)
+**Vulnerability:** The Zig and Rust implementations used a hardcoded path (`/tmp/sentrylogmon`) for the IPC socket directory.
+**Learning:** Hardcoded world-writable/shared directories can lead to a Local Denial of Service (DoS) where an attacker can pre-create the directory to block the application or steal IPC connections.
+**Prevention:** Always namespace shared temp directories with the current user's ID (e.g., `/tmp/sentrylogmon-<uid>`) on Unix-like systems.
