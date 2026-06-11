@@ -21,6 +21,20 @@ pub struct StatusResponse {
     pub memory_alloc: u64,
 }
 
+pub fn get_socket_dir() -> PathBuf {
+    // SECURITY: Namespace the shared IPC directory with the user's UID on Unix to prevent
+    // local Denial of Service (DoS) attacks where another user pre-creates the directory.
+    #[cfg(unix)]
+    {
+        let uid = unsafe { libc::getuid() };
+        PathBuf::from("/tmp").join(format!("sentrylogmon-{}", uid))
+    }
+    #[cfg(not(unix))]
+    {
+        PathBuf::from("/tmp").join("sentrylogmon")
+    }
+}
+
 pub fn ensure_secure_directory(path: &Path) -> Result<()> {
     if !path.exists() {
         fs::create_dir_all(path)
