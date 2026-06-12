@@ -5,3 +5,7 @@
 ## 2026-02-02 - [Human-Readable Durations]
 **Learning:** For long-running processes, displaying uptime in raw hours (e.g., "50h") forces users to do mental math. Breaking it down into days (e.g., "2d 2h") respects the user's cognitive load and aligns with standard CLI patterns.
 **Action:** Use a day-aware duration formatter for time spans >= 24 hours.
+
+## 2026-06-12 - [Empty Status UX]
+**Learning:** When users run a command to list running instances (like `--status`), an empty response or a bare table header is confusing and looks like a bug.
+**Action:** Always provide explicit, helpful feedback like "No running instances found." when list results are empty.
