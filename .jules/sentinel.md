@@ -44,3 +44,7 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+## 2024-06-13 - Local DoS vulnerability via hardcoded IPC socket directory
+**Vulnerability:** The application used a hardcoded path (`/tmp/sentrylogmon`) for its IPC socket directory in both the Rust and Zig implementations.
+**Learning:** While the directory was secured (0700 permissions), a local attacker could pre-create the directory and restrict access, causing the application to fail during startup or block other users (Local DoS).
+**Prevention:** Use user-isolated paths by appending the user's UID to the hardcoded directory name (e.g., `/tmp/sentrylogmon-<uid>`), making collisions practically impossible and securely isolating users.
