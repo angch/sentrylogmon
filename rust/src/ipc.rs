@@ -21,6 +21,18 @@ pub struct StatusResponse {
     pub memory_alloc: u64,
 }
 
+// SECURITY: Prevent Local DoS by namespacing the IPC directory with the user's UID so it cannot be pre-created by other users
+#[cfg(unix)]
+pub fn get_socket_dir() -> PathBuf {
+    let uid = unsafe { libc::getuid() };
+    std::env::temp_dir().join(format!("sentrylogmon-{}", uid))
+}
+
+#[cfg(not(unix))]
+pub fn get_socket_dir() -> PathBuf {
+    std::env::temp_dir().join("sentrylogmon")
+}
+
 pub fn ensure_secure_directory(path: &Path) -> Result<()> {
     if !path.exists() {
         fs::create_dir_all(path)

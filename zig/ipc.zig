@@ -19,6 +19,16 @@ pub const StatusResponse = struct {
     }
 };
 
+// SECURITY: Prevent Local DoS by namespacing the IPC directory with the user's UID so it cannot be pre-created by other users
+pub fn getSocketDir(allocator: std.mem.Allocator) ![]const u8 {
+    if (@import("builtin").os.tag != .windows) {
+        const uid = std.posix.getuid();
+        return std.fmt.allocPrint(allocator, "/tmp/sentrylogmon-{d}", .{uid});
+    } else {
+        return std.fmt.allocPrint(allocator, "/tmp/sentrylogmon", .{});
+    }
+}
+
 pub fn ensureSecureDirectory(path: []const u8) !void {
     // Try to create directory
     std.fs.makeDirAbsolute(path) catch |err| {
