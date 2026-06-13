@@ -44,3 +44,7 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+## 2026-02-09 - Fix Local Denial of Service via hardcoded IPC directory in Rust
+**Vulnerability:** Local Denial of Service (DoS) due to hardcoded IPC socket directory (`/tmp/sentrylogmon`) in Rust implementation. A local attacker could pre-create this directory, preventing the application from starting due to ownership/permission checks.
+**Learning:** Hardcoded, world-writable temp directories for IPC are vulnerable to local DoS or collision attacks.
+**Prevention:** Namespace the temporary directory with the current user's ID (`getuid()`) on Unix systems to ensure unique, user-specific paths. Provide safe fallbacks for non-Unix systems.
