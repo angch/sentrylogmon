@@ -21,6 +21,21 @@ pub struct StatusResponse {
     pub memory_alloc: u64,
 }
 
+pub fn get_socket_dir() -> PathBuf {
+    // SECURITY: Namespace IPC socket directory with UID to prevent local DoS attacks
+    #[cfg(unix)]
+    {
+        let uid = unsafe { libc::getuid() };
+        PathBuf::from(format!("/tmp/sentrylogmon-{}", uid))
+    }
+    #[cfg(windows)]
+    {
+        let mut path = std::env::temp_dir();
+        path.push("sentrylogmon");
+        path
+    }
+}
+
 pub fn ensure_secure_directory(path: &Path) -> Result<()> {
     if !path.exists() {
         fs::create_dir_all(path)
