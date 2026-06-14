@@ -210,7 +210,10 @@ pub fn main() !void {
     defer if (args.config) |c| allocator.free(c);
 
     // IPC Commands
-    const socket_dir = "/tmp/sentrylogmon";
+    // SECURITY: Namespace IPC socket directory with UID to prevent local DoS attacks
+    const socket_dir = try std.fmt.allocPrint(allocator, "/tmp/sentrylogmon-{d}", .{std.posix.getuid()});
+    defer allocator.free(socket_dir);
+
     if (args.status) {
         var instances = ipc.listInstances(allocator, socket_dir) catch |err| {
             std.debug.print("Error listing instances: {}\n", .{err});
