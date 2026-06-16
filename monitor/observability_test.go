@@ -55,3 +55,50 @@ func TestLastActivityMetric(t *testing.T) {
 		t.Errorf("Metric value in future. Got %v, expected ~%v", val, now)
 	}
 }
+
+func TestMonitorLagMetric(t *testing.T) {
+	metrics.MonitorLag.Reset()
+
+	// Valid timestamp in the past to simulate lag
+	past := time.Now().Add(-5 * time.Second)
+	// Format as ISO8601
+	tsStr := past.Format(time.RFC3339)
+	input := tsStr + " error occurred\n"
+
+	source := &MockSource{content: input}
+	detector := &MockDetector{} // MockDetector accepts everything, ISO8601 will be parsed by default extractTimestamp
+
+	mon, err := New(context.Background(), source, detector, nil, Options{})
+	if err != nil {
+		t.Fatalf("Failed to create monitor: %v", err)
+	}
+	mon.StopOnEOF = true
+	mon.Start()
+
+	// Give it a tiny bit of time to ensure observation was recorded
+	time.Sleep(10 * time.Millisecond)
+
+	m, err := metrics.MonitorLag.GetMetricWith(prometheus.Labels{"source": "mock"})
+	if err != nil {
+		t.Fatalf("Failed to get metric: %v", err)
+	}
+
+	var metric dto.Metric
+	pm := m.(prometheus.Metric)
+	err = pm.Write(&metric)
+	if err != nil {
+		t.Fatalf("Failed to read metric: %v", err)
+	}
+
+	// Get histogram
+	hist := metric.GetHistogram()
+	if hist.GetSampleCount() != 1 {
+		t.Errorf("Expected 1 sample, got %v", hist.GetSampleCount())
+	}
+
+	// The lag should be approximately 5 seconds
+	sum := hist.GetSampleSum()
+	if sum < 4.0 || sum > 6.0 {
+		t.Errorf("Expected lag around 5 seconds, got %v", sum)
+	}
+}
