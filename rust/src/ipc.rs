@@ -226,3 +226,17 @@ mod tests {
         fs::remove_dir_all(&path).ok();
     }
 }
+
+pub fn get_socket_dir() -> PathBuf {
+    let mut path = std::env::temp_dir();
+    #[cfg(unix)]
+    {
+        // SECURITY: Namespace IPC directory by UID to prevent Local DoS/Symlink attacks
+        path.push(format!("sentrylogmon-{}", unsafe { libc::getuid() }));
+    }
+    #[cfg(not(unix))]
+    {
+        path.push("sentrylogmon");
+    }
+    path
+}
