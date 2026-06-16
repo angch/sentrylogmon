@@ -63,3 +63,11 @@ func BenchmarkNginxAccessTimestamp_Manual(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkParseNginxError(b *testing.B) {
+	line := []byte("2023/10/27 10:00:00 [error] 12345#0: *6789 open() \"/usr/share/nginx/html/favicon.ico\" failed")
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		ParseNginxError(line)
+	}
+}
