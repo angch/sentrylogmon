@@ -87,7 +87,9 @@ func main() {
 	// Load configuration after checking for IPC flags
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: Failed to load configuration: %v\n\n", err)
+		flag.Usage()
+		os.Exit(1)
 	}
 
 	if cfg.Sentry.DSN == "" {
