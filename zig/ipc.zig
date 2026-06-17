@@ -19,6 +19,11 @@ pub const StatusResponse = struct {
     }
 };
 
+// SECURITY: Namespace socket directory with UID to prevent local DoS/resource collisions in shared /tmp space.
+pub fn getSocketDir(allocator: std.mem.Allocator) ![]const u8 {
+    return std.fmt.allocPrint(allocator, "/tmp/sentrylogmon-{d}", .{std.posix.getuid()});
+}
+
 pub fn ensureSecureDirectory(path: []const u8) !void {
     // Try to create directory
     std.fs.makeDirAbsolute(path) catch |err| {

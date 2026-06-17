@@ -21,6 +21,22 @@ pub struct StatusResponse {
     pub memory_alloc: u64,
 }
 
+// SECURITY: Namespace socket directory with UID to prevent local DoS/resource collisions in shared /tmp space.
+pub fn get_socket_dir() -> PathBuf {
+    #[cfg(unix)]
+    {
+        let mut dir = std::env::temp_dir();
+        dir.push(format!("sentrylogmon-{}", unsafe { libc::getuid() }));
+        dir
+    }
+    #[cfg(not(unix))]
+    {
+        let mut dir = std::env::temp_dir();
+        dir.push("sentrylogmon");
+        dir
+    }
+}
+
 pub fn ensure_secure_directory(path: &Path) -> Result<()> {
     if !path.exists() {
         fs::create_dir_all(path)
