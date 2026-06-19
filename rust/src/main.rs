@@ -22,7 +22,7 @@ async fn main() -> Result<()> {
     let cfg = config::Config::load()?;
 
     if cfg.status {
-        let socket_dir = PathBuf::from("/tmp/sentrylogmon");
+        let socket_dir = get_socket_dir();
         let instances = ipc::list_instances(&socket_dir)?;
 
         if is_terminal() {
@@ -34,7 +34,7 @@ async fn main() -> Result<()> {
     }
 
     if cfg.update {
-        let socket_dir = PathBuf::from("/tmp/sentrylogmon");
+        let socket_dir = get_socket_dir();
         let instances = ipc::list_instances(&socket_dir)?;
         for inst in instances {
             let socket_path = socket_dir.join(format!("sentrylogmon.{}.sock", inst.pid));
@@ -83,7 +83,7 @@ async fn main() -> Result<()> {
     collector.run().await;
 
     // Start IPC server
-    let socket_dir = PathBuf::from("/tmp/sentrylogmon");
+    let socket_dir = get_socket_dir();
     if let Err(e) = ipc::ensure_secure_directory(&socket_dir) {
         tracing::error!("Failed to ensure secure IPC directory: {}", e);
     } else {
@@ -213,6 +213,17 @@ fn determine_detector_format(mon_cfg: &config::MonitorConfig) -> String {
         return "dmesg".to_string();
     }
     "custom".to_string()
+}
+
+#[cfg(unix)]
+fn get_socket_dir() -> PathBuf {
+    // SECURITY: Namespace shared directory to prevent Local DoS via pre-creation
+    PathBuf::from(format!("/tmp/sentrylogmon-{}", unsafe { libc::getuid() }))
+}
+
+#[cfg(not(unix))]
+fn get_socket_dir() -> PathBuf {
+    PathBuf::from("/tmp/sentrylogmon")
 }
 
 fn is_terminal() -> bool {

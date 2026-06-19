@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-03-05 - Port Parity of Local DoS Fix
+**Vulnerability:** The Local DoS vulnerability via a hardcoded IPC socket directory (/tmp/sentrylogmon) in /tmp existed in both the Rust and Zig ports, despite being fixed in the Go application (namespacing it using UID).
+**Learning:** Security fixes applied to the primary implementation (Go) must also be replicated across all language ports (Rust, Zig) to maintain a consistent security posture. Parity issues can lead to persistent vulnerabilities in alternative implementations.
+**Prevention:**
+1. When fixing vulnerabilities in cross-platform/multi-language projects, review all port implementations.
+2. Use dynamic paths like /tmp/sentrylogmon-<uid> using libc::getuid() (Rust) or std.posix.getuid() (Zig) across all implementations for parity.
