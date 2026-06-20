@@ -71,8 +71,10 @@ func StartServer(socketPath string, cfg *config.Config, restartFunc func()) erro
 		}()
 	})
 
+	// SECURITY: Mitigate Slowloris/resource exhaustion attacks by configuring ReadHeaderTimeout
 	server := &http.Server{
-		Handler: mux,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	if cfg.Verbose {

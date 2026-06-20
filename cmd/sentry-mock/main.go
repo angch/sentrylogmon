@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 )
 
 type EventStore struct {
@@ -115,7 +116,13 @@ func main() {
 	http.HandleFunc("/events", handleEvents)
 
 	log.Println("Sentry Mock Server listening on :8080")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	// SECURITY: Mitigate Slowloris/resource exhaustion attacks by configuring ReadHeaderTimeout
+	server := &http.Server{
+		Addr:              ":8080",
+		Handler:           nil,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }
