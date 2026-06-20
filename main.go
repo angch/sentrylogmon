@@ -140,7 +140,13 @@ func main() {
 				w.WriteHeader(http.StatusOK)
 				w.Write([]byte("OK"))
 			})
-			if err := http.ListenAndServe(addr, nil); err != nil {
+			// SECURITY: Mitigate Slowloris/resource exhaustion attacks by configuring ReadHeaderTimeout
+			server := &http.Server{
+				Addr:              addr,
+				Handler:           nil,
+				ReadHeaderTimeout: 5 * time.Second,
+			}
+			if err := server.ListenAndServe(); err != nil {
 				log.Printf("Failed to start metrics server: %v", err)
 			}
 		}()

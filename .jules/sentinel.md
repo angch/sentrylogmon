@@ -44,3 +44,7 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+## 2026-06-20 - HTTP Server Timeouts Configuration
+**Vulnerability:** Default `http.ListenAndServe` and unconfigured `http.Server` instances lack connection timeouts, exposing them to Slowloris attacks (CWE-400, CWE-676).
+**Learning:** Always use explicit `http.Server` structs with `ReadHeaderTimeout` set to mitigate connection exhaustion attacks by slowly sending HTTP headers.
+**Prevention:** Configure `ReadHeaderTimeout` (e.g., to 5 seconds) on all HTTP servers.
