@@ -44,3 +44,8 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-06-23 - Prevent Local DoS in IPC Socket Setup
+**Vulnerability:** Local Denial of Service (DoS) (CWE-377) due to predictable, world-writable IPC directory paths (e.g., `/tmp/sentrylogmon`).
+**Learning:** Namespacing world-writable paths with standard identifiers (like `uid`) is insufficient because attackers can predict the name and pre-create the directories to block the daemon from starting.
+**Prevention:** Use user-specific runtime directories (`XDG_RUNTIME_DIR`) or securely scoped cache directories (`~/.cache`) that guarantee exclusive access.

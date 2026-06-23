@@ -19,6 +19,25 @@ pub const StatusResponse = struct {
     }
 };
 
+pub fn getSocketDir(allocator: std.mem.Allocator) ![]const u8 {
+    if (@import("builtin").os.tag == .windows) {
+        return try allocator.dupe(u8, "sentrylogmon");
+    }
+
+    if (std.posix.getenv("XDG_RUNTIME_DIR")) |xdg| {
+        return try std.fs.path.join(allocator, &[_][]const u8{ xdg, "sentrylogmon" });
+    }
+
+    const uid = std.posix.getuid();
+    if (std.posix.getenv("HOME")) |home| {
+        const cache_dir = try std.fs.path.join(allocator, &[_][]const u8{ home, ".cache" });
+        defer allocator.free(cache_dir);
+        return try std.fmt.allocPrint(allocator, "{s}/sentrylogmon-{d}", .{ cache_dir, uid });
+    }
+
+    return try std.fmt.allocPrint(allocator, "/tmp/sentrylogmon-{d}", .{uid});
+}
+
 pub fn ensureSecureDirectory(path: []const u8) !void {
     // Try to create directory
     std.fs.makeDirAbsolute(path) catch |err| {
@@ -234,7 +253,11 @@ pub fn requestUpdate(allocator: std.mem.Allocator, socket_path: []const u8) !voi
 
 test "IPC server and client" {
     const allocator = std.testing.allocator;
-    const socket_path = "/tmp/test_sentrylogmon.sock";
+    const socket_dir = try getSocketDir(allocator);
+    defer allocator.free(socket_dir);
+    try ensureSecureDirectory(socket_dir);
+    const socket_path = try std.fmt.allocPrint(allocator, "{s}/test_sentrylogmon.sock", .{socket_dir});
+    defer allocator.free(socket_path);
 
     const args = &[_][]const u8{"program", "arg1"};
 

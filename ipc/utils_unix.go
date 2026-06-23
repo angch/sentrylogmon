@@ -61,5 +61,11 @@ func EnsureSecureDirectory(path string) error {
 
 // GetSocketDir returns the secure socket directory for the current user.
 func GetSocketDir() string {
+	if xdg := os.Getenv("XDG_RUNTIME_DIR"); xdg != "" {
+		return filepath.Join(xdg, "sentrylogmon")
+	}
+	if cacheDir, err := os.UserCacheDir(); err == nil {
+		return filepath.Join(cacheDir, fmt.Sprintf("sentrylogmon-%d", os.Getuid()))
+	}
 	return filepath.Join(os.TempDir(), fmt.Sprintf("sentrylogmon-%d", os.Getuid()))
 }
