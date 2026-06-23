@@ -21,6 +21,25 @@ pub struct StatusResponse {
     pub memory_alloc: u64,
 }
 
+pub fn get_socket_dir() -> PathBuf {
+    #[cfg(unix)]
+    {
+        if let Some(xdg) = std::env::var_os("XDG_RUNTIME_DIR") {
+            return PathBuf::from(xdg).join("sentrylogmon");
+        }
+        let uid = unsafe { libc::getuid() };
+        if let Some(home) = std::env::var_os("HOME") {
+            let cache_dir = PathBuf::from(home).join(".cache");
+            return cache_dir.join(format!("sentrylogmon-{}", uid));
+        }
+        PathBuf::from("/tmp").join(format!("sentrylogmon-{}", uid))
+    }
+    #[cfg(not(unix))]
+    {
+        PathBuf::from("/tmp/sentrylogmon")
+    }
+}
+
 pub fn ensure_secure_directory(path: &Path) -> Result<()> {
     if !path.exists() {
         fs::create_dir_all(path)
