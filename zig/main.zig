@@ -210,7 +210,19 @@ pub fn main() !void {
     defer if (args.config) |c| allocator.free(c);
 
     // IPC Commands
-    const socket_dir = "/tmp/sentrylogmon";
+    // SECURITY: Prevent Local DoS by using user-specific runtime directory instead of shared /tmp
+    const socket_dir = if (@import("builtin").os.tag != .windows) blk: {
+        if (std.posix.getenv("XDG_RUNTIME_DIR")) |xdg| {
+            break :blk try std.fmt.allocPrint(allocator, "{s}/sentrylogmon", .{xdg});
+        } else {
+            const uid = std.posix.getuid();
+            break :blk try std.fmt.allocPrint(allocator, "/tmp/sentrylogmon-{d}", .{uid});
+        }
+    } else blk: {
+        break :blk try std.fmt.allocPrint(allocator, "/tmp/sentrylogmon", .{});
+    };
+    defer allocator.free(socket_dir);
+
     if (args.status) {
         var instances = ipc.listInstances(allocator, socket_dir) catch |err| {
             std.debug.print("Error listing instances: {}\n", .{err});
