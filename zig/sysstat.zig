@@ -563,19 +563,22 @@ fn sanitizeCommand(allocator: std.mem.Allocator, args: []const []const u8) ![]u8
             const lower_key = try std.ascii.allocLowerString(allocator, clean_key);
             defer allocator.free(lower_key);
 
-            if (std.mem.eql(u8, lower_key, "password") or
-                std.mem.eql(u8, lower_key, "token") or
-                std.mem.eql(u8, lower_key, "secret") or
-                std.mem.eql(u8, lower_key, "key") or
-                std.mem.eql(u8, lower_key, "auth")) {
-                sensitive = true;
-            } else {
-                 for (sensitive_suffixes) |suffix| {
-                     if (std.mem.endsWith(u8, lower_key, suffix)) {
-                         sensitive = true;
-                         break;
+            // SECURITY: Guard heuristic matching to require leading dash to prevent non-flag arguments from triggering redaction.
+            if (std.mem.startsWith(u8, key, "-")) {
+                if (std.mem.eql(u8, lower_key, "password") or
+                    std.mem.eql(u8, lower_key, "token") or
+                    std.mem.eql(u8, lower_key, "secret") or
+                    std.mem.eql(u8, lower_key, "key") or
+                    std.mem.eql(u8, lower_key, "auth")) {
+                    sensitive = true;
+                } else {
+                     for (sensitive_suffixes) |suffix| {
+                         if (std.mem.endsWith(u8, lower_key, suffix)) {
+                             sensitive = true;
+                             break;
+                         }
                      }
-                 }
+                }
             }
 
             if (sensitive or sensitive_flags.has(key)) {

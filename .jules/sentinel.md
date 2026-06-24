@@ -44,3 +44,7 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+## 2025-06-24 - Fix heuristic argument redaction
+**Vulnerability:** Over-permissive space-separated argument redaction allowing arbitrary non-flag arguments to trigger redaction.
+**Learning:** Stripping dashes before checking argument names can cause legitimate parameters (like a payload) to maliciously hide data.
+**Prevention:** Ensure that suffix-based heuristic matching is strictly guarded by verifying the argument actually starts with a dash.
