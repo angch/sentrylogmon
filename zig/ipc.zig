@@ -19,6 +19,20 @@ pub const StatusResponse = struct {
     }
 };
 
+// SECURITY: Prevent Local DoS by namespace IPC socket directory.
+pub fn getSocketDir(allocator: std.mem.Allocator) ![]u8 {
+    if (@import("builtin").os.tag == .windows) {
+        return allocator.dupe(u8, "/tmp/sentrylogmon");
+    }
+
+    if (std.posix.getenv("XDG_RUNTIME_DIR")) |xdg| {
+        return std.fmt.allocPrint(allocator, "{s}/sentrylogmon", .{xdg});
+    }
+
+    const uid = std.posix.getuid();
+    return std.fmt.allocPrint(allocator, "/tmp/sentrylogmon-{d}", .{uid});
+}
+
 pub fn ensureSecureDirectory(path: []const u8) !void {
     // Try to create directory
     std.fs.makeDirAbsolute(path) catch |err| {
