@@ -70,3 +70,12 @@ func TestParseSyslogTimestamp(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkNginxErrorTimestamp_Manual(b *testing.B) {
+	line := []byte("2023/10/27 10:00:00 [error] 123#123: *1 open() \"/usr/share/nginx/html/favicon.ico\" failed")
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, _, _ = ParseNginxError(line)
+	}
+}
