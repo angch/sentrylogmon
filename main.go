@@ -87,10 +87,20 @@ func main() {
 	// Load configuration after checking for IPC flags
 	cfg, err := config.Load()
 	if err != nil {
+		// If no arguments were provided, print usage to be helpful before the error
+		if len(os.Args) == 1 {
+			flag.Usage()
+			fmt.Println()
+		}
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
 	if cfg.Sentry.DSN == "" {
+		// If no arguments were provided, print usage to be helpful before the error
+		if len(os.Args) == 1 {
+			flag.Usage()
+			fmt.Println()
+		}
 		log.Fatal("Sentry DSN is required. Set via --dsn flag, SENTRY_DSN environment variable, or config file")
 	}
 
