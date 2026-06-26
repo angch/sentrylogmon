@@ -44,3 +44,7 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+## 2024-05-18 - Fix Local DoS in IPC socket path creation
+**Vulnerability:** IPC socket path was hardcoded to `/tmp/sentrylogmon` across the Rust and Zig ports, which created a Local DoS vulnerability as any local user could pre-create this directory/file preventing the service from starting.
+**Learning:** Hardcoded temporary paths without proper namespacing (like `getuid()` or `XDG_RUNTIME_DIR`) allow malicious unprivileged users to squat files and directory paths, blocking root services.
+**Prevention:** Always scope shared tmp resources using standard environmental vars like `XDG_RUNTIME_DIR`, or dynamically append process/user identifiers like `-$(id -u)`.
