@@ -63,3 +63,15 @@ func BenchmarkNginxAccessTimestamp_Manual(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkNginxErrorTimestamp_Manual(b *testing.B) {
+	line := []byte("2023/10/27 10:00:00 [error] 12345#0: *67890 connect() failed")
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if _, _, ok := ParseNginxError(line); !ok {
+			b.Fatal("should match")
+		}
+	}
+}
