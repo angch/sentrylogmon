@@ -12,6 +12,23 @@ use sysinfo::{Pid, System};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixListener;
 
+#[cfg(unix)]
+pub fn get_socket_dir() -> PathBuf {
+    // SECURITY: Prevent shared /tmp directory collisions and Local DoS/LPE vulnerabilities
+    // by scoping the IPC socket directory to the current user (using XDG_RUNTIME_DIR or UID).
+    let uid = unsafe { libc::getuid() };
+    if let Ok(xdg_dir) = std::env::var("XDG_RUNTIME_DIR") {
+        PathBuf::from(xdg_dir).join("sentrylogmon")
+    } else {
+        PathBuf::from(format!("/tmp/sentrylogmon-{}", uid))
+    }
+}
+
+#[cfg(not(unix))]
+pub fn get_socket_dir() -> PathBuf {
+    PathBuf::from("/tmp/sentrylogmon")
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StatusResponse {
     pub pid: u32,
