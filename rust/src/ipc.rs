@@ -21,6 +21,25 @@ pub struct StatusResponse {
     pub memory_alloc: u64,
 }
 
+pub fn get_socket_dir() -> PathBuf {
+    // SECURITY: Prevent Local DoS by avoiding a hardcoded path in a shared temporary directory.
+    // Use user-isolated paths like XDG_RUNTIME_DIR or append the UID.
+    #[cfg(unix)]
+    {
+        if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
+            let mut path = PathBuf::from(runtime_dir);
+            path.push("sentrylogmon");
+            return path;
+        }
+        let uid = unsafe { libc::getuid() };
+        PathBuf::from(format!("/tmp/sentrylogmon-{}", uid))
+    }
+    #[cfg(not(unix))]
+    {
+        PathBuf::from("/tmp/sentrylogmon")
+    }
+}
+
 pub fn ensure_secure_directory(path: &Path) -> Result<()> {
     if !path.exists() {
         fs::create_dir_all(path)
