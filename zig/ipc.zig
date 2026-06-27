@@ -19,6 +19,16 @@ pub const StatusResponse = struct {
     }
 };
 
+pub fn getSocketDir(allocator: std.mem.Allocator) ![]u8 {
+    // SECURITY: Prevent Local DoS by avoiding a hardcoded path in a shared temporary directory.
+    // Use user-isolated paths by appending the UID.
+    if (@import("builtin").os.tag != .windows) {
+        const uid = std.posix.getuid();
+        return std.fmt.allocPrint(allocator, "/tmp/sentrylogmon-{d}", .{uid});
+    }
+    return allocator.dupe(u8, "/tmp/sentrylogmon");
+}
+
 pub fn ensureSecureDirectory(path: []const u8) !void {
     // Try to create directory
     std.fs.makeDirAbsolute(path) catch |err| {

@@ -44,3 +44,7 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+## 2024-06-27 - Local Denial of Service via Hardcoded IPC Socket Directory
+**Vulnerability:** The Rust and Zig ports used a hardcoded path (`/tmp/sentrylogmon`) for the IPC socket directory. This allows a local user to pre-create the directory and block other users from starting their own instances.
+**Learning:** Hardcoded paths in shared temporary directories (`/tmp`) create resource collision vulnerabilities in multi-user environments.
+**Prevention:** Namespace temporary directories using the user's UID (e.g., `/tmp/app-<uid>`) or environment variables like `XDG_RUNTIME_DIR`.
