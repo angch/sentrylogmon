@@ -55,3 +55,35 @@ func TestLastActivityMetric(t *testing.T) {
 		t.Errorf("Metric value in future. Got %v, expected ~%v", val, now)
 	}
 }
+
+func TestMonitorLagMetric(t *testing.T) {
+	metrics.MonitorLagSeconds.Reset()
+
+	input := "[1234567890.123] line1\n"
+	source := &MockSource{content: input}
+	detector := &MockDetector{}
+
+	mon, err := New(context.Background(), source, detector, nil, Options{})
+	if err != nil {
+		t.Fatalf("Failed to create monitor: %v", err)
+	}
+	mon.StopOnEOF = true
+
+	mon.Start()
+
+	m := metrics.MonitorLagSeconds.With(prometheus.Labels{"source": "mock"})
+	var metric dto.Metric
+	err = m.(prometheus.Metric).Write(&metric)
+	if err != nil {
+		t.Fatalf("Failed to read metric: %v", err)
+	}
+
+	if metric.Histogram == nil {
+		t.Errorf("Expected histogram metric to be populated")
+	} else {
+		count := metric.Histogram.GetSampleCount()
+		if count == 0 {
+			t.Errorf("Metric sample count is 0, expected > 0")
+		}
+	}
+}
