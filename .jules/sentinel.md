@@ -44,3 +44,7 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+## 2024-05-18 - Prevent Local DoS via predictable IPC socket paths
+**Vulnerability:** Rust and Zig ports hardcoded the IPC socket directory as `/tmp/sentrylogmon`. A malicious local user could pre-create this directory with restrictive permissions to prevent the application from starting (Local DoS) or use it for other attacks.
+**Learning:** Hardcoded shared paths in `/tmp` are dangerous on multi-user systems. Fallbacks across languages (Go vs Rust/Zig) weren't consistent in ensuring process separation and namespace isolation.
+**Prevention:** Always use dynamically resolved directories like `XDG_RUNTIME_DIR` or UID-namespaced temporary directories (e.g., `/tmp/sentrylogmon-<uid>`) for socket paths to ensure isolation.
