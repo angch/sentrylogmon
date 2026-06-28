@@ -1,5 +1,20 @@
 const std = @import("std");
 
+pub fn getSocketDir(allocator: std.mem.Allocator) ![]const u8 {
+    // SECURITY: Prevent Local DoS via predictable temp paths
+    // Check XDG_RUNTIME_DIR first for Unix standards, fallback to namespaced temp dir
+    if (std.posix.getenv("XDG_RUNTIME_DIR")) |runtime_dir| {
+        return try std.fmt.allocPrint(allocator, "{s}/sentrylogmon", .{runtime_dir});
+    }
+
+    if (@import("builtin").os.tag != .windows) {
+        const uid = std.posix.getuid();
+        return try std.fmt.allocPrint(allocator, "/tmp/sentrylogmon-{d}", .{uid});
+    } else {
+        return try allocator.dupe(u8, "/tmp/sentrylogmon");
+    }
+}
+
 pub fn containsPattern(haystack: []const u8, needle: []const u8) bool {
     return std.ascii.indexOfIgnoreCase(haystack, needle) != null;
 }

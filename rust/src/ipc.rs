@@ -147,6 +147,22 @@ pub async fn start_server(
     }
 }
 
+pub fn get_socket_dir() -> PathBuf {
+    // SECURITY: Prevent Local DoS via predictable temp paths by using XDG_RUNTIME_DIR or namespaced temp dir
+    if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
+        let mut path = PathBuf::from(runtime_dir);
+        path.push("sentrylogmon");
+        return path;
+    }
+
+    #[cfg(unix)]
+    let uid = unsafe { libc::getuid() };
+    #[cfg(not(unix))]
+    let uid = 0;
+
+    PathBuf::from(format!("/tmp/sentrylogmon-{}", uid))
+}
+
 pub fn list_instances(socket_dir: &Path) -> Result<Vec<StatusResponse>> {
     let mut instances = Vec::new();
 

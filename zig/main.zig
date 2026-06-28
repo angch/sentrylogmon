@@ -210,8 +210,9 @@ pub fn main() !void {
     defer if (args.config) |c| allocator.free(c);
 
     // IPC Commands
-    const socket_dir = "/tmp/sentrylogmon";
     if (args.status) {
+        const socket_dir = try utils.getSocketDir(allocator);
+        defer allocator.free(socket_dir);
         var instances = ipc.listInstances(allocator, socket_dir) catch |err| {
             std.debug.print("Error listing instances: {}\n", .{err});
             std.process.exit(1);
@@ -296,6 +297,8 @@ pub fn main() !void {
     }
 
     if (args.update) {
+        const socket_dir = try utils.getSocketDir(allocator);
+        defer allocator.free(socket_dir);
         var instances = ipc.listInstances(allocator, socket_dir) catch |err| {
             std.debug.print("Error listing instances: {}\n", .{err});
             std.process.exit(1);
@@ -322,6 +325,8 @@ pub fn main() !void {
     }
 
     // Initialize IPC Server
+    const socket_dir = try utils.getSocketDir(allocator);
+    defer allocator.free(socket_dir);
     ipc.ensureSecureDirectory(socket_dir) catch |err| {
         std.debug.print("Failed to ensure secure IPC directory: {}\n", .{err});
     };
