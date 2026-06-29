@@ -44,3 +44,10 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+
+## 2026-03-01 - Local DoS via Hardcoded IPC Path (Rust Port)
+**Vulnerability:** The Rust port of the application used a hardcoded path (`/tmp/sentrylogmon`) for its IPC socket directory. This allowed a local attacker to pre-create the directory, blocking other users from starting their own instances (Local Denial of Service) because the application would fail to secure/own the directory.
+**Learning:** Hardcoded paths in shared temporary directories (`/tmp`) create resource collision vulnerabilities in multi-user environments. Even if file permissions are secure, the existence of the directory owned by another user causes a conflict. The Go port had this fixed, but the Rust port missed this mitigation.
+**Prevention:**
+1. Namespace temporary directories using the user's UID (e.g., `/tmp/app-<uid>`).
+2. Always dynamically resolve IPC paths rather than hardcoding them.
