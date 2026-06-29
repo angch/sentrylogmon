@@ -87,10 +87,14 @@ func main() {
 	// Load configuration after checking for IPC flags
 	cfg, err := config.Load()
 	if err != nil {
+		flag.Usage()
+		fmt.Println()
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
 	if cfg.Sentry.DSN == "" {
+		flag.Usage()
+		fmt.Println()
 		log.Fatal("Sentry DSN is required. Set via --dsn flag, SENTRY_DSN environment variable, or config file")
 	}
 
@@ -126,6 +130,8 @@ func main() {
 	}
 
 	if len(cfg.Monitors) == 0 {
+		flag.Usage()
+		fmt.Println()
 		log.Fatal("No monitors configured. Use --file, --dmesg, --journalctl, --command, or config file.")
 	}
 
