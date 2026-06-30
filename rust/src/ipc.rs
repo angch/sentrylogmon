@@ -21,6 +21,22 @@ pub struct StatusResponse {
     pub memory_alloc: u64,
 }
 
+// SECURITY: Use dynamic paths (XDG_RUNTIME_DIR or UID-namespaced /tmp) to prevent Local DoS via predictable path collisions.
+pub fn get_socket_dir() -> PathBuf {
+    #[cfg(unix)]
+    {
+        if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
+            return PathBuf::from(runtime_dir).join("sentrylogmon");
+        }
+        let uid = unsafe { libc::getuid() };
+        PathBuf::from(format!("/tmp/sentrylogmon-{}", uid))
+    }
+    #[cfg(not(unix))]
+    {
+        PathBuf::from("/tmp/sentrylogmon")
+    }
+}
+
 pub fn ensure_secure_directory(path: &Path) -> Result<()> {
     if !path.exists() {
         fs::create_dir_all(path)

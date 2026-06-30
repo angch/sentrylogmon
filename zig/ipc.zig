@@ -19,6 +19,19 @@ pub const StatusResponse = struct {
     }
 };
 
+// SECURITY: Use dynamic paths (XDG_RUNTIME_DIR or UID-namespaced /tmp) to prevent Local DoS via predictable path collisions.
+pub fn getSocketDir(allocator: std.mem.Allocator) ![]const u8 {
+    if (@import("builtin").os.tag == .windows) {
+        return allocator.dupe(u8, "/tmp/sentrylogmon");
+    } else {
+        if (std.posix.getenv("XDG_RUNTIME_DIR")) |runtime_dir| {
+            return std.fs.path.join(allocator, &[_][]const u8{ runtime_dir, "sentrylogmon" });
+        }
+        const uid = std.posix.getuid();
+        return std.fmt.allocPrint(allocator, "/tmp/sentrylogmon-{d}", .{uid});
+    }
+}
+
 pub fn ensureSecureDirectory(path: []const u8) !void {
     // Try to create directory
     std.fs.makeDirAbsolute(path) catch |err| {
@@ -234,7 +247,11 @@ pub fn requestUpdate(allocator: std.mem.Allocator, socket_path: []const u8) !voi
 
 test "IPC server and client" {
     const allocator = std.testing.allocator;
-    const socket_path = "/tmp/test_sentrylogmon.sock";
+    const socket_dir = try getSocketDir(allocator);
+    defer allocator.free(socket_dir);
+    try ensureSecureDirectory(socket_dir);
+    const socket_path = try std.fs.path.join(allocator, &[_][]const u8{ socket_dir, "test_sentrylogmon.sock" });
+    defer allocator.free(socket_path);
 
     const args = &[_][]const u8{"program", "arg1"};
 
