@@ -55,3 +55,53 @@ func TestLastActivityMetric(t *testing.T) {
 		t.Errorf("Metric value in future. Got %v, expected ~%v", val, now)
 	}
 }
+
+// MockTimestampDetector implements detectors.Detector and detectors.TimestampExtractor
+type MockTimestampDetector struct{}
+
+func (d *MockTimestampDetector) Detect(line []byte) bool { return true }
+func (d *MockTimestampDetector) ExtractTimestamp(line []byte) (float64, string, bool) {
+	now := float64(time.Now().UnixNano()) / 1e9
+	return now - 1.5, "test-time", true // 1.5 seconds ago
+}
+
+func TestMonitorLagMetric(t *testing.T) {
+	metrics.MonitorLag.Reset()
+
+	input := "line1\n"
+	source := &MockSource{content: input}
+	detector := &MockTimestampDetector{}
+
+	mon, err := New(context.Background(), source, detector, nil, Options{})
+	if err != nil {
+		t.Fatalf("Failed to create monitor: %v", err)
+	}
+	mon.StopOnEOF = true
+
+	mon.Start()
+
+	m, err := metrics.MonitorLag.GetMetricWith(prometheus.Labels{"source": "mock"})
+	if err != nil {
+		t.Fatalf("Failed to get metric: %v", err)
+	}
+
+	var metric dto.Metric
+	err = m.(prometheus.Metric).Write(&metric)
+	if err != nil {
+		t.Fatalf("Failed to read metric: %v", err)
+	}
+
+	if metric.GetHistogram() == nil {
+		t.Fatalf("Histogram is nil")
+	}
+
+	count := metric.GetHistogram().GetSampleCount()
+	if count != 1 {
+		t.Errorf("Expected 1 observation, got %d", count)
+	}
+
+	sum := metric.GetHistogram().GetSampleSum()
+	if sum < 1.4 || sum > 2.0 {
+		t.Errorf("Expected sum to be around 1.5, got %f", sum)
+	}
+}
