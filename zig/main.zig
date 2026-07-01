@@ -317,6 +317,7 @@ pub fn main() !void {
     }
 
     if (args.dsn.len == 0 and args.config == null) {
+        printUsage();
         std.debug.print("Sentry DSN is required. Set via --dsn flag or SENTRY_DSN environment variable\n", .{});
         std.process.exit(1);
     }
