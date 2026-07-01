@@ -49,7 +49,9 @@ async fn main() -> Result<()> {
     }
 
     if cfg.sentry.dsn.is_empty() {
-        anyhow::bail!("Sentry DSN is required");
+        use clap::CommandFactory;
+        let _ = config::Args::command().print_help();
+        anyhow::bail!("Sentry DSN is required. Set via --dsn flag, SENTRY_DSN environment variable, or config file");
     }
 
     // Initialize Sentry
@@ -75,6 +77,8 @@ async fn main() -> Result<()> {
     }
 
     if cfg.monitors.is_empty() {
+        use clap::CommandFactory;
+        let _ = config::Args::command().print_help();
         anyhow::bail!("No monitors configured");
     }
 
