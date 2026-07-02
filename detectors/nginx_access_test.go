@@ -45,6 +45,16 @@ func TestParseNginxAccess(t *testing.T) {
 			wantOk: false,
 		},
 		{
+			name:   "Malformed hours",
+			line:   `127.0.0.1 - - [27/Oct/2023:--:00:00 +0000]`,
+			wantOk: false,
+		},
+		{
+			name:   "Malformed minutes",
+			line:   `127.0.0.1 - - [27/Oct/2023:10:--:00 +0000]`,
+			wantOk: false,
+		},
+		{
 			name:   "No closing bracket",
 			line:   `127.0.0.1 - - [27/Oct/2023:10:00:00 +0000`,
 			wantOk: false,
