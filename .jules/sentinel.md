@@ -44,3 +44,7 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+## 2026-07-02 - Sentinel: [Low] Fix missing lower bound validation in custom timestamp parsers
+**Vulnerability:** Missing lower bound checks for hour (`h`), minute (`min`), and second (`s`) parts during custom manual timestamp parsing allowed malformed values like dashes (`--`) to slip past validation when local helpers (e.g., `atoi2`) returned `-1`.
+**Learning:** Always comprehensively validate custom parsing bounds, particularly ensuring `-1` error returns from manual byte parsers cannot pass boundary conditions (e.g., `< 0`).
+**Prevention:** Implement complete bounds checks (e.g., `h < 0 || h > 23`) whenever local parsing utilities use error sentinels like `-1`.

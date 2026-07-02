@@ -42,7 +42,7 @@ func ParseISO8601(line []byte) (float64, string, bool) {
 	min := atoi2(line[14:16])
 	s := atoi2(line[17:19])
 
-	if y < 0 || m < 1 || m > 12 || d < 1 || d > 31 || h > 23 || min > 59 || s > 60 {
+	if y < 0 || m < 1 || m > 12 || d < 1 || d > 31 || h < 0 || h > 23 || min < 0 || min > 59 || s < 0 || s > 60 {
 		return 0, "", false
 	}
 
@@ -488,7 +488,7 @@ func ParseNginxAccess(line []byte) (float64, string, bool) {
 		tzH := atoi2(line[start+22 : start+24])
 		tzM := atoi2(line[start+24 : start+26])
 
-		if d < 1 || d > 31 || y < 1970 || h > 23 || min > 59 || s > 60 || tzH < 0 || tzM < 0 || tzM > 59 {
+		if d < 1 || d > 31 || y < 1970 || h < 0 || h > 23 || min < 0 || min > 59 || s < 0 || s > 60 || tzH < 0 || tzM < 0 || tzM > 59 {
 			continue
 		}
 
