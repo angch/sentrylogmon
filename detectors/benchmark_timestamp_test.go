@@ -63,3 +63,32 @@ func BenchmarkNginxAccessTimestamp_Manual(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkNginxErrorTimestamp_Regex(b *testing.B) {
+	line := []byte(`2023/10/27 10:00:00 [error] 12345#0: *67890 open() "/var/www/html/404.html" failed (2: No such file or directory)`)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if indices := TimestampRegexNginxError.FindSubmatchIndex(line); len(indices) >= 4 {
+			tsStr := string(line[indices[2]:indices[3]])
+			if _, err := time.Parse("2006/01/02 15:04:05", tsStr); err != nil {
+				b.Fatal(err)
+			}
+		} else {
+			b.Fatal("should match")
+		}
+	}
+}
+
+func BenchmarkNginxErrorTimestamp_Manual(b *testing.B) {
+	line := []byte(`2023/10/27 10:00:00 [error] 12345#0: *67890 open() "/var/www/html/404.html" failed (2: No such file or directory)`)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if _, _, ok := ParseNginxError(line); !ok {
+			b.Fatal("should match")
+		}
+	}
+}
