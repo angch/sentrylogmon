@@ -55,3 +55,42 @@ func TestLastActivityMetric(t *testing.T) {
 		t.Errorf("Metric value in future. Got %v, expected ~%v", val, now)
 	}
 }
+
+type mockTimestampDetector struct {
+	MockDetector
+}
+
+func (d *mockTimestampDetector) ExtractTimestamp(line []byte) (float64, string, bool) {
+	return 31536000.0, "1971-01-01T00:00:00Z", true
+}
+
+func TestMonitorLagMetric(t *testing.T) {
+	metrics.MonitorLag.Reset()
+	input := "1971-01-01T00:00:00Z line1\n1971-01-01T00:00:00Z line2\n"
+	source := &MockSource{content: input}
+	detector := &mockTimestampDetector{}
+	mon, err := New(context.Background(), source, detector, nil, Options{})
+	if err != nil {
+		t.Fatalf("Failed to create monitor: %v", err)
+	}
+	mon.StopOnEOF = true
+	mon.Start()
+
+	m := metrics.MonitorLag.With(prometheus.Labels{"source": "mock"})
+	if m == nil {
+		t.Fatalf("Metric is nil")
+	}
+	if mMetric, ok := m.(prometheus.Metric); ok {
+		var metric dto.Metric
+		err = mMetric.Write(&metric)
+		if err != nil {
+			t.Fatalf("Failed to read metric: %v", err)
+		}
+		count := metric.GetHistogram().GetSampleCount()
+		if count == 0 {
+			t.Errorf("Metric sample count is 0, expected it to be updated")
+		}
+	} else {
+		t.Fatalf("Could not cast to prometheus.Metric")
+	}
+}
