@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use clap::Parser;
+use clap::CommandFactory;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -267,10 +268,12 @@ impl Config {
         }
 
         if config.sentry.dsn.is_empty() {
+            let _ = Args::command().print_help();
             anyhow::bail!("Sentry DSN is required. Set via --dsn flag, SENTRY_DSN environment variable, or config file");
         }
 
         if config.monitors.is_empty() {
+            let _ = Args::command().print_help();
             anyhow::bail!("No monitors configured. Use --file, --dmesg, --journalctl, --command, or config file.");
         }
 
