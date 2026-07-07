@@ -8,6 +8,7 @@ mod sysstat;
 
 use anyhow::Result;
 use chrono::prelude::*;
+use clap::CommandFactory;
 use std::cmp::max;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -19,7 +20,13 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
     // Load configuration
-    let cfg = config::Config::load()?;
+    let cfg = match config::Config::load() {
+        Ok(c) => c,
+        Err(e) => {
+            let _ = config::Args::command().print_help();
+            anyhow::bail!(e);
+        }
+    };
 
     if cfg.status {
         let socket_dir = PathBuf::from("/tmp/sentrylogmon");
@@ -49,6 +56,7 @@ async fn main() -> Result<()> {
     }
 
     if cfg.sentry.dsn.is_empty() {
+        let _ = config::Args::command().print_help();
         anyhow::bail!("Sentry DSN is required");
     }
 
@@ -75,6 +83,7 @@ async fn main() -> Result<()> {
     }
 
     if cfg.monitors.is_empty() {
+        let _ = config::Args::command().print_help();
         anyhow::bail!("No monitors configured");
     }
 
