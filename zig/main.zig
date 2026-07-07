@@ -317,6 +317,7 @@ pub fn main() !void {
     }
 
     if (args.dsn.len == 0 and args.config == null) {
+        printUsage();
         std.debug.print("Sentry DSN is required. Set via --dsn flag or SENTRY_DSN environment variable\n", .{});
         std.process.exit(1);
     }
@@ -513,6 +514,7 @@ pub fn main() !void {
 
         // If no source specified, exit
         if (std.mem.eql(u8, source_name, "unknown") and args.config == null) {
+            printUsage();
             std.debug.print("Please specify a log source: --dmesg, --file, --command, --journalctl, --syslog, or --config\n", .{});
             std.process.exit(1);
         }
