@@ -16,6 +16,7 @@ import (
 	"github.com/angch/sentrylogmon/sysstat"
 	"github.com/getsentry/sentry-go"
 	"github.com/prometheus/client_golang/prometheus"
+	"golang.org/x/sys/unix"
 )
 
 var severityKeys = []string{"level", "severity", "log_level", "type"}
@@ -172,6 +173,7 @@ type Monitor struct {
 	metricSentrySent     prometheus.Counter
 	metricSentryDropped  prometheus.Counter
 	metricLastActivity   prometheus.Gauge
+	metricMonitorLag     prometheus.Observer
 
 	// Buffering
 	buffer           strings.Builder
@@ -214,6 +216,7 @@ func New(ctx context.Context, source sources.LogSource, detector detectors.Detec
 	m.metricSentrySent = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "sent"})
 	m.metricSentryDropped = metrics.SentryEventsTotal.With(prometheus.Labels{"source": source.Name(), "status": "dropped"})
 	m.metricLastActivity = metrics.LastActivityTimestamp.With(prometheus.Labels{"source": source.Name()})
+	m.metricMonitorLag = metrics.MonitorLag.With(prometheus.Labels{"source": source.Name()})
 
 	// Initialize Sentry Hub
 	if opts.SentryDSN != "" {
@@ -452,6 +455,21 @@ func (m *Monitor) processMatch(line []byte) {
 
 	if transformer, ok := m.Detector.(detectors.MessageTransformer); ok {
 		line = transformer.TransformMessage(line)
+	}
+
+	if timestamp > 0 {
+		var lag float64
+		if timestamp < 1e9 {
+			var ts unix.Timespec
+			if err := unix.ClockGettime(unix.CLOCK_BOOTTIME, &ts); err == nil {
+				lag = (float64(ts.Sec) + float64(ts.Nsec)/1e9) - timestamp
+			}
+		} else {
+			lag = float64(time.Now().UnixNano())/1e9 - timestamp
+		}
+		if lag >= 0 {
+			m.metricMonitorLag.Observe(lag)
+		}
 	}
 
 	var msgToSend string

@@ -55,3 +55,44 @@ func TestLastActivityMetric(t *testing.T) {
 		t.Errorf("Metric value in future. Got %v, expected ~%v", val, now)
 	}
 }
+
+type MockTimestampDetector struct {
+	MockDetector
+}
+
+func (d *MockTimestampDetector) ExtractTimestamp(line []byte) (float64, string, bool) {
+	return float64(time.Now().UnixNano())/1e9 - 2.0, "mock_time", true
+}
+
+func TestMonitorLagMetric(t *testing.T) {
+	metrics.MonitorLag.Reset()
+
+	input := "line1\n"
+	source := &MockSource{content: input}
+	detector := &MockTimestampDetector{}
+
+	mon, err := New(context.Background(), source, detector, nil, Options{})
+	if err != nil {
+		t.Fatalf("Failed to create monitor: %v", err)
+	}
+	mon.StopOnEOF = true
+	mon.Start()
+
+	m := metrics.MonitorLag.With(prometheus.Labels{"source": "mock"})
+
+	var metric dto.Metric
+	err = m.(prometheus.Metric).Write(&metric)
+	if err != nil {
+		t.Fatalf("Failed to read metric: %v", err)
+	}
+
+	hist := metric.GetHistogram()
+	if hist.GetSampleCount() != 1 {
+		t.Errorf("Expected 1 observation, got %d", hist.GetSampleCount())
+	}
+
+	sum := hist.GetSampleSum()
+	if sum < 1.0 || sum > 3.0 {
+		t.Errorf("Expected lag ~2.0, got %v", sum)
+	}
+}
