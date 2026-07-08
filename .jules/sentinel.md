@@ -44,3 +44,7 @@
 **Prevention:**
 1. Implement dual thresholds (count AND size) for all buffering logic.
 2. Flush the buffer immediately when either threshold is exceeded.
+## 2026-02-02 - Secure IPC Socket Directory
+**Vulnerability:** The application used a hardcoded path (`/tmp/sentrylogmon`) for its IPC socket directory. This allowed a local user to pre-create the directory and block other users from starting their own instances (Local Denial of Service).
+**Learning:** Hardcoded paths in shared temporary directories (`/tmp`) create resource collision vulnerabilities in multi-user environments. Even if file permissions are secure, the existence of the directory owned by another user causes a conflict.
+**Prevention:** Namespace temporary directories using the user's UID (e.g., `/tmp/sentrylogmon-<uid>`), XDG_RUNTIME_DIR, or use `os.MkdirTemp`.
