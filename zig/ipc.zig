@@ -19,6 +19,26 @@ pub const StatusResponse = struct {
     }
 };
 
+pub fn getSocketDir(allocator: std.mem.Allocator) ![]u8 {
+    // SECURITY: Use XDG_RUNTIME_DIR or user-namespaced paths to prevent Local DoS
+    // vulnerabilities where an attacker pre-creates a shared /tmp directory.
+    if (@import("builtin").os.tag == .windows) {
+        return try allocator.dupe(u8, "/tmp/sentrylogmon");
+    } else {
+        if (std.process.getEnvVarOwned(allocator, "XDG_RUNTIME_DIR")) |xdg| {
+            defer allocator.free(xdg);
+            return try std.fs.path.join(allocator, &[_][]const u8{ xdg, "sentrylogmon" });
+        } else |err| {
+            if (err == error.EnvironmentVariableNotFound) {
+                const uid = if (@hasDecl(std.posix, "getuid")) std.posix.getuid() else 0;
+                return try std.fmt.allocPrint(allocator, "/tmp/sentrylogmon-{d}", .{uid});
+            } else {
+                return err;
+            }
+        }
+    }
+}
+
 pub fn ensureSecureDirectory(path: []const u8) !void {
     // Try to create directory
     std.fs.makeDirAbsolute(path) catch |err| {

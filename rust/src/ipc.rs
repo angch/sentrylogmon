@@ -21,6 +21,26 @@ pub struct StatusResponse {
     pub memory_alloc: u64,
 }
 
+pub fn get_socket_dir() -> PathBuf {
+    // SECURITY: Use XDG_RUNTIME_DIR or user-namespaced paths to prevent Local DoS
+    // vulnerabilities where an attacker pre-creates a shared /tmp directory.
+    if let Ok(dir) = std::env::var("XDG_RUNTIME_DIR") {
+        let mut path = PathBuf::from(dir);
+        path.push("sentrylogmon");
+        path
+    } else {
+        #[cfg(unix)]
+        {
+            let uid = unsafe { libc::getuid() };
+            PathBuf::from(format!("/tmp/sentrylogmon-{}", uid))
+        }
+        #[cfg(not(unix))]
+        {
+            PathBuf::from("/tmp/sentrylogmon")
+        }
+    }
+}
+
 pub fn ensure_secure_directory(path: &Path) -> Result<()> {
     if !path.exists() {
         fs::create_dir_all(path)
